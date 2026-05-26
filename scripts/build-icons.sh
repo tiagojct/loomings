@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# Import icons from Apple Icon Composer export + pad to Apple HIG safe area.
+# Import icons from Apple Icon Composer export + pad + delegate to tauri-cli for all platforms.
 # Source: ./icons/Icon Exports/Icon-iOS-Default-1024x1024@1x.png
-# Adds 5% transparent padding so squircle visual size matches other dock icons.
-# Outputs: src-tauri/icons/{icon.png, 32x32.png, 128x128.png, 128x128@2x.png, icon.icns}
+# Outputs full set: PNG sizes, .ico (Windows), .icns (macOS).
 # Usage: ./scripts/build-icons.sh
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SRC="$ROOT/icons/Icon Exports/Icon-iOS-Default-1024x1024@1x.png"
 ICONS="$ROOT/src-tauri/icons"
-ICONSET="/tmp/loomings.iconset"
 PADDED="/tmp/loomings-padded-1024.png"
 PADDER="$ROOT/scripts/pad-icon"
 PADDER_SRC="$ROOT/scripts/pad-icon.swift"
@@ -28,24 +26,12 @@ fi
 
 "$PADDER" "$SRC" "$PADDED" 1024 "$SCALE"
 
-cp "$PADDED" "$ICONS/icon.png"
-sips -z 32 32   "$PADDED" --out "$ICONS/32x32.png"       > /dev/null
-sips -z 128 128 "$PADDED" --out "$ICONS/128x128.png"     > /dev/null
-sips -z 256 256 "$PADDED" --out "$ICONS/128x128@2x.png"  > /dev/null
+# Let Tauri CLI generate full platform icon set (.ico, .icns, sized PNGs).
+# Outputs all into src-tauri/icons/.
+"$ROOT/node_modules/.bin/tauri" icon "$PADDED" --output "$ICONS"
 
-rm -rf "$ICONSET"
-mkdir -p "$ICONSET"
-sips -z 16 16     "$PADDED" --out "$ICONSET/icon_16x16.png"        > /dev/null
-sips -z 32 32     "$PADDED" --out "$ICONSET/icon_16x16@2x.png"     > /dev/null
-sips -z 32 32     "$PADDED" --out "$ICONSET/icon_32x32.png"        > /dev/null
-sips -z 64 64     "$PADDED" --out "$ICONSET/icon_32x32@2x.png"     > /dev/null
-sips -z 128 128   "$PADDED" --out "$ICONSET/icon_128x128.png"      > /dev/null
-sips -z 256 256   "$PADDED" --out "$ICONSET/icon_128x128@2x.png"   > /dev/null
-sips -z 256 256   "$PADDED" --out "$ICONSET/icon_256x256.png"      > /dev/null
-sips -z 512 512   "$PADDED" --out "$ICONSET/icon_256x256@2x.png"   > /dev/null
-sips -z 512 512   "$PADDED" --out "$ICONSET/icon_512x512.png"      > /dev/null
-sips -z 1024 1024 "$PADDED" --out "$ICONSET/icon_512x512@2x.png"   > /dev/null
+# Drop mobile-only assets (Tauri produces them; we don't need them for desktop).
+rm -rf "$ICONS/android" "$ICONS/ios" "$ICONS"/Square*.png "$ICONS/StoreLogo.png"
 
-iconutil -c icns "$ICONSET" -o "$ICONS/icon.icns"
-rm -rf "$ICONSET" "$PADDED"
-echo "icons rebuilt (scale=$SCALE)"
+rm -f "$PADDED"
+echo "icons rebuilt (scale=$SCALE, all platforms)"
