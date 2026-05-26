@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loomings</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="titlebar" data-tauri-drag-region></div>
+
+  <div id="editor-container">
+    <div id="content-area" class="width-normal">
+      <div id="editor"></div>
+      <div id="preview" class="hidden"></div>
+    </div>
+  </div>
+
+  <div id="statusbar">
+    <div id="status-left">
+      <span id="status-app">Loomings</span>
+      <span id="status-file" class="hidden"></span>
+      <span id="dirty" class="hidden">&bull;</span>
+    </div>
+    <div id="status-right">
+      <span id="cursor-pos">Ln 1, Col 1</span>
+      <div id="stats">
+        <span id="stat-words">0 w</span>
+        <span id="stat-chars">0 c</span>
+        <span id="stat-lines">0 ln</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="palette" class="hidden">
+    <div id="palette-inner">
+      <input id="palette-input" type="text" placeholder="Jump to heading…" autocomplete="off" spellcheck="false"/>
+      <ul id="palette-list"></ul>
+    </div>
+  </div>
+
+  <script type="module" src="editor.js"></script>
+</body>
+</html>
