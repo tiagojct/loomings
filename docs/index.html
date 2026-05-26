@@ -3,112 +3,69 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loomings — A minimalist Markdown writing app</title>
-  <meta name="description" content="The shapes loom before they take form. A minimalist Markdown writing app for macOS. Tauri + CodeMirror 6. Open source, MIT.">
+  <title>Loomings — A markdown writing app</title>
+  <meta name="description" content="A markdown writing app for macOS, Windows and Linux. Stays out of the way.">
   <meta property="og:title" content="Loomings">
-  <meta property="og:description" content="A minimalist Markdown writing app for macOS.">
+  <meta property="og:description" content="A markdown writing app for macOS, Windows, and Linux. Stays out of the way.">
   <meta property="og:image" content="assets/icon.png">
   <meta property="og:type" content="website">
-  <meta name="theme-color" content="#0D2F42">
+  <meta name="theme-color" content="#F1E7D2">
   <link rel="icon" type="image/png" href="assets/icon.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="hero">
-    <div class="hero-inner">
-      <img src="assets/icon.png" alt="Loomings icon" class="hero-icon" width="180" height="180">
+  <main>
+    <header>
+      <img src="assets/icon.png" alt="" class="mark" width="84" height="84">
       <h1>Loomings</h1>
-      <p class="tagline">The shapes loom before they take form.</p>
-      <p class="lede">A minimalist Markdown writing app for macOS. Real syntax highlighting, focus mode, distraction-free.</p>
-      <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/tiagojct/loomings/releases/latest">Download</a>
-        <a class="btn btn-ghost" href="https://github.com/tiagojct/loomings">View on GitHub</a>
-      </div>
-      <p class="cta-note">macOS · Windows · Linux · unsigned builds</p>
+      <p class="sub">A markdown writing app.</p>
+    </header>
 
-      <details class="gk-note">
-        <summary>macOS: "Loomings.app is damaged"?</summary>
-        <p>Unsigned builds get quarantined by Gatekeeper. After moving the app to <code>/Applications</code>:</p>
-        <pre><code>xattr -dr com.apple.quarantine /Applications/Loomings.app</code></pre>
-        <p>Or open System Settings → Privacy &amp; Security → "Open Anyway" after a failed launch attempt.</p>
-      </details>
-    </div>
-  </header>
+    <article>
+      <p class="lede">
+        <span class="dropcap">C</span>all me Ishmael. Some years ago — never mind how long precisely — having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.
+      </p>
 
-  <section class="features">
-    <h2>What it does</h2>
-    <div class="grid">
-      <article>
-        <h3>Inline Markdown</h3>
-        <p>Bold, italic, headings, code, links — rendered as you type. CodeMirror 6 with lezer markdown.</p>
-      </article>
-      <article>
-        <h3>Focus mode</h3>
-        <p>Dims everything outside the current sentence. Cmd+Shift+D.</p>
-      </article>
-      <article>
-        <h3>Outline palette</h3>
-        <p>Cmd+P — jump to any heading by fuzzy match.</p>
-      </article>
-      <article>
-        <h3>Smart typography</h3>
-        <p>"foo" → "foo", -- → —, ... → … as you type. Toggleable.</p>
-      </article>
-      <article>
-        <h3>Lists that finish themselves</h3>
-        <p>Enter on <code>- foo</code> continues the bullet. Numbered lists increment. Empty line exits.</p>
-      </article>
-      <article>
-        <h3>Word goal</h3>
-        <p>Set a target. Progress shows in the statusbar. Cmd+Shift+G.</p>
-      </article>
-      <article>
-        <h3>File watcher</h3>
-        <p>If a file changes outside the app, prompts to reload. No silent overwrites.</p>
-      </article>
-      <article>
-        <h3>Crash recovery</h3>
-        <p>Unsaved buffer persisted to disk every second. Recover on next launch.</p>
-      </article>
-      <article>
-        <h3>Pequod theme</h3>
-        <p>Dark navy + amber, parchment for light mode. Follows system or toggle manually.</p>
-      </article>
-    </div>
-  </section>
+      <p>
+        Loomings is a markdown editor for macOS, Windows, and Linux. It opens to a blank page. You write. It stays out of the way. The first chapter of Moby-Dick is called <em>Loomings</em>, and that is where this came from.
+      </p>
 
-  <section class="specs">
-    <h2>Under the hood</h2>
-    <ul>
-      <li><strong>Tauri v2</strong> — Rust shell + system WebKit. No bundled Chromium.</li>
-      <li><strong>CodeMirror 6</strong> — virtualized editor, native undo, IME-safe.</li>
-      <li><strong>markdown-it</strong> — CommonMark preview with URL sanitization.</li>
-      <li><strong>~12 MB</strong> universal binary. <strong>~30 MB</strong> idle RAM.</li>
-      <li><strong>MIT licensed</strong>. Open source.</li>
-    </ul>
-  </section>
+      <p class="actions">
+        <a class="btn" href="https://github.com/tiagojct/loomings/releases/latest">Download</a>
+        <a class="link" href="https://github.com/tiagojct/loomings">Source on GitHub →</a>
+      </p>
 
-  <section class="shortcuts">
-    <h2>Keyboard</h2>
-    <div class="kb-grid">
-      <div><kbd>⌘</kbd><kbd>N</kbd> New</div>
-      <div><kbd>⌘</kbd><kbd>O</kbd> Open</div>
-      <div><kbd>⌘</kbd><kbd>S</kbd> Save</div>
-      <div><kbd>⌘</kbd><kbd>B</kbd> Bold</div>
-      <div><kbd>⌘</kbd><kbd>I</kbd> Italic</div>
-      <div><kbd>⌘</kbd><kbd>K</kbd> Link</div>
-      <div><kbd>⌘</kbd><kbd>F</kbd> Find</div>
-      <div><kbd>⌘</kbd><kbd>P</kbd> Jump to heading</div>
-      <div><kbd>⌘</kbd><kbd>⇧</kbd><kbd>D</kbd> Focus mode</div>
-      <div><kbd>⌘</kbd><kbd>⇧</kbd><kbd>P</kbd> Preview</div>
-      <div><kbd>⌘</kbd><kbd>⇧</kbd><kbd>T</kbd> Cycle theme</div>
-      <div><kbd>⌘</kbd><kbd>⇧</kbd><kbd>G</kbd> Word goal</div>
-    </div>
-  </section>
+      <h2>What is there</h2>
+      <p>
+        Real markdown in the editor — bold reads bold, headings read heading, code reads code. List lines that continue themselves when you press <em>return</em>, and stop when you press it twice. An outline you can jump to with <em>⌘P</em>. A focus mode that dims everything outside the sentence under the cursor. Word counts. A word goal if you want one. Find and replace. Light and dark themes that follow the system if you let them.
+      </p>
 
-  <footer>
-    <p>Built by <a href="https://tiagojct.eu">Tiago Jacinto</a> · <a href="https://github.com/tiagojct/loomings">Source</a> · MIT</p>
-    <p class="quote">“Some years ago — never mind how long precisely — having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.” — Herman Melville, <em>Moby-Dick</em>, Chapter 1: <em>Loomings</em>.</p>
-  </footer>
+      <h2>What is not</h2>
+      <p>
+        No cloud sync. No account. No tracking. No newsletter. No themes marketplace. No AI assistant pestering the margin. No mobile companion. The files are your files; they live wherever you put them.
+      </p>
+
+      <h2>Built with</h2>
+      <p>
+        Tauri 2 and CodeMirror 6. The macOS build is about twelve megabytes and idles at thirty of RAM. The source is MIT-licensed. The icon is set in italic Didot. The body in this page is Source Serif. The colours come from a chapter that opens with a man bored of land.
+      </p>
+
+      <h2>If macOS calls it damaged</h2>
+      <p>
+        The build is unsigned — no Apple Developer ID at the moment. Sequoia and Tahoe refuse the right-click trick now, so after moving <code>Loomings.app</code> into <code>/Applications</code>, run:
+      </p>
+      <pre><code>xattr -dr com.apple.quarantine /Applications/Loomings.app</code></pre>
+      <p>
+        That removes the quarantine flag Safari attached on download. The app opens normally afterwards. Alternatively, attempt to launch once, then approve it in System Settings under <em>Privacy &amp; Security</em>.
+      </p>
+    </article>
+
+    <footer>
+      <hr>
+      <p>
+        By <a href="https://tiagojct.eu">Tiago Jacinto</a>. The shapes loom before they take form.
+      </p>
+    </footer>
+  </main>
 </body>
 </html>
