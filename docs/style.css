@@ -113,6 +113,40 @@ h1 {
   font-size: 13px;
   color: var(--fg-ghost);
 }
+.gk-note {
+  max-width: 520px;
+  margin: 24px auto 0;
+  text-align: left;
+  font-size: 14px;
+  color: var(--fg-dim);
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+.gk-note summary {
+  cursor: pointer;
+  color: var(--accent-light);
+  font-weight: 500;
+  list-style: none;
+}
+.gk-note summary::-webkit-details-marker { display: none; }
+.gk-note summary::before { content: "▸ "; }
+.gk-note[open] summary::before { content: "▾ "; }
+.gk-note p { margin-top: 10px; line-height: 1.55; }
+.gk-note pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 10px 0;
+}
+.gk-note code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent-light);
+}
 
 /* ===== Features grid ===== */
 .features, .specs, .shortcuts {

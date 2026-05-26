@@ -28,9 +28,21 @@ Built with Tauri v2 + CodeMirror 6. ~12MB binary, native macOS WebKit, Rust back
 
 ## Install
 
-Download the latest `.dmg` from [Releases](https://github.com/tiagojct/loomings/releases).
+Download the latest installer from [Releases](https://github.com/tiagojct/loomings/releases):
 
-App is unsigned (no Apple Developer ID). First launch: right-click `Loomings.app` → Open → confirm. After that it launches normally.
+- **macOS**: `Loomings_*_aarch64.dmg` (Apple Silicon) or `Loomings_*_x64.dmg` (Intel)
+- **Windows**: `Loomings_*_x64-setup.exe`
+- **Linux**: `Loomings_*_amd64.deb` or `.AppImage`
+
+### macOS Gatekeeper
+
+App is unsigned (no Apple Developer ID, $99/yr). macOS Sequoia/Tahoe blocks "right-click → Open" for unsigned apps. After moving `Loomings.app` to `/Applications`, strip the quarantine attribute:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Loomings.app
+```
+
+App opens normally after that. Alternative: open System Settings → Privacy & Security, attempt to launch, then click "Open Anyway".
 
 ## Build from source
 

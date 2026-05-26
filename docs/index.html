@@ -21,10 +21,17 @@
       <p class="tagline">The shapes loom before they take form.</p>
       <p class="lede">A minimalist Markdown writing app for macOS. Real syntax highlighting, focus mode, distraction-free.</p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/tiagojct/loomings/releases/latest">Download for macOS</a>
+        <a class="btn btn-primary" href="https://github.com/tiagojct/loomings/releases/latest">Download</a>
         <a class="btn btn-ghost" href="https://github.com/tiagojct/loomings">View on GitHub</a>
       </div>
-      <p class="cta-note">Universal binary · macOS 11+ · unsigned (right-click → Open)</p>
+      <p class="cta-note">macOS · Windows · Linux · unsigned builds</p>
+
+      <details class="gk-note">
+        <summary>macOS: "Loomings.app is damaged"?</summary>
+        <p>Unsigned builds get quarantined by Gatekeeper. After moving the app to <code>/Applications</code>:</p>
+        <pre><code>xattr -dr com.apple.quarantine /Applications/Loomings.app</code></pre>
+        <p>Or open System Settings → Privacy &amp; Security → "Open Anyway" after a failed launch attempt.</p>
+      </details>
     </div>
   </header>
 
