@@ -5,7 +5,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
-use tauri::menu::{MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
@@ -194,6 +195,75 @@ fn watch_file(app: AppHandle, state: State<AppState>, path: String) -> Result<()
 
     *state.watcher.lock().unwrap() = Some(debouncer);
     Ok(())
+}
+
+#[derive(Serialize, Clone)]
+struct UpdateInfo {
+    version: String,
+    url: String,
+    body: String,
+}
+
+fn parse_semver(s: &str) -> Option<(u32, u32, u32)> {
+    let s = s.trim_start_matches('v');
+    let mut parts = s.split('.');
+    let major: u32 = parts.next()?.parse().ok()?;
+    let minor: u32 = parts.next()?.parse().ok()?;
+    let patch_raw = parts.next()?;
+    let patch: u32 = patch_raw.split(|c: char| !c.is_ascii_digit()).next()?.parse().ok()?;
+    Some((major, minor, patch))
+}
+
+#[tauri::command]
+fn check_for_update() -> Option<UpdateInfo> {
+    let current = parse_semver(env!("CARGO_PKG_VERSION"))?;
+    let agent = ureq::AgentBuilder::new()
+        .timeout(Duration::from_secs(5))
+        .user_agent("loomings-update-check")
+        .build();
+    let resp = agent
+        .get("https://api.github.com/repos/tiagojct/loomings/releases/latest")
+        .call()
+        .ok()?;
+    let json: serde_json::Value = resp.into_json().ok()?;
+    let tag = json.get("tag_name")?.as_str()?.to_string();
+    let url = json
+        .get("html_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or("https://github.com/tiagojct/loomings/releases/latest")
+        .to_string();
+    let body = json
+        .get("body")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let remote = parse_semver(&tag)?;
+    if remote > current {
+        Some(UpdateInfo {
+            version: tag.trim_start_matches('v').to_string(),
+            url,
+            body,
+        })
+    } else {
+        None
+    }
+}
+
+#[tauri::command]
+fn open_example(app: AppHandle) -> Result<(), String> {
+    let path = app
+        .path()
+        .resolve("examples/loomings.md", BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    app.emit(
+        "file-opened",
+        FileOpenedPayload {
+            path: path.to_string_lossy().to_string(),
+            content,
+        },
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -385,12 +455,53 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
         ])
         .build()?;
 
+    let help_about = MenuItemBuilder::new("About Loomings")
+        .id("help-about")
+        .build(app)?;
+    let help_example = MenuItemBuilder::new("Open Example")
+        .id("help-example")
+        .build(app)?;
+    let help_check_update = MenuItemBuilder::new("Check for Updates…")
+        .id("help-check-update")
+        .build(app)?;
+    let help_website = MenuItemBuilder::new("Visit Website")
+        .id("help-website")
+        .build(app)?;
+    let help_github = MenuItemBuilder::new("GitHub Repository")
+        .id("help-github")
+        .build(app)?;
+    let help_sep1 = PredefinedMenuItem::separator(app)?;
+    let help_sep2 = PredefinedMenuItem::separator(app)?;
+    let help_sep3 = PredefinedMenuItem::separator(app)?;
+    let help_menu = SubmenuBuilder::new(app, "Help")
+        .items(&[
+            &help_about,
+            &help_sep1,
+            &help_example,
+            &help_sep2,
+            &help_check_update,
+            &help_sep3,
+            &help_website,
+            &help_github,
+        ])
+        .build()?;
+
     let mut menu_builder = MenuBuilder::new(app);
 
     #[cfg(target_os = "macos")]
     {
         let app_name = "Loomings";
-        let about = PredefinedMenuItem::about(app, Some(app_name), None)?;
+        let about_meta = AboutMetadataBuilder::new()
+            .name(Some(app_name.to_string()))
+            .version(Some(env!("CARGO_PKG_VERSION").to_string()))
+            .authors(Some(vec!["Tiago Jacinto".to_string()]))
+            .license(Some("MIT".to_string()))
+            .website(Some("https://tiagojct.eu/loomings".to_string()))
+            .website_label(Some("tiagojct.eu/loomings".to_string()))
+            .copyright(Some("© 2026 Tiago Jacinto".to_string()))
+            .comments(Some("A markdown writing app. Built with Tauri 2 + CodeMirror 6.".to_string()))
+            .build();
+        let about = PredefinedMenuItem::about(app, Some(app_name), Some(about_meta))?;
         let services = PredefinedMenuItem::services(app, None)?;
         let hide = PredefinedMenuItem::hide(app, None)?;
         let hide_others = PredefinedMenuItem::hide_others(app, None)?;
@@ -416,7 +527,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
     }
 
     let menu = menu_builder
-        .items(&[&file_menu, &edit_menu, &view_menu])
+        .items(&[&file_menu, &edit_menu, &view_menu, &help_menu])
         .build()?;
     app.set_menu(menu)?;
     Ok(())
@@ -468,7 +579,9 @@ pub fn run() {
             cancel_quit_request,
             open_file_dialog,
             watch_file,
-            unwatch_file
+            unwatch_file,
+            check_for_update,
+            open_example
         ])
         .setup(|app| {
             build_menu(&app.handle())?;
@@ -505,6 +618,16 @@ pub fn run() {
                 "cycle-goal"     => { let _ = app.emit("cycle-goal", ()); }
                 "toggle-typo"    => { let _ = app.emit("toggle-typo", ()); }
                 "open-palette"   => { let _ = app.emit("open-palette", ()); }
+                "help-about"     => { let _ = app.emit("open-about", ()); }
+                "help-example"   => {
+                    let app_handle = app.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ = open_example(app_handle);
+                    });
+                }
+                "help-check-update" => { let _ = app.emit("manual-update-check", ()); }
+                "help-website"   => { let _ = app.emit("open-url", "https://tiagojct.eu/loomings"); }
+                "help-github"    => { let _ = app.emit("open-url", "https://github.com/tiagojct/loomings"); }
                 "font-inc"       => { let _ = app.emit("font-size", 1i32); }
                 "font-dec"       => { let _ = app.emit("font-size", -1i32); }
                 "toggle-fullscreen" => {

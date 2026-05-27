@@ -1,6 +1,6 @@
 [package]
 name = "loomings"
-version = "0.2.2"
+version = "0.2.3"
 description = "A minimalist Markdown writing app"
 authors = ["Tiago Jacinto"]
 license = "MIT"
@@ -21,6 +21,7 @@ serde_json = "1"
 tokio = { version = "1", features = ["sync"] }
 notify = "7"
 notify-debouncer-mini = "0.5"
+ureq = { version = "2", default-features = false, features = ["json", "tls"] }
 
 [profile.release]
 panic = "abort"

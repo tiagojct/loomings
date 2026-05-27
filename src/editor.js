@@ -627,6 +627,84 @@ function closePalette() {
   view.focus();
 }
 
+// ==========================
+//  About modal
+// ==========================
+
+const aboutEl       = document.getElementById('about');
+const aboutIcon     = document.getElementById('about-icon');
+const aboutVersion  = document.getElementById('about-version');
+const aboutExample  = document.getElementById('about-example');
+
+const APP_VERSION = '0.2.3';
+
+function initAbout() {
+  aboutIcon.src = new URL('./icon.png', import.meta.url).href;
+  aboutIcon.onerror = () => { aboutIcon.style.display = 'none'; };
+  aboutVersion.textContent = `Version ${APP_VERSION}`;
+}
+
+function openAbout() {
+  aboutEl.classList.remove('hidden');
+}
+function closeAbout() {
+  aboutEl.classList.add('hidden');
+  view.focus();
+}
+
+aboutEl.addEventListener('click', (e) => {
+  if (e.target === aboutEl) closeAbout();
+});
+aboutEl.querySelectorAll('a[data-url]').forEach(a => {
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    window.open(a.dataset.url, '_blank');
+  });
+});
+aboutExample.addEventListener('click', (e) => {
+  e.preventDefault();
+  closeAbout();
+  invoke('open_example').catch(() => {});
+});
+
+// ==========================
+//  Update banner
+// ==========================
+
+const updateBannerEl  = document.getElementById('update-banner');
+const updateMessageEl = document.getElementById('update-message');
+const updateLinkEl    = document.getElementById('update-link');
+const updateDismissEl = document.getElementById('update-dismiss');
+
+let latestUpdateUrl = null;
+
+function showUpdateBanner(info) {
+  updateMessageEl.textContent = `Loomings ${info.version} is available.`;
+  latestUpdateUrl = info.url;
+  updateBannerEl.classList.remove('hidden');
+}
+function hideUpdateBanner() {
+  updateBannerEl.classList.add('hidden');
+}
+updateLinkEl.addEventListener('click', (e) => {
+  e.preventDefault();
+  if (latestUpdateUrl) window.open(latestUpdateUrl, '_blank');
+});
+updateDismissEl.addEventListener('click', hideUpdateBanner);
+
+async function runUpdateCheck(manual = false) {
+  try {
+    const info = await invoke('check_for_update');
+    if (info) {
+      showUpdateBanner(info);
+    } else if (manual) {
+      flashStatus('You’re up to date.');
+    }
+  } catch (_) {
+    if (manual) flashStatus('Update check failed.');
+  }
+}
+
 function jumpToHeading(idx) {
   const list = filteredHeadings();
   const h = list[idx];
@@ -851,8 +929,9 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
-    if (isPreviewVisible) { togglePreview();   return; }
-    if (isFocusMode)      { toggleFocusMode(); return; }
+    if (!aboutEl.classList.contains('hidden')) { closeAbout();      return; }
+    if (isPreviewVisible)                      { togglePreview();   return; }
+    if (isFocusMode)                           { toggleFocusMode(); return; }
     return;
   }
 
@@ -915,6 +994,9 @@ async function registerListeners() {
     listen('cycle-goal',           ()  => cycleWordGoal()),
     listen('toggle-typo',          ()  => toggleSmartTypo()),
     listen('open-palette',         ()  => openPalette()),
+    listen('open-about',           ()  => openAbout()),
+    listen('manual-update-check',  ()  => runUpdateCheck(true)),
+    listen('open-url',             (e) => { if (e.payload) window.open(e.payload, '_blank'); }),
     listen('font-size',            (e) => changeFontSize(e.payload)),
     listen('request-close',     async () => {
       if (isDirty) {
@@ -952,6 +1034,8 @@ if (titlebar) {
 
 (async () => {
   await registerListeners();
+  initAbout();
+  setTimeout(() => runUpdateCheck(false), 3000);
   const scratch = await ipcReadScratch();
   if (scratch && scratch.content && scratch.content.length > 0) {
     const recover = await ask(
