@@ -9,6 +9,25 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 First stable release. The app has been complete enough to use daily for
 some time; this version is the line in the sand.
 
+### Install
+
+**macOS (Apple Silicon) — Homebrew:**
+
+```sh
+brew install --cask tiagojct/loomings/loomings
+```
+
+Homebrew automatically strips `com.apple.quarantine`, so no manual
+`xattr` command is needed.
+
+**Direct downloads** are attached below for all platforms (`.dmg`,
+`.msi`/`.exe`, `.deb`, `.AppImage`, `.rpm`). For unsigned macOS direct
+downloads, after moving the app into `/Applications`:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Loomings.app
+```
+
 ### Editor
 - Real markdown syntax in the editor — bold, italic, headings (H1/H2/H3/H4
   visually distinct), inline code, links.
