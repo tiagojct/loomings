@@ -304,6 +304,153 @@ Resist the temptation to add:
 
 ---
 
+## Landing page audit
+
+`docs/index.html` + `docs/style.css` — served at `tiagojct.eu/loomings`
+
+The landing page is already strong: editorial tone, Pequod palette, dark mode support, Source Serif 4 typography, drop cap, no marketing fluff. The "What is not" section is a manifesto — rare and valuable. However, for a v1.0.0 launch, several improvements would reduce friction and communicate the product more effectively.
+
+### 1. Single screenshot, zero feature visuals
+
+**Current:** One screenshot showing the editor with Moby-Dick chapter 1. This sells the tone but not the features. A first-time visitor cannot see focus mode, the outline palette, the preview, or the word goal — these are invisible until the app is installed.
+
+**Recommendation:** Add two additional screenshots, small and inline with the relevant sections:
+- One showing focus mode (dimmed text with active sentence highlighted), placed near the focus mode mention in "What is there"
+- One showing the preview pane, placed near the preview mention
+
+Format: PNG, ~800px wide, same border/shadow treatment as the existing `.shot` figure. No carousel — static, editorial placement within the text flow.
+
+### 2. Generic "Download" button
+
+**Current:** A single "Download" button linking to `github.com/tiagojct/loomings/releases/latest`. Non-technical users land on a page of technical filenames (`aarch64.dmg`, `amd64.deb`, `x64-setup.exe`) with no guidance. Drop-off at this step is likely high.
+
+**Recommendation:** Replace with platform-specific buttons or a segmented control:
+
+```
+[macOS Apple Silicon]  [macOS Intel]  [Windows]  [Linux .deb]  [Other Linux]
+```
+
+Each button links directly to the asset URL on the latest GitHub release. The URLs can be hardcoded per release or generated via a small build script that fetches `/releases/latest` and extracts asset download URLs. For v1.0.0, hardcoding is acceptable — update with each release.
+
+Style: keep the ink-on-parchment aesthetic. No OS logos. Platform names in Source Serif, monospace file extensions in JetBrains Mono.
+
+### 3. Dark mode support is incomplete
+
+**Current:** The CSS has `@media (prefers-color-scheme: dark)` with correct palette values. But:
+- The `<meta name="theme-color">` tag only specifies the light value (`#F1E7D2`). In dark-mode browsers, the address bar stays parchment-colored against a dark page — visually broken.
+- There is no manual theme toggle. For a product page, a sun/moon toggle is expected, though system-respecting is acceptable for a static page.
+
+**Recommendation:**
+- Add: `<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0B1F2D">`
+- Optional: a small theme toggle in the header using a CSS-class-based override + `localStorage`
+
+### 4. No keyboard shortcuts reference
+
+**Current:** The README has a full shortcuts table. The landing page has none. Someone who reads the feature descriptions ("focus mode that dims everything…") has to go to GitHub to learn how to activate it.
+
+**Recommendation:** Add a compact "How it works" section with 5–6 key shortcuts in visual pills:
+
+```html
+<div class="shortcuts">
+  <span class="key"><kbd>⌘P</kbd> Outline</span>
+  <span class="key"><kbd>⌘⇧D</kbd> Focus</span>
+  <span class="key"><kbd>⌘⇧P</kbd> Preview</span>
+  <span class="key"><kbd>⌘⇧W</kbd> Width</span>
+  <span class="key"><kbd>⌘⇧T</kbd> Theme</span>
+  <span class="key"><kbd>⌘⇧G</kbd> Goal</span>
+</div>
+```
+
+Style each pill as an inline-flex container: JetBrains Mono for the keys, Source Serif for the labels, subtle border, matching the ink-on-parchment aesthetic. No background fill — ghost buttons in the same style as the rest of the page.
+
+### 5. Redundant @font-face declaration
+
+**Current:** `style.css` has both a manual `@font-face` block for Source Serif 4 (lines 30–37) and a `@import` from Google Fonts (line 39). The `@font-face` `src: url(...)` points to a Google Fonts CSS URL, not a font file. This does not work — the browser ignores it because the URL returns CSS, not a font binary. The `@import` on line 39 loads the font correctly, making the `@font-face` block dead code.
+
+**Recommendation:** Remove the manual `@font-face` block (lines 30–37). The `@import` alone is sufficient. If `local()` prioritization is desired, use a proper `@font-face` with `local()` in `src:` and a font file URL or `url()` pointing to the Google Fonts CSS — but this is unnecessary complexity for a single-page static site.
+
+### 6. "What is not" section deserves visual weight
+
+**Current:** A single paragraph listing anti-features. This is the strongest piece of positioning on the page — it defines what Loomings refuses to be. It should not look like body text.
+
+**Recommendation:** Render as a styled list with em-dash or multiplication-sign bullets:
+
+```html
+<ul class="not-list">
+  <li>No cloud sync</li>
+  <li>No account</li>
+  <li>No tracking</li>
+  <li>No newsletter</li>
+  <li>No themes marketplace</li>
+  <li>No AI assistant pestering the margin</li>
+  <li>No mobile companion</li>
+</ul>
+```
+
+Style: no standard bullets. Use `::before { content: "—"; }` with the accent color. Slightly larger font size than body text (20px). Each item on its own line with comfortable spacing. The list should feel deliberate — each line is a commitment.
+
+### 7. Footer is too minimal
+
+**Current:** Only name, tagline, and a short horizontal rule. No link to GitHub, releases, or the main site. For a product page, the footer should provide the user's next action.
+
+**Recommendation:**
+
+```
+Loomings · v1.0.0 · by Tiago Jacinto · GitHub · tiagojct.eu
+```
+
+App name links to the top of the page. Version links to the GitHub releases page. Author name links to tiagojct.eu. GitHub links to the repo. Keep the horizontal rule. Keep the italic style. Add version number for transparency.
+
+### 8. Open Graph image is the app icon (84×84)
+
+**Current:** `og:image` points to `assets/icon.png` — an 84×84 app icon. When shared on Twitter, Mastodon, LinkedIn, or iMessage, the preview card shows a tiny square icon with no text. This is a missed opportunity for every social share.
+
+**Recommendation:** Create a dedicated social share image: 1200×630px, dark parchment background (`#0B1F2D` or `#F1E7D2`), with the app name ("Loomings") in italic Source Serif Display, the tagline below in regular weight, and the app icon small in a corner. The image communicates the product identity at a glance. Tools: any image editor, or generate via HTML→screenshot automation.
+
+### 9. No version number visible
+
+**Current:** The page mentions "v0.2.3" nowhere. For a launched product, showing the current version builds trust (this is maintained, not abandonware) and helps users identify whether they have the latest.
+
+**Recommendation:** Add the version number to the header (below the subtitle: "v1.0.0") or the footer. Subtle, muted color, monospace font. Updates with each release tag.
+
+### Landing page improvement plan (ordered by impact)
+
+| # | Change | Effort | Impact |
+|---|--------|--------|--------|
+| 1 | Platform-specific download buttons | 30 min | High — reduces install friction |
+| 2 | +2 screenshots (focus mode, preview) | 20 min | High — shows the product |
+| 3 | Keyboard shortcuts section | 15 min | Medium — communicates usability |
+| 4 | Style "What is not" as a list | 10 min | Medium — reinforces positioning |
+| 5 | Fix redundant @font-face | 5 min | Low — cleanup |
+| 6 | Meta theme-color for dark mode | 2 min | Low — polish |
+| 7 | Footer with links and version | 10 min | Low — navigation and trust |
+| 8 | Social share image (1200×630) | 30 min | Medium — social reach |
+| 9 | Version number in header | 2 min | Low — trust signal |
+| **Total** | | **~2 hours** | |
+
+---
+
+## Updated launch checklist
+
+- [ ] Bump version to 1.0.0 in package.json, Cargo.toml, tauri.conf.json
+- [ ] Write v1.0.0 release notes
+- [ ] Add `.qmd` and `.rmd` to file filters in lib.rs
+- [ ] Landing page: platform-specific download buttons (item 1)
+- [ ] Landing page: feature screenshots (item 2)
+- [ ] Landing page: keyboard shortcuts section (item 3)
+- [ ] Landing page: style "What is not" list (item 4)
+- [ ] Landing page: fix @font-face + theme-color (items 5, 6)
+- [ ] Landing page: footer + version number (items 7, 9)
+- [ ] Landing page: social share image (item 8)
+- [ ] Verify landing page works at tiagojct.eu/loomings
+- [ ] Verify macOS About panel shows correct icon
+- [ ] Tag `v1.0.0` and push
+- [ ] Wait for CI to complete (4 platforms, ~15 minutes)
+- [ ] Review draft release, paste release notes, click "Publish"
+- [ ] Announce (blog post, Mastodon, LinkedIn, Hacker News?)
+
+---
+
 ## File inventory
 
 ```
