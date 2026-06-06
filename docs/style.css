@@ -246,6 +246,21 @@ footer a { color: var(--ink-soft); }
 
 /* === Downloads grid (B1) === */
 .downloads-block { margin: 2.4em 0 3em; }
+.brew-line {
+  margin: 0 0 18px !important;
+  font-size: 15px;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+.brew-line code {
+  font-style: normal;
+  background: var(--paper-soft);
+  padding: 2px 8px;
+  border-radius: 2px;
+  font-size: 13px;
+  color: var(--ink);
+  border: 1px solid var(--rule);
+}
 .downloads {
   display: grid;
   grid-template-columns: 1fr 1fr;

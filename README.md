@@ -12,6 +12,16 @@ Built with Tauri 2 + CodeMirror 6. ~12 MB binary, native system WebView, Rust ba
 
 ## Install
 
+### macOS (Homebrew, Apple Silicon)
+
+```sh
+brew install --cask tiagojct/loomings/loomings
+```
+
+Homebrew strips `com.apple.quarantine` automatically — no `xattr` command needed.
+
+### Direct download
+
 | Platform | File |
 |---|---|
 | macOS (Apple Silicon) | `Loomings_<ver>_aarch64.dmg` |
