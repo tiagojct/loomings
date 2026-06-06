@@ -5,4 +5,5 @@ src-tauri/gen/
 .DS_Store
 *.log
 scripts/pad-icon
+scripts/render-og
 .cargo/

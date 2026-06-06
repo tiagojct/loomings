@@ -6,6 +6,7 @@ Built with Tauri 2 + CodeMirror 6. ~12 MB binary, native system WebView, Rust ba
 
 **Site:** [tiagojct.eu/loomings](https://tiagojct.eu/loomings)
 **Downloads:** [Latest release](https://github.com/tiagojct/loomings/releases/latest)
+**Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ![Loomings editor showing chapter 1 of Moby-Dick](docs/assets/screenshot.png)
 

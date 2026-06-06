@@ -1,6 +1,6 @@
 [package]
 name = "loomings"
-version = "0.2.3"
+version = "1.0.0"
 description = "A minimalist Markdown writing app"
 authors = ["Tiago Jacinto"]
 license = "MIT"

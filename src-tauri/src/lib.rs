@@ -61,7 +61,7 @@ async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>,
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .add_filter("Markdown", &["md", "markdown", "txt"])
+        .add_filter("Markdown", &["md", "markdown", "qmd", "rmd", "txt"])
         .set_file_name("untitled.md")
         .set_title("Save Markdown File")
         .save_file(move |path| {
@@ -278,7 +278,7 @@ async fn open_file_dialog(app: AppHandle) -> Result<Option<FileOpenedPayload>, S
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .add_filter("Markdown", &["md", "markdown", "txt"])
+        .add_filter("Markdown", &["md", "markdown", "qmd", "rmd", "txt"])
         .add_filter("All Files", &["*"])
         .set_title("Open Markdown File")
         .pick_file(move |path| {

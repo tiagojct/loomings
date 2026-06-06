@@ -636,7 +636,7 @@ const aboutIcon     = document.getElementById('about-icon');
 const aboutVersion  = document.getElementById('about-version');
 const aboutExample  = document.getElementById('about-example');
 
-const APP_VERSION = '0.2.3';
+const APP_VERSION = '1.0.0';
 
 function initAbout() {
   aboutIcon.src = new URL('./icon.png', import.meta.url).href;

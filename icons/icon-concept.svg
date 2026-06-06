@@ -1,0 +1,108 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background gradient: deep navy, lighter at top -->
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0D2F42"/>
+      <stop offset="100%" stop-color="#02101B"/>
+    </linearGradient>
+
+    <!-- Fog gradient: cream, fading to transparent horizontally -->
+    <linearGradient id="fog1" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F7F3EE" stop-opacity="0"/>
+      <stop offset="35%" stop-color="#EAE1D7" stop-opacity="0.15"/>
+      <stop offset="65%" stop-color="#DBC9B6" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#DBC9B6" stop-opacity="0.08"/>
+    </linearGradient>
+
+    <linearGradient id="fog2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F7F3EE" stop-opacity="0"/>
+      <stop offset="40%" stop-color="#F7F3EE" stop-opacity="0.12"/>
+      <stop offset="70%" stop-color="#EAE1D7" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#DBC9B6" stop-opacity="0.04"/>
+    </linearGradient>
+
+    <linearGradient id="fog3" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F7F3EE" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#EAE1D7" stop-opacity="0.08"/>
+      <stop offset="80%" stop-color="#F7F3EE" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#DBC9B6" stop-opacity="0.02"/>
+    </linearGradient>
+
+    <!-- Silhouette: dark form that sharpens rightward -->
+    <linearGradient id="shape" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0D2F42" stop-opacity="0"/>
+      <stop offset="30%" stop-color="#061826" stop-opacity="0.4"/>
+      <stop offset="55%" stop-color="#02101B" stop-opacity="0.75"/>
+      <stop offset="100%" stop-color="#010A12" stop-opacity="1"/>
+    </linearGradient>
+
+    <!-- Fog overlay that softens the shape edges -->
+    <linearGradient id="fogOver" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F7F3EE" stop-opacity="0.18"/>
+      <stop offset="45%" stop-color="#EAE1D7" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#F7F3EE" stop-opacity="0"/>
+    </linearGradient>
+
+    <!-- Amber glow -->
+    <radialGradient id="glow" cx="0.85" cy="0.22" r="0.25" fx="0.85" fy="0.22">
+      <stop offset="0%" stop-color="#BD8C68" stop-opacity="0.35"/>
+      <stop offset="40%" stop-color="#BD8C68" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#BD8C68" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Rounded rectangle clip (macOS icon shape, ~22% radius) -->
+    <clipPath id="squircle">
+      <rect x="0" y="0" width="1024" height="1024" rx="225" ry="225"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#bg)" clip-path="url(#squircle)"/>
+
+  <!-- Amber glow at upper right -->
+  <rect x="0" y="0" width="1024" height="1024" fill="url(#glow)" clip-path="url(#squircle)"/>
+
+  <!-- Horizon line: thin amber -->
+  <line x1="0" y1="560" x2="1024" y2="560" stroke="#BD8C68" stroke-opacity="0.12" stroke-width="1.5" clip-path="url(#squircle)"/>
+
+  <!-- Horizon line: second, slightly lower, cream -->
+  <line x1="0" y1="590" x2="1024" y2="590" stroke="#DBC9B6" stroke-opacity="0.08" stroke-width="0.8" clip-path="url(#squircle)"/>
+
+  <!-- Fog layer 1: low, thick band -->
+  <rect x="0" y="500" width="1024" height="180" fill="url(#fog1)" clip-path="url(#squircle)"/>
+
+  <!-- Fog layer 2: mid-level -->
+  <rect x="0" y="380" width="1024" height="140" fill="url(#fog2)" clip-path="url(#squircle)"/>
+
+  <!-- Fog layer 3: upper, thin -->
+  <rect x="0" y="280" width="1024" height="100" fill="url(#fog3)" clip-path="url(#squircle)"/>
+
+  <!-- Emerging shape: sperm whale back, abstracted as a sweeping curve -->
+  <path d="
+    M 120,620
+    C 180,610  280,580  380,540
+    C 480,500  560,470  620,430
+    C 680,390  740,360  800,350
+    C 860,340  920,360  960,400
+    L 960,680
+    L 120,680
+    Z
+  " fill="url(#shape)" clip-path="url(#squircle)"/>
+
+  <!-- Shape highlight: a subtle lighter edge along the top of the silhouette -->
+  <path d="
+    M 400,530
+    C 500,490  580,460  650,425
+    C 710,392  770,365  830,353
+  " fill="none" stroke="#163F54" stroke-opacity="0.3" stroke-width="2" clip-path="url(#squircle)"/>
+
+  <!-- Foreground fog overlay: softens the silhouette's left edge -->
+  <rect x="0" y="300" width="1024" height="400" fill="url(#fogOver)" clip-path="url(#squircle)"/>
+
+  <!-- Tiny accent dot: lantern/star at upper right -->
+  <circle cx="870" cy="195" r="4" fill="#D4A882" fill-opacity="0.7" clip-path="url(#squircle)"/>
+  <circle cx="870" cy="195" r="10" fill="#BD8C68" fill-opacity="0.12" clip-path="url(#squircle)"/>
+
+  <!-- Subtle bottom edge detail: darken -->
+  <rect x="0" y="800" width="1024" height="224" fill="#02101B" fill-opacity="0.4" clip-path="url(#squircle)"/>
+</svg>
