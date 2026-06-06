@@ -15,10 +15,16 @@ Built with Tauri 2 + CodeMirror 6. ~12 MB binary, native system WebView, Rust ba
 ### macOS (Homebrew, Apple Silicon)
 
 ```sh
-brew install --cask tiagojct/loomings/loomings
+brew install --cask --no-quarantine tiagojct/loomings/loomings
 ```
 
-Homebrew strips `com.apple.quarantine` automatically — no `xattr` command needed.
+The `--no-quarantine` flag is required because the build is unsigned. Without it,
+macOS Sequoia / Tahoe Gatekeeper will reject the app on first launch with
+"Loomings.app is damaged". If you already installed without the flag, fix it with:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/Loomings.app
+```
 
 ### Direct download
 

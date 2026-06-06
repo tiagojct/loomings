@@ -14,19 +14,23 @@ some time; this version is the line in the sand.
 **macOS (Apple Silicon) — Homebrew:**
 
 ```sh
-brew install --cask tiagojct/loomings/loomings
+brew install --cask --no-quarantine tiagojct/loomings/loomings
 ```
 
-Homebrew automatically strips `com.apple.quarantine`, so no manual
-`xattr` command is needed.
-
-**Direct downloads** are attached below for all platforms (`.dmg`,
-`.msi`/`.exe`, `.deb`, `.AppImage`, `.rpm`). For unsigned macOS direct
-downloads, after moving the app into `/Applications`:
+The `--no-quarantine` flag is required because the build is unsigned.
+Modern Homebrew adds the `com.apple.quarantine` xattr by default; without
+the flag, Sequoia and Tahoe Gatekeeper refuse to launch the app with
+*"Loomings.app is damaged."* If you have already installed without the
+flag, fix the existing copy with:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Loomings.app
 ```
+
+**Direct downloads** are attached below for all platforms (`.dmg`,
+`.msi`/`.exe`, `.deb`, `.AppImage`, `.rpm`). For unsigned macOS direct
+downloads, run the same `xattr` command after moving the app into
+`/Applications`.
 
 ### Editor
 - Real markdown syntax in the editor — bold, italic, headings (H1/H2/H3/H4
