@@ -682,11 +682,29 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit = event {
-                let p = scratch_path(app_handle);
-                if p.exists() {
-                    let _ = fs::remove_file(p);
+            match event {
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                    let p = scratch_path(app_handle);
+                    if p.exists() {
+                        let _ = fs::remove_file(p);
+                    }
                 }
+                tauri::RunEvent::Opened { urls } => {
+                    for url in urls {
+                        if let Ok(path) = url.to_file_path() {
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                let _ = app_handle.emit(
+                                    "file-opened",
+                                    FileOpenedPayload {
+                                        path: path.to_string_lossy().to_string(),
+                                        content,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+                _ => {}
             }
         });
 }

@@ -4,6 +4,37 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] — 2026-06-08
+
+### Added
+
+- **File associations on all three platforms.** Loomings now registers
+  itself as a handler for `.md`, `.markdown`, `.mdown`, `.mkd`, `.qmd`,
+  `.rmd`, and `.txt`. After installing this version you can right-click
+  a markdown file in Finder/Explorer/your file manager and pick
+  "Always Open With Loomings" — double-click then opens the file in
+  Loomings directly. Files passed on launch (via Finder double-click,
+  `open file.md`, or argv) are loaded on startup.
+
+### Fixed
+
+- **Close-cancel bypass that could lose unsaved work.** When the quit
+  confirmation prompt was declined and a second close attempt arrived
+  within two seconds, the window was force-closed regardless. The
+  client now resets the close-tracker on cancel, so the prompt is
+  shown again on the next attempt.
+- **File-watcher registration race.** Three callers (loading a file,
+  save-as, scratch recovery) were fire-and-forget against the OS
+  watcher. An external edit landing in the few-ms gap was silently
+  missed. All three now await the registration before continuing.
+- **Social-card preview on LinkedIn, X, Slack, iMessage.** The
+  Open Graph and Twitter image meta tags pointed at a relative path.
+  Social crawlers require absolute URLs; they were silently falling
+  back to no preview. Now both point at the full
+  `https://tiagojct.eu/loomings/assets/og.png`. An `og:url` canonical
+  was added at the same time, and the meta `description` was brought
+  into line with `og:description` (Oxford comma).
+
 ## [1.0.0] — 2026-06-06
 
 First stable release. The app has been complete enough to use daily for
@@ -142,6 +173,7 @@ earlier Electron prototype.
 - Crash recovery via scratch buffer.
 - Dark + light Pequod themes following system preference.
 
+[1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
 [1.0.0]: https://github.com/tiagojct/loomings/releases/tag/v1.0.0
 [0.2.3]: https://github.com/tiagojct/loomings/releases/tag/v0.2.3
 [0.2.2]: https://github.com/tiagojct/loomings/releases/tag/v0.2.2
