@@ -817,7 +817,7 @@ async function handleSaveAs() {
     if (path) {
       currentFile = path;
       await ipcAddRecent(path);
-      ipcWatchFile(path);
+      await ipcWatchFile(path);
       ipcSetTitle(basename(path).replace(/\.md$/, ''));
       markClean(); refreshStatusBar();
     }
@@ -960,7 +960,7 @@ async function loadFile(payload) {
   currentFile = payload.path;
   ipcSetTitle(basename(payload.path).replace(/\.md$/, ''));
   ipcAddRecent(payload.path);
-  ipcWatchFile(payload.path);
+  await ipcWatchFile(payload.path);
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
   view.focus();
 }
@@ -1001,7 +1001,10 @@ async function registerListeners() {
     listen('request-close',     async () => {
       if (isDirty) {
         const proceed = await confirmDiscard('Quit Loomings?');
-        if (!proceed) return;
+        if (!proceed) {
+          await ipcCancelQuitRequest();
+          return;
+        }
       }
       clearTimeout(autoSaveTimer);
       clearTimeout(scratchTimer);
@@ -1048,7 +1051,7 @@ if (titlebar) {
       currentFile = scratch.current_file || null;
       if (currentFile) {
         ipcSetTitle(basename(currentFile).replace(/\.md$/, ''));
-        ipcWatchFile(currentFile);
+        await ipcWatchFile(currentFile);
       }
       markDirty();
     } else {
