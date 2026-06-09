@@ -588,6 +588,34 @@ pub fn run() {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
             }
+
+            // Cross-platform launch-with-file: read argv for a file path.
+            // macOS file opens go through RunEvent::Opened (Apple Events),
+            // so on macOS argv is usually empty for double-click; this path
+            // covers Windows, Linux, and CLI invocations like `loomings foo.md`.
+            #[cfg(not(target_os = "macos"))]
+            {
+                let args: Vec<String> = std::env::args().skip(1).collect();
+                if let Some(arg) = args.into_iter().find(|a| !a.starts_with('-')) {
+                    let path = PathBuf::from(&arg);
+                    if path.is_file() {
+                        let app_handle = app.handle().clone();
+                        std::thread::spawn(move || {
+                            std::thread::sleep(Duration::from_millis(800));
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                let _ = app_handle.emit(
+                                    "file-opened",
+                                    FileOpenedPayload {
+                                        path: path.to_string_lossy().to_string(),
+                                        content,
+                                    },
+                                );
+                            }
+                        });
+                    }
+                }
+            }
+
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -689,6 +717,7 @@ pub fn run() {
                         let _ = fs::remove_file(p);
                     }
                 }
+                #[cfg(target_os = "macos")]
                 tauri::RunEvent::Opened { urls } => {
                     for url in urls {
                         if let Ok(path) = url.to_file_path() {
