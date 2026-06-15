@@ -31,11 +31,14 @@ xattr -dr com.apple.quarantine /Applications/Loomings.app
 | Platform | File |
 |---|---|
 | macOS (Apple Silicon) | `Loomings_<ver>_aarch64.dmg` |
-| macOS (Intel) | `Loomings_<ver>_x64.dmg` |
 | Windows | `Loomings_<ver>_x64-setup.exe` or `_x64_en-US.msi` |
 | Linux (Debian/Ubuntu) | `Loomings_<ver>_amd64.deb` |
 | Linux (other) | `Loomings_<ver>_amd64.AppImage` |
 | Linux (Fedora/RHEL) | `Loomings-<ver>-1.x86_64.rpm` |
+
+> **Intel Macs:** the pre-built Intel `.dmg` is not published — the free-tier
+> `macos-13` runner queue is too long for it to land before the release goes
+> out. Intel Mac users should [build from source](#build-from-source) for now.
 
 ### macOS Gatekeeper
 

@@ -409,6 +409,11 @@ function buildState(doc = '') {
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       EditorView.lineWrapping,
+      EditorView.contentAttributes.of({
+        spellcheck: 'true',
+        autocorrect: 'on',
+        autocapitalize: 'sentences',
+      }),
       search({ top: true }),
       placeholderCompartment.of(placeholder('The shapes loom before they take form…')),
       fontSizeCompartment.of(EditorView.theme({ '&': { fontSize: editorFontSize + 'px' } })),
@@ -636,7 +641,7 @@ const aboutIcon     = document.getElementById('about-icon');
 const aboutVersion  = document.getElementById('about-version');
 const aboutExample  = document.getElementById('about-example');
 
-const APP_VERSION = '1.0.1';
+const APP_VERSION = '1.0.2';
 
 function initAbout() {
   aboutIcon.src = new URL('./icon.png', import.meta.url).href;
@@ -651,6 +656,63 @@ function closeAbout() {
   aboutEl.classList.add('hidden');
   view.focus();
 }
+
+// ==========================
+//  Welcome modal (first launch)
+// ==========================
+
+const welcomeEl           = document.getElementById('welcome');
+const welcomeInstrEl      = document.getElementById('welcome-instructions');
+const welcomeGotItBtn     = document.getElementById('welcome-got-it');
+
+function welcomeInstructionsForOS() {
+  const p = (navigator.platform || '').toLowerCase();
+  const ua = (navigator.userAgent || '').toLowerCase();
+  if (/mac/.test(p) || /mac/.test(ua)) {
+    return `
+      <ol>
+        <li>In <strong>Finder</strong>, right-click any <code>.md</code> file.</li>
+        <li>Choose <strong>Get Info</strong> (<code>⌘ I</code>).</li>
+        <li>Under <strong>Open with</strong>, pick <strong>Loomings</strong>.</li>
+        <li>Click <strong>Change All…</strong> and confirm.</li>
+      </ol>`;
+  }
+  if (/win/.test(p) || /win/.test(ua)) {
+    return `
+      <ol>
+        <li>In <strong>Explorer</strong>, right-click any <code>.md</code> file.</li>
+        <li>Choose <strong>Open with → Choose another app</strong>.</li>
+        <li>Pick <strong>Loomings</strong>, tick <strong>Always use this app</strong>, then <strong>OK</strong>.</li>
+      </ol>`;
+  }
+  return `
+    <ol>
+      <li>In your file manager, right-click any <code>.md</code> file.</li>
+      <li>Pick <strong>Open With → Other Application</strong> (or <strong>Properties → Open With</strong>).</li>
+      <li>Choose <strong>Loomings</strong> and mark it as the default.</li>
+    </ol>`;
+}
+
+function showWelcomeIfFirstLaunch() {
+  if (STORE.getBool('welcomeSeen', false)) return;
+  // If the app was launched by opening a file (Finder / argv), skip the
+  // welcome — the user already discovered the file-association story.
+  if (currentFile) {
+    STORE.setBool('welcomeSeen', true);
+    return;
+  }
+  welcomeInstrEl.innerHTML = welcomeInstructionsForOS();
+  welcomeEl.classList.remove('hidden');
+}
+function closeWelcome() {
+  welcomeEl.classList.add('hidden');
+  STORE.setBool('welcomeSeen', true);
+  view.focus();
+}
+welcomeGotItBtn.addEventListener('click', closeWelcome);
+welcomeEl.addEventListener('click', (e) => {
+  if (e.target === welcomeEl) closeWelcome();
+});
 
 aboutEl.addEventListener('click', (e) => {
   if (e.target === aboutEl) closeAbout();
@@ -692,16 +754,27 @@ updateLinkEl.addEventListener('click', (e) => {
 });
 updateDismissEl.addEventListener('click', hideUpdateBanner);
 
+let updateCheckInFlight = false;
+
 async function runUpdateCheck(manual = false) {
+  if (updateCheckInFlight) {
+    if (manual) flashStatus('Already checking…');
+    return;
+  }
+  updateCheckInFlight = true;
+  if (manual) flashStatus('Checking for updates…');
   try {
     const info = await invoke('check_for_update');
     if (info) {
       showUpdateBanner(info);
+      if (manual) flashStatus(`Loomings ${info.version} is available.`);
     } else if (manual) {
       flashStatus('You’re up to date.');
     }
   } catch (_) {
     if (manual) flashStatus('Update check failed.');
+  } finally {
+    updateCheckInFlight = false;
   }
 }
 
@@ -929,9 +1002,10 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
-    if (!aboutEl.classList.contains('hidden')) { closeAbout();      return; }
-    if (isPreviewVisible)                      { togglePreview();   return; }
-    if (isFocusMode)                           { toggleFocusMode(); return; }
+    if (!welcomeEl.classList.contains('hidden')) { closeWelcome();    return; }
+    if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
+    if (isPreviewVisible)                        { togglePreview();   return; }
+    if (isFocusMode)                             { toggleFocusMode(); return; }
     return;
   }
 
@@ -1039,6 +1113,7 @@ if (titlebar) {
   await registerListeners();
   initAbout();
   setTimeout(() => runUpdateCheck(false), 3000);
+  setTimeout(showWelcomeIfFirstLaunch, 600);
   const scratch = await ipcReadScratch();
   if (scratch && scratch.content && scratch.content.length > 0) {
     const recover = await ask(

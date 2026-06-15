@@ -4,6 +4,34 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] — 2026-06-09
+
+Polish patch from the launch-readiness audit.
+
+### Added
+
+- **Browser-native spellcheck** in the editor. Misspelled words underline
+  while you type, right-click for the system dictionary suggestions, all
+  via WebKit / WebView2 / WebKitGTK.
+- **First-launch welcome modal** with per-OS instructions for setting
+  Loomings as the default `.md` handler. Dismissable, shown once.
+- **`og:site_name` and `og:locale`** meta tags so social previews on
+  Slack, LinkedIn, iMessage display the site name beside the OG card.
+
+### Changed
+
+- **Update check shows "Checking for updates…" in the statusbar**
+  when triggered from Help → Check for Updates. Previously the manual
+  check returned silently if nothing was found until the result toast.
+- **Intel macOS download removed from the landing page and README.**
+  The free-tier `macos-13` runner queue means the Intel `.dmg` has not
+  shipped in the v1.0.x line; advertising it was a broken promise.
+  Intel users are now pointed at building from source.
+- **Instagram launch script is committed; generated PNGs are
+  gitignored.** The script (`social/instagram/generate_images.py`) is
+  the source of truth; the images regenerate from it. Cuts ~30 MB
+  from the repo working tree.
+
 ## [1.0.1] — 2026-06-08
 
 ### Added
@@ -173,6 +201,7 @@ earlier Electron prototype.
 - Crash recovery via scratch buffer.
 - Dark + light Pequod themes following system preference.
 
+[1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
 [1.0.0]: https://github.com/tiagojct/loomings/releases/tag/v1.0.0
 [0.2.3]: https://github.com/tiagojct/loomings/releases/tag/v0.2.3

@@ -6,4 +6,5 @@ src-tauri/gen/
 *.log
 scripts/pad-icon
 scripts/render-og
+social/instagram/images/
 .cargo/

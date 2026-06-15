@@ -1,6 +1,6 @@
 {
   "name": "loomings",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "A minimalist Markdown writing app. The shapes loom before they take form.",
   "type": "module",
   "scripts": {
