@@ -4,6 +4,47 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] — 2026-06-15
+
+Internals patch from the launch-readiness audit (Tier 2). No new features
+in the editor itself; what changes here is correctness, security, and one
+small View-menu addition.
+
+### Added
+
+- **Line numbers toggle** in View menu. Persisted across launches.
+- **Strict-ish Content Security Policy.** The shipped build now restricts
+  resource loading to `self`, the Tauri IPC scheme, and `api.github.com`
+  for the update check. Previously the policy was disabled entirely.
+- **Unit tests for the update-check version parser.** Covers `v`-prefix
+  stripping, pre-release suffixes (`-rc.1`, `-beta`), build metadata
+  (`+build.42`), and rejects malformed input.
+
+### Fixed
+
+- **Close-window race condition.** The previous double-tap-close guard
+  kept its state in a Rust-side mutex with a 2-second window. A second
+  close request landing in that window was force-accepted regardless of
+  the unsaved-confirm result. The state machine is gone — Rust now
+  unconditionally intercepts every close request and waits for an
+  explicit `confirm_quit` from the frontend before exiting.
+- **Cold-launch race between Apple Events and the JS event listener.**
+  When opening Loomings by double-clicking a `.md` file from Finder on
+  the very first launch, the file path could arrive before the renderer
+  had attached its `file-opened` listener, dropping the file silently.
+  The path is now cached on the Rust side and drained by the JS init
+  flow once listeners are ready. Warm-launch "Open With" while the app
+  is already running takes the direct emit path as before.
+- **Tokio worker starvation during update check.** The synchronous
+  `ureq` GET to GitHub Releases ran on a tokio worker thread, blocking
+  it for up to 5 seconds and starving every other IPC command. The
+  call now runs on `tauri::async_runtime::spawn_blocking` so the worker
+  thread stays free for IPC during the network round-trip.
+- **Silent file-watcher failures.** If the OS denied the watch
+  registration (sandbox, network filesystem, missing capability), the
+  failure was swallowed and external-edit detection was quietly dead.
+  Failures now flash in the statusbar.
+
 ## [1.0.2] — 2026-06-09
 
 Polish patch from the launch-readiness audit.
@@ -201,6 +242,7 @@ earlier Electron prototype.
 - Crash recovery via scratch buffer.
 - Dark + light Pequod themes following system preference.
 
+[1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
 [1.0.0]: https://github.com/tiagojct/loomings/releases/tag/v1.0.0

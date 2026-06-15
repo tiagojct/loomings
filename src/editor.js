@@ -3,7 +3,7 @@
 // ========================================
 
 import { EditorState, Compartment, RangeSetBuilder } from '@codemirror/state';
-import { EditorView, keymap, drawSelection, highlightActiveLine, placeholder, ViewPlugin, Decoration } from '@codemirror/view';
+import { EditorView, keymap, drawSelection, highlightActiveLine, lineNumbers, placeholder, ViewPlugin, Decoration } from '@codemirror/view';
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
@@ -160,9 +160,11 @@ const fontSizeCompartment    = new Compartment();
 const placeholderCompartment = new Compartment();
 const themeCompartment       = new Compartment();
 const highlightCompartment   = new Compartment();
+const lineNumbersCompartment = new Compartment();
 
 let themeMode  = STORE.get('themeMode', 'system');
 let activeTheme = resolveTheme(themeMode);
+let lineNumbersOn = STORE.get('lineNumbers', false);
 
 function resolveTheme(mode) {
   if (mode === 'dark' || mode === 'light') return mode;
@@ -303,6 +305,15 @@ function toggleSmartTypo() {
   flashStatus(`Smart typography: ${smartTypo ? 'on' : 'off'}`);
 }
 
+function toggleLineNumbers() {
+  lineNumbersOn = !lineNumbersOn;
+  STORE.setBool('lineNumbers', lineNumbersOn);
+  view.dispatch({
+    effects: lineNumbersCompartment.reconfigure(lineNumbersOn ? lineNumbers() : []),
+  });
+  flashStatus(`Line numbers: ${lineNumbersOn ? 'on' : 'off'}`);
+}
+
 function insertLink(view) {
   const sel = view.state.selection.main;
   if (sel.empty) {
@@ -408,6 +419,7 @@ function buildState(doc = '') {
       frontmatterPlugin,
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
+      lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
       EditorView.lineWrapping,
       EditorView.contentAttributes.of({
         spellcheck: 'true',
@@ -466,8 +478,15 @@ async function ipcSaveScratch(content, currentFile) {
 async function ipcReadScratch()  { try { return await invoke('read_scratch'); } catch (_) { return null; } }
 async function ipcClearScratch() { try { await invoke('clear_scratch'); } catch (_) {} }
 async function ipcConfirmQuit()  { return invoke('confirm_quit'); }
-async function ipcCancelQuitRequest() { try { await invoke('cancel_quit_request'); } catch (_) {} }
-async function ipcWatchFile(path) { try { await invoke('watch_file', { path }); } catch (_) {} }
+async function ipcTakeLaunchFile() { try { return await invoke('take_launch_file'); } catch (_) { return null; } }
+async function ipcFrontendReady()  { try { await invoke('frontend_ready'); } catch (_) {} }
+async function ipcWatchFile(path) {
+  // External-edit detection depends on this succeeding. If the OS denies
+  // the watch (sandbox, permissions, network FS), surface it once so the
+  // user knows reload-on-external-change is dead for this file.
+  try { await invoke('watch_file', { path }); }
+  catch (err) { flashStatus('File watcher failed: ' + (err?.message || err)); }
+}
 async function ipcUnwatchFile()  { try { await invoke('unwatch_file'); } catch (_) {} }
 
 // ==========================
@@ -641,7 +660,7 @@ const aboutIcon     = document.getElementById('about-icon');
 const aboutVersion  = document.getElementById('about-version');
 const aboutExample  = document.getElementById('about-example');
 
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 function initAbout() {
   aboutIcon.src = new URL('./icon.png', import.meta.url).href;
@@ -1067,6 +1086,7 @@ async function registerListeners() {
     listen('toggle-theme',         ()  => cycleTheme()),
     listen('cycle-goal',           ()  => cycleWordGoal()),
     listen('toggle-typo',          ()  => toggleSmartTypo()),
+    listen('toggle-line-numbers',  ()  => toggleLineNumbers()),
     listen('open-palette',         ()  => openPalette()),
     listen('open-about',           ()  => openAbout()),
     listen('manual-update-check',  ()  => runUpdateCheck(true)),
@@ -1075,10 +1095,9 @@ async function registerListeners() {
     listen('request-close',     async () => {
       if (isDirty) {
         const proceed = await confirmDiscard('Quit Loomings?');
-        if (!proceed) {
-          await ipcCancelQuitRequest();
-          return;
-        }
+        // No cancel-side IPC: the Rust handler always intercepts the close
+        // and waits for confirm_quit. Doing nothing leaves the window open.
+        if (!proceed) return;
       }
       clearTimeout(autoSaveTimer);
       clearTimeout(scratchTimer);
@@ -1112,28 +1131,43 @@ if (titlebar) {
 (async () => {
   await registerListeners();
   initAbout();
-  setTimeout(() => runUpdateCheck(false), 3000);
-  setTimeout(showWelcomeIfFirstLaunch, 600);
-  const scratch = await ipcReadScratch();
-  if (scratch && scratch.content && scratch.content.length > 0) {
-    const recover = await ask(
-      'Unsaved draft found from previous session. Recover it?\n\n' +
-      (scratch.current_file ? 'File: ' + basename(scratch.current_file) : '(untitled)'),
-      { title: 'Loomings', kind: 'info' }
-    );
-    if (recover) {
-      setText(scratch.content);
-      currentFile = scratch.current_file || null;
-      if (currentFile) {
-        ipcSetTitle(basename(currentFile).replace(/\.md$/, ''));
-        await ipcWatchFile(currentFile);
+
+  // Drain the launch-file cache BEFORE scratch recovery — if the user
+  // double-clicked an .md file in Finder, that's the document they want,
+  // not "do you want to recover yesterday's draft?".
+  const launch = await ipcTakeLaunchFile();
+  if (launch && launch.content !== undefined) {
+    await loadFile(launch);
+  } else {
+    const scratch = await ipcReadScratch();
+    if (scratch && scratch.content && scratch.content.length > 0) {
+      const recover = await ask(
+        'Unsaved draft found from previous session. Recover it?\n\n' +
+        (scratch.current_file ? 'File: ' + basename(scratch.current_file) : '(untitled)'),
+        { title: 'Loomings', kind: 'info' }
+      );
+      if (recover) {
+        setText(scratch.content);
+        currentFile = scratch.current_file || null;
+        if (currentFile) {
+          ipcSetTitle(basename(currentFile).replace(/\.md$/, ''));
+          await ipcWatchFile(currentFile);
+        }
+        markDirty();
+      } else {
+        await ipcClearScratch();
       }
-      markDirty();
-    } else {
-      await ipcClearScratch();
     }
   }
+
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();
   ipcSetTitle(currentFile ? basename(currentFile).replace(/\.md$/, '') : null);
+
+  // Tell Rust the frontend is alive — subsequent macOS RunEvent::Opened
+  // events (warm "Open With") will go straight to the file-opened listener.
+  await ipcFrontendReady();
+
+  setTimeout(() => runUpdateCheck(false), 3000);
+  setTimeout(showWelcomeIfFirstLaunch, 600);
 })();

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
 use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
@@ -16,7 +16,15 @@ type FileWatcher = Debouncer<notify::RecommendedWatcher>;
 struct AppState {
     watcher: Mutex<Option<FileWatcher>>,
     watched_path: Mutex<Option<PathBuf>>,
-    last_close_request: Mutex<Option<Instant>>,
+    /// File path passed on launch (via argv on Windows/Linux, or macOS
+    /// Apple Events before listeners are attached). JS init picks it up
+    /// via `take_launch_file`, race-free.
+    pending_launch_file: Mutex<Option<PathBuf>>,
+    /// True once JS init has registered its event listeners. Lets
+    /// RunEvent::Opened distinguish a cold launch (stash to the cache)
+    /// from a warm "Open With" while the app is already running (emit
+    /// directly, because the listener exists).
+    frontend_ready: Mutex<bool>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -141,8 +149,18 @@ fn confirm_quit(app: AppHandle) {
 }
 
 #[tauri::command]
-fn cancel_quit_request(state: State<AppState>) {
-    *state.last_close_request.lock().unwrap() = None;
+fn take_launch_file(state: State<AppState>) -> Option<FileOpenedPayload> {
+    let path = state.pending_launch_file.lock().unwrap().take()?;
+    let content = fs::read_to_string(&path).ok()?;
+    Some(FileOpenedPayload {
+        path: path.to_string_lossy().to_string(),
+        content,
+    })
+}
+
+#[tauri::command]
+fn frontend_ready(state: State<AppState>) {
+    *state.frontend_ready.lock().unwrap() = true;
 }
 
 #[tauri::command]
@@ -214,8 +232,7 @@ fn parse_semver(s: &str) -> Option<(u32, u32, u32)> {
     Some((major, minor, patch))
 }
 
-#[tauri::command]
-fn check_for_update() -> Option<UpdateInfo> {
+fn check_for_update_blocking() -> Option<UpdateInfo> {
     let current = parse_semver(env!("CARGO_PKG_VERSION"))?;
     let agent = ureq::AgentBuilder::new()
         .timeout(Duration::from_secs(5))
@@ -247,6 +264,17 @@ fn check_for_update() -> Option<UpdateInfo> {
     } else {
         None
     }
+}
+
+#[tauri::command]
+async fn check_for_update() -> Option<UpdateInfo> {
+    // ureq is synchronous and would block the tokio worker thread it lands on,
+    // starving every other tauri::command for up to 5s. Hop to the blocking
+    // pool — the worker thread stays free for IPC during the network round-trip.
+    tauri::async_runtime::spawn_blocking(check_for_update_blocking)
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
@@ -421,6 +449,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
     let toggle_typo = MenuItemBuilder::new("Smart Typography")
         .id("toggle-typo")
         .build(app)?;
+    let toggle_line_numbers = MenuItemBuilder::new("Line Numbers")
+        .id("toggle-line-numbers")
+        .build(app)?;
     let open_palette = MenuItemBuilder::new("Jump to Heading...")
         .id("open-palette")
         .accelerator("CmdOrCtrl+P")
@@ -444,6 +475,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
             &toggle_theme,
             &cycle_goal,
             &toggle_typo,
+            &toggle_line_numbers,
             &open_palette,
             &sep4,
             &font_inc,
@@ -576,7 +608,8 @@ pub fn run() {
             read_scratch,
             clear_scratch,
             confirm_quit,
-            cancel_quit_request,
+            take_launch_file,
+            frontend_ready,
             open_file_dialog,
             watch_file,
             unwatch_file,
@@ -589,29 +622,19 @@ pub fn run() {
                 let _ = window.show();
             }
 
-            // Cross-platform launch-with-file: read argv for a file path.
-            // macOS file opens go through RunEvent::Opened (Apple Events),
-            // so on macOS argv is usually empty for double-click; this path
-            // covers Windows, Linux, and CLI invocations like `loomings foo.md`.
+            // Cross-platform launch-with-file: read argv for a file path and
+            // cache it in AppState. The frontend's init flow calls
+            // `take_launch_file` once listeners are registered — race-free.
+            // macOS file opens go through RunEvent::Opened (Apple Events)
+            // and also stash into the same slot.
             #[cfg(not(target_os = "macos"))]
             {
                 let args: Vec<String> = std::env::args().skip(1).collect();
                 if let Some(arg) = args.into_iter().find(|a| !a.starts_with('-')) {
                     let path = PathBuf::from(&arg);
                     if path.is_file() {
-                        let app_handle = app.handle().clone();
-                        std::thread::spawn(move || {
-                            std::thread::sleep(Duration::from_millis(800));
-                            if let Ok(content) = fs::read_to_string(&path) {
-                                let _ = app_handle.emit(
-                                    "file-opened",
-                                    FileOpenedPayload {
-                                        path: path.to_string_lossy().to_string(),
-                                        content,
-                                    },
-                                );
-                            }
-                        });
+                        let state = app.state::<AppState>();
+                        *state.pending_launch_file.lock().unwrap() = Some(path);
                     }
                 }
             }
@@ -645,6 +668,7 @@ pub fn run() {
                 "toggle-theme"   => { let _ = app.emit("toggle-theme", ()); }
                 "cycle-goal"     => { let _ = app.emit("cycle-goal", ()); }
                 "toggle-typo"    => { let _ = app.emit("toggle-typo", ()); }
+                "toggle-line-numbers" => { let _ = app.emit("toggle-line-numbers", ()); }
                 "open-palette"   => { let _ = app.emit("open-palette", ()); }
                 "help-about"     => { let _ = app.emit("open-about", ()); }
                 "help-example"   => {
@@ -689,20 +713,12 @@ pub fn run() {
             }
         })
         .on_window_event(|window, event| {
+            // Always intercept the close. JS shows the unsaved-changes prompt
+            // and either calls confirm_quit (which exits the process) or does
+            // nothing (window stays open, user clicks close again to retry).
+            // No state machine — the previous double-tap-bypass-within-2s
+            // pattern was the source of the v1.0.0 data-loss bug.
             if let WindowEvent::CloseRequested { api, .. } = event {
-                let state = window.state::<AppState>();
-                let now = Instant::now();
-                {
-                    let mut last = state.last_close_request.lock().unwrap();
-                    if let Some(prev) = *last {
-                        if now.duration_since(prev) <= Duration::from_secs(2) {
-                            *last = None;
-                            return;
-                        }
-                    }
-                    *last = Some(now);
-                }
-
                 api.prevent_close();
                 let _ = window.app_handle().emit("request-close", ());
             }
@@ -719,16 +735,24 @@ pub fn run() {
                 }
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Opened { urls } => {
+                    let state = app_handle.state::<AppState>();
+                    let ready = *state.frontend_ready.lock().unwrap();
                     for url in urls {
                         if let Ok(path) = url.to_file_path() {
-                            if let Ok(content) = fs::read_to_string(&path) {
-                                let _ = app_handle.emit(
-                                    "file-opened",
-                                    FileOpenedPayload {
-                                        path: path.to_string_lossy().to_string(),
-                                        content,
-                                    },
-                                );
+                            if ready {
+                                // Warm: listeners exist, emit directly.
+                                if let Ok(content) = fs::read_to_string(&path) {
+                                    let _ = app_handle.emit(
+                                        "file-opened",
+                                        FileOpenedPayload {
+                                            path: path.to_string_lossy().to_string(),
+                                            content,
+                                        },
+                                    );
+                                }
+                            } else {
+                                // Cold: stash; JS init drains via take_launch_file.
+                                *state.pending_launch_file.lock().unwrap() = Some(path);
                             }
                         }
                     }
@@ -736,4 +760,49 @@ pub fn run() {
                 _ => {}
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_semver_basic() {
+        assert_eq!(parse_semver("1.0.0"), Some((1, 0, 0)));
+        assert_eq!(parse_semver("0.2.3"), Some((0, 2, 3)));
+        assert_eq!(parse_semver("12.34.56"), Some((12, 34, 56)));
+    }
+
+    #[test]
+    fn parse_semver_strips_v_prefix() {
+        assert_eq!(parse_semver("v1.0.0"), Some((1, 0, 0)));
+        assert_eq!(parse_semver("v1.0.3"), Some((1, 0, 3)));
+    }
+
+    #[test]
+    fn parse_semver_strips_prerelease_and_build() {
+        assert_eq!(parse_semver("1.2.3-rc.1"), Some((1, 2, 3)));
+        assert_eq!(parse_semver("1.2.3-beta"), Some((1, 2, 3)));
+        assert_eq!(parse_semver("v1.2.3+build.42"), Some((1, 2, 3)));
+        assert_eq!(parse_semver("1.0.0-alpha+exp.sha.5114f85"), Some((1, 0, 0)));
+    }
+
+    #[test]
+    fn parse_semver_rejects_malformed() {
+        assert_eq!(parse_semver(""), None);
+        assert_eq!(parse_semver("1.0"), None);
+        assert_eq!(parse_semver("1"), None);
+        assert_eq!(parse_semver("not-a-version"), None);
+        assert_eq!(parse_semver("1.x.0"), None);
+        assert_eq!(parse_semver("v"), None);
+    }
+
+    #[test]
+    fn parse_semver_ordering() {
+        assert!(parse_semver("1.0.3") > parse_semver("1.0.2"));
+        assert!(parse_semver("v1.1.0") > parse_semver("v1.0.99"));
+        assert!(parse_semver("2.0.0") > parse_semver("1.999.999"));
+        // Tuple ordering ignores prerelease tags — fine because we only ship stable.
+        assert_eq!(parse_semver("1.0.0-rc.1"), parse_semver("1.0.0"));
+    }
 }
