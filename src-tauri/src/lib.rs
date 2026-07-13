@@ -879,7 +879,8 @@ pub fn run() {
                     let path = PathBuf::from(&arg);
                     if path.is_file() {
                         let state = app.state::<AppState>();
-                        if let LaunchState::Pending(p) = &mut *state.launch_state.lock().unwrap() {
+                        let mut guard = state.launch_state.lock().unwrap();
+                        if let LaunchState::Pending(p) = &mut *guard {
                             *p = Some(path);
                         }
                     }
