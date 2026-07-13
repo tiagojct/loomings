@@ -1,11 +1,15 @@
-// Add transparent padding around icon — match Apple HIG safe area (~92% squircle).
+// Add transparent padding around icon — match macOS's actual squircle content
+// ratio (0.805, i.e. ~824/1024; measured identically across System Settings,
+// Notes, Mail, and Safari's own .icns — their icons additionally carry a
+// soft drop-shadow that bleeds a few more px, which our flat-edged source
+// doesn't have, so the shadow-inclusive bbox isn't the right target).
 // Usage: ./pad-icon input.png output.png size scale
 import Cocoa
 guard CommandLine.arguments.count == 5 else { exit(1) }
 let inPath = CommandLine.arguments[1]
 let outPath = CommandLine.arguments[2]
 let size = CGFloat(Int(CommandLine.arguments[3]) ?? 1024)
-let scale = CGFloat(Double(CommandLine.arguments[4]) ?? 0.92)
+let scale = CGFloat(Double(CommandLine.arguments[4]) ?? 0.805)
 
 guard let img = NSImage(contentsOfFile: inPath) else { exit(1) }
 let rep = NSBitmapImageRep(

@@ -4,6 +4,99 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] — 2026-07-13
+
+Performance release plus two new theme families. Typing is now free of
+per-keystroke full-document work, file writes are atomic, and the theme
+menu grows Glauca and Try-Works alongside Pequod.
+
+### Added
+
+- **Two new theme families**: **Glauca** (Profundum dark / Pruina light,
+  the glaucous bloom) and **Try-Works** (Try-Fire dark / True Lamp light,
+  Moby-Dick ch. 96), ported from their design-system source tokens.
+  Pick the family in View → Theme; ⌘⇧T still cycles system/light/dark
+  within the family. Persisted across launches.
+- **Typewriter scrolling** (View menu) — keeps the cursor line vertically
+  centered while typing, and while moving the cursor with arrows/clicks.
+- **Reading time** (`~N min`, 200 wpm) in the stats bar, and **selection
+  stats**: while text is selected the stats bar shows the selection's
+  words/chars/lines.
+- **Export HTML** (File menu) — standalone HTML file rendered with the
+  current theme's palette, via the same sanitized renderer as Preview.
+- **Drag-and-drop to open** — drop a markdown file onto the window.
+
+### Performance
+
+- **No more per-keystroke O(document) work.** Word-count and preview
+  renders were recomputed on every keystroke (even with the stats bar
+  hidden); both are now debounced and skipped when their UI is hidden.
+  Word counting itself no longer allocates a full split() array.
+- **Focus-mode decorations** rebuilt on every view update (including
+  scrolls) even when focus mode was off; now rebuilt only on edits,
+  cursor moves, or mode toggle.
+- Removed a dead `highlightActiveLine` extension (styled invisible but
+  running on every update).
+- **Scratch autosaves skip unchanged content** and moved off the IPC
+  fast path (`spawn_blocking`), as did file saves.
+- **Recents menu updates no longer rebuild the entire menubar** — only
+  the Open Recent submenu's items are swapped.
+
+### Fixed
+
+- **App icon size.** The macOS icon was noticeably larger than sibling app
+  icons in the Dock/Launchpad — its content filled more of the canvas than
+  Apple's own icons do. Measured System Settings/Notes/Mail/Safari's actual
+  `.icns` files pixel-by-pixel and matched the icon build to the same ratio.
+- **Atomic file writes.** Saves, scratch, and the recents list now write
+  temp-file-then-rename — a crash mid-write can no longer truncate the
+  document being saved.
+- **Concurrent-save races.** An autosave and an explicit ⌘S (or two saves
+  landing close together) could overlap on the same temp file and corrupt
+  or drop one of the writes; saves and scratch writes now serialize.
+- **A slow save could stomp fresher state.** If a save was still in flight
+  when the buffer moved on (New, Open, external reload, Save As), its
+  late-arriving result could overwrite the newer buffer's save/scratch
+  bookkeeping — including resurrecting a crash-recovery draft for a file
+  the user had already switched away from. Saves now check whether the
+  buffer they were writing for is still current before applying results.
+- **Crash-recovery draft could resurface for already-discarded content**
+  when opening a different file, reloading from disk, or after Save As —
+  not just after a plain autosave (fixed above). All of these now clear
+  the stale draft.
+- **Cold-launch file-open race fully closed.** A macOS "Open With" file
+  could still be dropped if it arrived in the narrow window between the
+  app finishing startup and the frontend's ready handshake; the two were
+  tracked independently and could race across threads.
+- **"Open Example" no longer opens the bundle resource as an editable
+  file** — autosave could write into the app bundle (or fail on
+  read-only installs). The example now opens as an untitled buffer.
+- **Line Numbers setting stuck on.** A string/boolean mix-up made the
+  persisted setting truthy regardless of value, re-enabling line numbers
+  on every launch.
+- **Spurious "File changed on disk" prompt while typing.** The file
+  watcher could echo Loomings' own autosave (buffer had newer keystrokes
+  than disk); accepting the reload silently discarded them. Own-write
+  echoes are now recognized and ignored.
+- **Closing a named file no longer threatens data loss.** ⌘W during the
+  2-second autosave window flushes the pending save instead of showing a
+  misleading "unsaved changes will be lost" prompt (untitled buffers
+  still prompt).
+- **External links** (About, update banner, Help menu, Preview) now open
+  through the opener plugin — `window.open` in a Tauri webview is not
+  guaranteed to reach the system browser.
+- **Window title extension stripping** now covers `.markdown`, `.qmd`,
+  `.rmd`, `.txt` (was `.md` only).
+- **⌘I on `**bold**`** no longer mangles it into `*bold*`, and repeated
+  ⌘I presses toggle italic on/off cleanly instead of piling up asterisks.
+- **⌘⇧ shortcuts work with caps lock on.**
+- **App version single-sourced** — the About dialog reads the version
+  from Tauri instead of a hard-coded string (which had already drifted
+  once).
+- Scratch recovery no longer prompts when the crashed session's buffer
+  matches the file already on disk, and steady-state typing no longer
+  deletes/recreates the scratch file every autosave cycle.
+
 ## [1.0.3] — 2026-06-15
 
 Internals patch from the launch-readiness audit (Tier 2). No new features

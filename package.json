@@ -1,6 +1,6 @@
 {
   "name": "loomings",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "A minimalist Markdown writing app. The shapes loom before they take form.",
   "type": "module",
   "scripts": {
@@ -23,6 +23,7 @@
     "@lezer/highlight": "^1.2.1",
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-dialog": "^2.0.1",
+    "@tauri-apps/plugin-opener": "^2.5.4",
     "markdown-it": "^14.1.0"
   },
   "devDependencies": {

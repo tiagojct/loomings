@@ -5,26 +5,51 @@ use std::sync::Mutex;
 use std::time::Duration;
 use notify::RecursiveMode;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult, Debouncer};
-use tauri::menu::{AboutMetadataBuilder, MenuBuilder, MenuItemBuilder, PredefinedMenuItem, SubmenuBuilder};
+use tauri::menu::{
+    AboutMetadataBuilder, CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, MenuItemKind,
+    PredefinedMenuItem, Submenu, SubmenuBuilder,
+};
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_dialog::DialogExt;
 
 type FileWatcher = Debouncer<notify::RecommendedWatcher>;
 
+// (id, label) for the View → Theme radio group. Single source of truth for
+// the menu build, the checkmark sync, and the menu-event dispatch — the
+// editor.js PALETTES/FAMILY_LABELS keys are the JS-side counterpart and
+// must list the same three ids.
+const THEME_FAMILIES: [(&str, &str); 3] = [
+    ("pequod", "Pequod"),
+    ("glauca", "Glauca"),
+    ("tryworks", "Try-Works"),
+];
+
+/// Cold launch (before JS has registered listeners) stashes an opened file
+/// path in `Pending`; `frontend_ready` flips it to `Ready` and drains
+/// whatever's there. A warm "Open With" while `Ready` emits directly instead
+/// of stashing. Both the check ("are we ready?") and the act (stash, or
+/// take-and-flip) happen under one lock acquisition — RunEvent::Opened and
+/// the `frontend_ready` command run on different threads, so doing this as
+/// two separately-locked fields (as before) left a TOCTOU window where a
+/// file-open landing in between could be stashed just after the one-shot
+/// drain already ran, and never picked up.
+enum LaunchState {
+    Pending(Option<PathBuf>),
+    Ready,
+}
+
+impl Default for LaunchState {
+    fn default() -> Self {
+        LaunchState::Pending(None)
+    }
+}
+
 #[derive(Default)]
 struct AppState {
     watcher: Mutex<Option<FileWatcher>>,
     watched_path: Mutex<Option<PathBuf>>,
-    /// File path passed on launch (via argv on Windows/Linux, or macOS
-    /// Apple Events before listeners are attached). JS init picks it up
-    /// via `take_launch_file`, race-free.
-    pending_launch_file: Mutex<Option<PathBuf>>,
-    /// True once JS init has registered its event listeners. Lets
-    /// RunEvent::Opened distinguish a cold launch (stash to the cache)
-    /// from a warm "Open With" while the app is already running (emit
-    /// directly, because the listener exists).
-    frontend_ready: Mutex<bool>,
+    launch_state: Mutex<LaunchState>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -58,10 +83,33 @@ fn scratch_path(app: &AppHandle) -> PathBuf {
     app_data_dir(app).join("scratch.json")
 }
 
+/// Write via a temp file + rename so a crash mid-write can never truncate
+/// the destination. The temp file lives next to the target (same filesystem,
+/// so the rename is atomic).
+fn write_atomic(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+    let mut tmp_name = path.as_os_str().to_owned();
+    tmp_name.push(".tmp~");
+    let tmp = PathBuf::from(tmp_name);
+    fs::write(&tmp, contents)?;
+    match fs::rename(&tmp, path) {
+        Ok(()) => Ok(()),
+        Err(e) => {
+            let _ = fs::remove_file(&tmp);
+            Err(e)
+        }
+    }
+}
+
 #[tauri::command]
-fn save_file(path: String, content: String) -> Result<String, String> {
-    fs::write(&path, content).map_err(|e| e.to_string())?;
-    Ok(path)
+async fn save_file(path: String, content: String) -> Result<String, String> {
+    // Disk writes leave the IPC fast path — a large document on a slow disk
+    // must not block other commands (same pattern as check_for_update).
+    tauri::async_runtime::spawn_blocking(move || {
+        write_atomic(std::path::Path::new(&path), &content).map_err(|e| e.to_string())?;
+        Ok(path)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -69,7 +117,7 @@ async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>,
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .add_filter("Markdown", &["md", "markdown", "qmd", "rmd", "txt"])
+        .add_filter("Markdown", &["md", "markdown", "mdown", "mkd", "qmd", "rmd", "txt"])
         .set_file_name("untitled.md")
         .set_title("Save Markdown File")
         .save_file(move |path| {
@@ -83,8 +131,12 @@ async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>,
                 .map_err(|e| e.to_string())?
                 .to_string_lossy()
                 .to_string();
-            fs::write(&path_str, content).map_err(|e| e.to_string())?;
-            Ok(Some(path_str))
+            tauri::async_runtime::spawn_blocking(move || {
+                write_atomic(std::path::Path::new(&path_str), &content).map_err(|e| e.to_string())?;
+                Ok(Some(path_str))
+            })
+            .await
+            .map_err(|e| e.to_string())?
         }
         None => Ok(None),
     }
@@ -105,8 +157,8 @@ fn add_recent_file(app: AppHandle, file_path: String) -> Result<(), String> {
     rec.insert(0, file_path);
     rec.truncate(10);
     let json = serde_json::to_string(&rec).map_err(|e| e.to_string())?;
-    fs::write(recent_path(&app), json).map_err(|e| e.to_string())?;
-    build_menu(&app).map_err(|e| e.to_string())?;
+    write_atomic(&recent_path(&app), &json).map_err(|e| e.to_string())?;
+    refresh_recent_submenu(&app).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -121,17 +173,33 @@ fn set_title(app: AppHandle, title: Option<String>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn save_scratch(app: AppHandle, content: String, current_file: Option<String>) -> Result<(), String> {
-    let buf = ScratchBuffer { content, current_file };
-    let json = serde_json::to_string(&buf).map_err(|e| e.to_string())?;
-    fs::write(scratch_path(&app), json).map_err(|e| e.to_string())
+async fn save_scratch(app: AppHandle, content: String, current_file: Option<String>) -> Result<(), String> {
+    let path = scratch_path(&app);
+    tauri::async_runtime::spawn_blocking(move || {
+        let buf = ScratchBuffer { content, current_file };
+        let json = serde_json::to_string(&buf).map_err(|e| e.to_string())?;
+        write_atomic(&path, &json).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 fn read_scratch(app: AppHandle) -> Option<ScratchBuffer> {
-    fs::read_to_string(scratch_path(&app))
+    let buf: ScratchBuffer = fs::read_to_string(scratch_path(&app))
         .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())?;
+    // A scratch that matches the named file on disk is a leftover from a
+    // session that autosaved and then crashed/exited uncleanly — nothing
+    // to recover, don't prompt.
+    if let Some(file) = &buf.current_file {
+        if let Ok(disk) = fs::read_to_string(file) {
+            if disk == buf.content {
+                return None;
+            }
+        }
+    }
+    Some(buf)
 }
 
 #[tauri::command]
@@ -148,10 +216,9 @@ fn confirm_quit(app: AppHandle) {
     app.exit(0);
 }
 
-#[tauri::command]
-fn take_launch_file(state: State<AppState>) -> Option<FileOpenedPayload> {
-    let path = state.pending_launch_file.lock().unwrap().take()?;
-    let content = fs::read_to_string(&path).ok()?;
+/// Read a file into the payload shape every "a file was opened" path emits.
+fn read_file_payload(path: &std::path::Path) -> Option<FileOpenedPayload> {
+    let content = fs::read_to_string(path).ok()?;
     Some(FileOpenedPayload {
         path: path.to_string_lossy().to_string(),
         content,
@@ -159,8 +226,45 @@ fn take_launch_file(state: State<AppState>) -> Option<FileOpenedPayload> {
 }
 
 #[tauri::command]
-fn frontend_ready(state: State<AppState>) {
-    *state.frontend_ready.lock().unwrap() = true;
+fn take_launch_file(state: State<AppState>) -> Option<FileOpenedPayload> {
+    let mut guard = state.launch_state.lock().unwrap();
+    let path = match &mut *guard {
+        LaunchState::Pending(p) => p.take()?,
+        LaunchState::Ready => return None,
+    };
+    drop(guard);
+    read_file_payload(&path)
+}
+
+#[tauri::command]
+async fn frontend_ready(app: AppHandle) {
+    // Extracted (not taken as a command param) so the borrow doesn't need to
+    // survive the .await below — async commands with reference params must
+    // return Result, which this doesn't need otherwise.
+    let state = app.state::<AppState>();
+    let pending = {
+        let mut guard = state.launch_state.lock().unwrap();
+        let taken = match &mut *guard {
+            LaunchState::Pending(p) => p.take(),
+            LaunchState::Ready => None,
+        };
+        *guard = LaunchState::Ready;
+        taken
+    };
+    // Close the race window: a file-open that landed after JS drained
+    // take_launch_file but before this flipped to Ready would otherwise sit
+    // in the cache forever. Listeners are registered by now, so emit directly.
+    if let Some(path) = pending {
+        // Off the async runtime thread — a slow/network-mounted file must
+        // not stall other in-flight IPC (autosave, theme sync, ...).
+        if let Some(payload) = tauri::async_runtime::spawn_blocking(move || read_file_payload(&path))
+            .await
+            .ok()
+            .flatten()
+        {
+            let _ = app.emit("file-opened", payload);
+        }
+    }
 }
 
 #[tauri::command]
@@ -284,14 +388,91 @@ fn open_example(app: AppHandle) -> Result<(), String> {
         .resolve("examples/loomings.md", BaseDirectory::Resource)
         .map_err(|e| e.to_string())?;
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    // Empty path = "untitled buffer with this content". The example lives
+    // inside the app bundle — emitting its real path would make autosave
+    // write into the bundle (or fail on read-only installs).
     app.emit(
         "file-opened",
         FileOpenedPayload {
-            path: path.to_string_lossy().to_string(),
+            path: String::new(),
             content,
         },
     )
     .map_err(|e| e.to_string())
+}
+
+/// Open an absolute path (drag-and-drop). Reads the file and emits the
+/// same `file-opened` event as every other open path.
+#[tauri::command]
+async fn open_path(app: AppHandle, path: String) -> Result<(), String> {
+    let payload = tauri::async_runtime::spawn_blocking(move || {
+        read_file_payload(std::path::Path::new(&path)).ok_or_else(|| "failed to read file".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    app.emit("file-opened", payload).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn export_html(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("HTML", &["html"])
+        .set_file_name(&suggested_name)
+        .set_title("Export HTML")
+        .save_file(move |path| {
+            let _ = tx.send(path);
+        });
+    let result = rx.await.map_err(|e| e.to_string())?;
+    match result {
+        Some(p) => {
+            let path_str = p
+                .into_path()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .to_string();
+            tauri::async_runtime::spawn_blocking(move || {
+                write_atomic(std::path::Path::new(&path_str), &content).map_err(|e| e.to_string())?;
+                Ok(Some(path_str))
+            })
+            .await
+            .map_err(|e| e.to_string())?
+        }
+        None => Ok(None),
+    }
+}
+
+/// Set the check marks on the View → Theme radio group. JS owns the theme
+/// state (localStorage); Rust only mirrors it in the native menu.
+#[tauri::command]
+fn sync_theme_menu(app: AppHandle, family: String) {
+    let Some(menu) = app.menu() else { return };
+    for (fam, _) in THEME_FAMILIES {
+        if let Some(MenuItemKind::Check(item)) = find_menu_item(&menu, &format!("theme-{fam}")) {
+            let _ = item.set_checked(fam == family);
+        }
+    }
+}
+
+/// Depth-first search across submenus — Menu::get only sees direct children.
+fn find_menu_item(menu: &Menu<tauri::Wry>, id: &str) -> Option<MenuItemKind<tauri::Wry>> {
+    fn walk(items: Vec<MenuItemKind<tauri::Wry>>, id: &str) -> Option<MenuItemKind<tauri::Wry>> {
+        for item in items {
+            if item.id().as_ref() == id {
+                return Some(item);
+            }
+            if let MenuItemKind::Submenu(sub) = &item {
+                if let Ok(children) = sub.items() {
+                    if let Some(found) = walk(children, id) {
+                        return Some(found);
+                    }
+                }
+            }
+        }
+        None
+    }
+    walk(menu.items().ok()?, id)
 }
 
 #[tauri::command]
@@ -306,7 +487,7 @@ async fn open_file_dialog(app: AppHandle) -> Result<Option<FileOpenedPayload>, S
     let (tx, rx) = tokio::sync::oneshot::channel();
     app.dialog()
         .file()
-        .add_filter("Markdown", &["md", "markdown", "qmd", "rmd", "txt"])
+        .add_filter("Markdown", &["md", "markdown", "mdown", "mkd", "qmd", "rmd", "txt"])
         .add_filter("All Files", &["*"])
         .set_title("Open Markdown File")
         .pick_file(move |path| {
@@ -339,8 +520,8 @@ fn open_recent_file(app: &AppHandle, path: String) {
             let mut rec = get_recent_files(app.clone());
             rec.retain(|f| f != &path);
             if let Ok(json) = serde_json::to_string(&rec) {
-                let _ = fs::write(recent_path(app), json);
-                let _ = build_menu(app);
+                let _ = write_atomic(&recent_path(app), &json);
+                let _ = refresh_recent_submenu(app);
             }
         }
     }
@@ -366,6 +547,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
         .id("file-save-as")
         .accelerator("CmdOrCtrl+Shift+S")
         .build(app)?;
+    let export_html_item = MenuItemBuilder::new("Export HTML…")
+        .id("file-export-html")
+        .build(app)?;
     let close_item = MenuItemBuilder::new("Close Window")
         .id("file-close")
         .accelerator("CmdOrCtrl+W")
@@ -388,6 +572,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
         &sep1,
         &save_item,
         &save_as_item,
+        &export_html_item,
         &sep2,
         &close_item,
     ];
@@ -442,6 +627,24 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
         .id("toggle-theme")
         .accelerator("CmdOrCtrl+Shift+T")
         .build(app)?;
+    let theme_items: Vec<_> = THEME_FAMILIES
+        .iter()
+        .map(|(id, label)| {
+            CheckMenuItemBuilder::new(*label)
+                .id(format!("theme-{id}"))
+                .checked(*id == "pequod") // default family; sync_theme_menu corrects this on boot
+                .build(app)
+        })
+        .collect::<tauri::Result<_>>()?;
+    let theme_item_refs: Vec<&dyn tauri::menu::IsMenuItem<tauri::Wry>> =
+        theme_items.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<tauri::Wry>).collect();
+    let theme_submenu = SubmenuBuilder::new(app, "Theme")
+        .id("theme-family")
+        .items(&theme_item_refs)
+        .build()?;
+    let toggle_typewriter = MenuItemBuilder::new("Typewriter Scrolling")
+        .id("toggle-typewriter")
+        .build(app)?;
     let cycle_goal = MenuItemBuilder::new("Cycle Word Goal")
         .id("cycle-goal")
         .accelerator("CmdOrCtrl+Shift+G")
@@ -472,10 +675,12 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
             &sep3,
             &toggle_stats,
             &toggle_width,
+            &theme_submenu,
             &toggle_theme,
             &cycle_goal,
             &toggle_typo,
             &toggle_line_numbers,
+            &toggle_typewriter,
             &open_palette,
             &sep4,
             &font_inc,
@@ -565,15 +770,22 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-fn build_recent_submenu(app: &AppHandle) -> tauri::Result<tauri::menu::Submenu<tauri::Wry>> {
-    let mut builder = SubmenuBuilder::new(app, "Open Recent").id("file-open-recent");
+fn build_recent_submenu(app: &AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
+    let submenu = SubmenuBuilder::new(app, "Open Recent")
+        .id("file-open-recent")
+        .build()?;
+    populate_recent_submenu(app, &submenu)?;
+    Ok(submenu)
+}
+
+fn populate_recent_submenu(app: &AppHandle, submenu: &Submenu<tauri::Wry>) -> tauri::Result<()> {
     let recents = get_recent_files(app.clone());
     if recents.is_empty() {
         let empty = MenuItemBuilder::new("(no recent files)")
             .id("recent-empty")
             .enabled(false)
             .build(app)?;
-        builder = builder.item(&empty);
+        submenu.append(&empty)?;
     } else {
         for (i, p) in recents.iter().enumerate() {
             let label = std::path::Path::new(p)
@@ -583,20 +795,50 @@ fn build_recent_submenu(app: &AppHandle) -> tauri::Result<tauri::menu::Submenu<t
             let item = MenuItemBuilder::new(label)
                 .id(format!("recent-{}", i))
                 .build(app)?;
-            builder = builder.item(&item);
+            submenu.append(&item)?;
         }
         let sep = PredefinedMenuItem::separator(app)?;
         let clear = MenuItemBuilder::new("Clear Recent")
             .id("recent-clear")
             .build(app)?;
-        builder = builder.item(&sep).item(&clear);
+        submenu.append(&sep)?;
+        submenu.append(&clear)?;
     }
-    builder.build()
+    Ok(())
+}
+
+/// Swap out only the Open Recent submenu's items — rebuilding the whole
+/// menubar for a recents change makes macOS flicker and is O(menu).
+fn refresh_recent_submenu(app: &AppHandle) -> tauri::Result<()> {
+    let submenu = app
+        .menu()
+        .and_then(|menu| find_menu_item(&menu, "file-open-recent"))
+        .and_then(|kind| match kind {
+            MenuItemKind::Submenu(sub) => Some(sub),
+            _ => None,
+        });
+    match submenu {
+        Some(sub) => {
+            for item in sub.items()? {
+                sub.remove(&item)?;
+            }
+            populate_recent_submenu(app, &sub)
+        }
+        // Menu not built yet (or platform quirk): fall back to full rebuild.
+        // That resets the Theme radio group to its default (Pequod checked);
+        // JS owns the real theme-family state, so ask it to resync.
+        None => {
+            build_menu(app)?;
+            let _ = app.emit("menu-rebuilt", ());
+            Ok(())
+        }
+    }
 }
 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             save_file,
@@ -614,7 +856,10 @@ pub fn run() {
             watch_file,
             unwatch_file,
             check_for_update,
-            open_example
+            open_example,
+            open_path,
+            export_html,
+            sync_theme_menu
         ])
         .setup(|app| {
             build_menu(&app.handle())?;
@@ -634,7 +879,9 @@ pub fn run() {
                     let path = PathBuf::from(&arg);
                     if path.is_file() {
                         let state = app.state::<AppState>();
-                        *state.pending_launch_file.lock().unwrap() = Some(path);
+                        if let LaunchState::Pending(p) = &mut *state.launch_state.lock().unwrap() {
+                            *p = Some(path);
+                        }
                     }
                 }
             }
@@ -659,6 +906,7 @@ pub fn run() {
                 }
                 "file-save"      => { let _ = app.emit("request-save", ()); }
                 "file-save-as"   => { let _ = app.emit("request-save-as", ()); }
+                "file-export-html" => { let _ = app.emit("request-export-html", ()); }
                 "file-close"     => { let _ = app.emit("request-close", ()); }
                 "app-quit-menu"  => { let _ = app.emit("request-close", ()); }
                 "toggle-focus"   => { let _ = app.emit("toggle-focus", ()); }
@@ -669,6 +917,13 @@ pub fn run() {
                 "cycle-goal"     => { let _ = app.emit("cycle-goal", ()); }
                 "toggle-typo"    => { let _ = app.emit("toggle-typo", ()); }
                 "toggle-line-numbers" => { let _ = app.emit("toggle-line-numbers", ()); }
+                "toggle-typewriter"   => { let _ = app.emit("toggle-typewriter", ()); }
+                s if s.starts_with("theme-") => {
+                    let family = s.trim_start_matches("theme-");
+                    if THEME_FAMILIES.iter().any(|(id, _)| *id == family) {
+                        let _ = app.emit("set-theme-family", family);
+                    }
+                }
                 "open-palette"   => { let _ = app.emit("open-palette", ()); }
                 "help-about"     => { let _ = app.emit("open-about", ()); }
                 "help-example"   => {
@@ -698,8 +953,8 @@ pub fn run() {
                     }
                 }
                 "recent-clear" => {
-                    let _ = fs::write(recent_path(app), "[]");
-                    let _ = build_menu(app);
+                    let _ = write_atomic(&recent_path(app), "[]");
+                    let _ = refresh_recent_submenu(app);
                 }
                 s if s.starts_with("recent-") => {
                     if let Ok(idx) = s.trim_start_matches("recent-").parse::<usize>() {
@@ -736,25 +991,33 @@ pub fn run() {
                 #[cfg(target_os = "macos")]
                 tauri::RunEvent::Opened { urls } => {
                     let state = app_handle.state::<AppState>();
-                    let ready = *state.frontend_ready.lock().unwrap();
                     for url in urls {
-                        if let Ok(path) = url.to_file_path() {
-                            if ready {
-                                // Warm: listeners exist, emit directly.
-                                if let Ok(content) = fs::read_to_string(&path) {
-                                    let _ = app_handle.emit(
-                                        "file-opened",
-                                        FileOpenedPayload {
-                                            path: path.to_string_lossy().to_string(),
-                                            content,
-                                        },
-                                    );
+                        let Ok(path) = url.to_file_path() else { continue };
+                        // Ready-check and stash/emit happen under one lock —
+                        // see LaunchState's doc comment for why that matters.
+                        let ready = {
+                            let mut guard = state.launch_state.lock().unwrap();
+                            match &mut *guard {
+                                LaunchState::Ready => true,
+                                LaunchState::Pending(p) => {
+                                    *p = Some(path.clone());
+                                    false
                                 }
-                            } else {
-                                // Cold: stash; JS init drains via take_launch_file.
-                                *state.pending_launch_file.lock().unwrap() = Some(path);
+                            }
+                        };
+                        if ready {
+                            // Warm: listeners exist, emit directly.
+                            if let Ok(content) = fs::read_to_string(&path) {
+                                let _ = app_handle.emit(
+                                    "file-opened",
+                                    FileOpenedPayload {
+                                        path: path.to_string_lossy().to_string(),
+                                        content,
+                                    },
+                                );
                             }
                         }
+                        // Cold: already stashed above; JS init drains via take_launch_file.
                     }
                 }
                 _ => {}
@@ -765,6 +1028,26 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn write_atomic_writes_and_replaces() {
+        let dir = std::env::temp_dir().join(format!("loomings-test-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("doc.md");
+
+        write_atomic(&target, "first").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "first");
+
+        write_atomic(&target, "second").unwrap();
+        assert_eq!(fs::read_to_string(&target).unwrap(), "second");
+
+        // No temp file left behind.
+        let mut tmp_name = target.as_os_str().to_owned();
+        tmp_name.push(".tmp~");
+        assert!(!PathBuf::from(tmp_name).exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn parse_semver_basic() {

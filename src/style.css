@@ -40,6 +40,68 @@
   --border:       #D7C9A8;
 }
 
+/* ========================================
+   Glauca — the glaucous bloom
+   Profundum (dark) / Pruina (light)
+   ======================================== */
+
+[data-palette="glauca"][data-theme="dark"] {
+  --bg:           #10161c;
+  --bg-elev:      #1f2932;
+  --bg-deep:      #0b1218;
+  --fg:           #e8eef2;
+  --fg-dim:       #93b7c9;
+  --fg-ghost:     #4d7391;
+  --accent:       #3d97ff;
+  --accent-light: #6cb2ff;
+  --accent-dim:   #007aff;
+  --border:       #2a3540;
+}
+
+[data-palette="glauca"][data-theme="light"] {
+  --bg:           #f0f4f6;
+  --bg-elev:      #ffffff;
+  --bg-deep:      #e8eef2;
+  --fg:           #16222a;
+  --fg-dim:       #55646d;
+  --fg-ghost:     #8c8c8c;
+  --accent:       #0b62cf;
+  --accent-light: #007aff;
+  --accent-dim:   #084b96;
+  --border:       #cdd7dc;
+}
+
+/* ========================================
+   Try-Works — the furnace on the Pequod's deck
+   Try-Fire (dark) / True Lamp (light)
+   ======================================== */
+
+[data-palette="tryworks"][data-theme="dark"] {
+  --bg:           #12161b;
+  --bg-elev:      #232b32;
+  --bg-deep:      #11151a;
+  --fg:           #f1efe9;
+  --fg-dim:       #8fb6bd;
+  --fg-ghost:     #4d7680;
+  --accent:       #c9651d;
+  --accent-light: #e0832a;
+  --accent-dim:   #9a4a16;
+  --border:       #2c3640;
+}
+
+[data-palette="tryworks"][data-theme="light"] {
+  --bg:           #dee7e4;
+  --bg-elev:      #f2f7f4;
+  --bg-deep:      #b4ccc9;
+  --fg:           #18272b;
+  --fg-dim:       #52646a;
+  --fg-ghost:     #97a0a4;
+  --accent:       #9e5017;
+  --accent-light: #b85f1c;
+  --accent-dim:   #7a3a10;
+  --border:       #c4d2cd;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {

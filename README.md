@@ -68,18 +68,26 @@ App opens normally after that. Alternative: open System Settings → Privacy & S
 
 ### Writing flow
 - **Focus mode** (⌘⇧D) — dims everything outside the current sentence.
+- **Typewriter scrolling** (View menu) — keeps the cursor line vertically centered.
 - **Preview** (⌘⇧P) — full markdown-it rendering with sanitized URLs.
 - **Word goal** (⌘⇧G) — set target, progress shows in statusbar.
+- Reading time + selection word count in the stats bar (⌘⇧L).
 - Column-width cycle (⌘⇧W) — wide / normal / narrow.
 
 ### Themes
-- Pequod navy (dark) + Pequod parchment (light) + system-follow.
-- Cycle theme (⌘⇧T).
+Three families, each with dark + light + system-follow (View → Theme):
+- **Pequod** — navy below-deck dark / parchment light. The original.
+- **Glauca** — Profundum dark / Pruina light, from the [Glauca](https://github.com/tiagojct/glauca) design system.
+- **Try-Works** — Try-Fire dark / True Lamp light, from the [Try-Works](https://github.com/tiagojct/try-works) design system.
+
+Cycle dark/light/system within the family with ⌘⇧T.
 
 ### Files
-- **Auto-save** 2s after last edit, for named files.
+- **Auto-save** 2s after last edit, for named files. Atomic writes (temp + rename).
 - **Crash-recovery** scratch buffer — last buffer restored on next launch.
 - **External file watcher** — prompts reload if file changes on disk.
+- **Drag-and-drop** a markdown file onto the window to open it.
+- **Export HTML** (File menu) — standalone HTML styled with the current theme.
 
 ### App
 - **About modal** + populated macOS About panel (Help menu).

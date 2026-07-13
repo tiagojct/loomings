@@ -11,7 +11,7 @@ ICONS="$ROOT/src-tauri/icons"
 PADDED="/tmp/loomings-padded-1024.png"
 PADDER="$ROOT/scripts/pad-icon"
 PADDER_SRC="$ROOT/scripts/pad-icon.swift"
-SCALE="0.90"
+SCALE="0.805"
 
 if [[ ! -f "$SRC" ]]; then
   echo "Source not found: $SRC"
