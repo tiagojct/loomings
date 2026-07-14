@@ -4,6 +4,15 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] — 2026-07-14
+
+Web only — no desktop app changes.
+
+### Added
+
+- Basic self-hosted (Umami) page-view analytics on the landing page only
+  (`docs/index.html`). The editor app itself is not tracked.
+
 ## [1.2.0] — 2026-07-14
 
 Web version, alongside the desktop app. Same editor, same CodeMirror core,
