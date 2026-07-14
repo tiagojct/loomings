@@ -4,13 +4,22 @@ A markdown writing app for macOS, Windows, and Linux. The shapes loom before the
 
 Built with Tauri 2 + CodeMirror 6. ~12 MB binary, native system WebView, Rust backend.
 
-**Site:** [tiagojct.eu/loomings](https://tiagojct.eu/loomings)
+**Site:** [loomings.tiagojct.eu](https://loomings.tiagojct.eu)
+**Try it in your browser:** [loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app)
 **Downloads:** [Latest release](https://github.com/tiagojct/loomings/releases/latest)
 **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ![Loomings editor showing chapter 1 of Moby-Dick](docs/assets/screenshot.png)
 
 ## Install
+
+### Web (no install)
+
+[loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app) — runs entirely
+in the browser, nothing sent to a server. Chrome/Edge get real open/save via
+the File System Access API; other browsers fall back to a file picker for
+opening and a download for saving/exporting. See [Web build](#web-build)
+below for hosting it yourself.
 
 ### macOS (Homebrew, Apple Silicon)
 
@@ -114,6 +123,30 @@ sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
 
 First Rust compile: 3-5 min. Subsequent builds: seconds.
 
+## Web build
+
+The web build (no Rust, no Tauri) is a static site: `docs/` (landing page)
+at the root, the app at `/app`. Build and preview locally:
+
+```sh
+npm install
+npm run vite:build -- --base /app/   # matches the /app mount point
+npm run vite:preview
+```
+
+Or via Docker (matches what `docker-publish.yml` publishes to
+`ghcr.io/tiagojct/loomings`):
+
+```sh
+docker build -t loomings .
+docker run --rm -p 8081:80 loomings
+```
+
+`docker-compose.yml` is the VPS deploy shape: a loopback-bound port for a
+reverse proxy in front, plus a [watchtower](https://containrrr.dev/watchtower/)
+sidecar that redeploys on new `:latest` image pushes (which only happen on
+version-tagged releases, not every commit to main).
+
 ## Keyboard shortcuts
 
 | Action | Shortcut |
@@ -144,11 +177,14 @@ First Rust compile: 3-5 min. Subsequent builds: seconds.
 ```
 loomings/
   src/                    # frontend (Vite + CodeMirror 6 + markdown-it)
-    editor.js             # everything: editor, menu listeners, IPC
+    editor.js             # everything: editor, UI, event listeners
+    platform.js            # picks the Tauri or web adapter at runtime
+    platform-tauri.js       # native file I/O, menu, window (desktop build)
+    platform-web.js         # File System Access API, IndexedDB (web build)
     index.html
     style.css
     icon.png              # served via Vite at runtime (About modal)
-  src-tauri/              # Rust backend (Tauri v2)
+  src-tauri/              # Rust backend (Tauri v2, desktop build only)
     src/lib.rs            # IPC commands, menu, file watcher, update check
     capabilities/         # Tauri permission allowlist
     icons/                # ICNS, ICO, sized PNGs
@@ -157,8 +193,13 @@ loomings/
   examples/loomings.md    # Moby-Dick chapter 1 (bundled as resource)
   icons/                  # Icon Composer .icon bundle + exports
   scripts/                # icon build pipeline (Swift + sips)
-  docs/                   # landing page (tiagojct.eu/loomings)
-  .github/workflows/      # 4-platform release automation
+  docs/                   # landing page, served at the site root
+  Dockerfile              # web build: static site (docs/ + app at /app)
+  nginx.conf              # served config for the Docker image
+  docker-compose.yml       # VPS deploy (loopback port + watchtower)
+  .github/workflows/
+    release.yml            # 3-platform desktop release automation
+    docker-publish.yml     # web image build + push to ghcr.io
 ```
 
 ## Stack
@@ -167,8 +208,10 @@ loomings/
 - **Vite 5** — frontend bundler.
 - **CodeMirror 6** — editor with lezer markdown grammar + syntax highlighting + search + history.
 - **markdown-it 14** — preview renderer with linkify + typographer.
-- **notify** (Rust) — external file watcher.
-- **ureq** (Rust) — sync HTTP client for the update check.
+- **notify** (Rust) — external file watcher (desktop build only).
+- **ureq** (Rust) — sync HTTP client for the update check (desktop build only).
+- **File System Access API** — real open/save in the web build (Chromium; other browsers fall back to a file picker/download).
+- **nginx** — serves the web build's static files + landing page.
 
 ## License
 

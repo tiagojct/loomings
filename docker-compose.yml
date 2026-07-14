@@ -1,0 +1,31 @@
+services:
+  loomings:
+    build: .
+    # Once the image is published, swap the line above for:
+    # image: ghcr.io/tiagojct/loomings:latest
+    ports:
+      # Bind to loopback only: reachable solely via the reverse proxy on
+      # the same host. Left-hand port is the host port the proxy targets
+      # (change it if 8081 is already taken); right-hand 80 is fixed.
+      - "127.0.0.1:8081:80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 5s
+      retries: 3
+    restart: unless-stopped
+    labels:
+      # Only containers with this label are watched by watchtower below.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # Auto-updater: polls the registry and restarts loomings when a new
+  # image is published. Only works when loomings runs FROM the registry
+  # image, not `build: .` — uncomment the `image:` line above and comment
+  # out `build:`. The image is public, so no registry auth is needed.
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup --label-enable

@@ -9,6 +9,16 @@
 <body>
   <div id="titlebar" data-tauri-drag-region></div>
 
+  <div id="web-toolbar">
+    <button id="tb-new" title="New">New</button>
+    <button id="tb-open" title="Open">Open</button>
+    <select id="tb-recent" title="Recent files" class="hidden"></select>
+    <button id="tb-save" title="Save">Save</button>
+    <button id="tb-export" title="Export HTML">Export</button>
+    <button id="tb-theme" title="Cycle theme family">Theme</button>
+    <button id="tb-about" title="About">About</button>
+  </div>
+
   <div id="editor-container">
     <div id="content-area" class="width-normal">
       <div id="editor"></div>
@@ -46,9 +56,9 @@
       <h2>Loomings</h2>
       <p id="about-version">Version</p>
       <p class="about-tagline">A markdown writing app. The shapes loom before they take form.</p>
-      <p class="about-tech">MIT licensed. Built with Tauri 2 and CodeMirror 6.</p>
+      <p class="about-tech" id="about-tech">MIT licensed. Built with Tauri 2 and CodeMirror 6.</p>
       <div class="about-links">
-        <a href="#" data-url="https://tiagojct.eu/loomings">tiagojct.eu/loomings</a>
+        <a href="#" data-url="https://loomings.tiagojct.eu">loomings.tiagojct.eu</a>
         <a href="#" data-url="https://github.com/tiagojct/loomings">github.com/tiagojct/loomings</a>
         <a href="#" id="about-example">Open Moby-Dick chapter</a>
       </div>
@@ -65,7 +75,7 @@
   <div id="welcome" class="hidden">
     <div id="welcome-inner">
       <h2>Welcome to Loomings</h2>
-      <p class="welcome-lede">
+      <p class="welcome-lede" id="welcome-lede">
         Make Loomings the default app for <code>.md</code> files and the rest
         of your markdown opens here on a double-click.
       </p>

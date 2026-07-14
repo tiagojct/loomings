@@ -1,0 +1,12 @@
+.git
+.github
+.claude
+node_modules
+dist
+src-tauri
+icons
+social
+scripts
+*.md
+LICENSE
+.DS_Store

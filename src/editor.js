@@ -9,14 +9,15 @@ import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
-import { invoke } from '@tauri-apps/api/core';
-import { listen } from '@tauri-apps/api/event';
-import { getCurrentWindow } from '@tauri-apps/api/window';
-import { getCurrentWebview } from '@tauri-apps/api/webview';
-import { getVersion } from '@tauri-apps/api/app';
-import { ask } from '@tauri-apps/plugin-dialog';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import MarkdownIt from 'markdown-it';
+import {
+  isTauri, listen, getVersion, openUrl, ask,
+  ipcSetTitle, ipcSaveFile, ipcSaveFileAs, ipcAddRecent, ipcSaveScratch,
+  ipcReadScratch, ipcClearScratch, ipcConfirmQuit, ipcTakeLaunchFile,
+  ipcFrontendReady, ipcWatchFile, ipcUnwatchFile, ipcSyncThemeMenu,
+  ipcExportHtml, ipcOpenFile, ipcOpenExample, ipcCheckForUpdate,
+  initTitlebarDrag, initDragDrop, getRecents, openRecent,
+} from './platform.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
 
@@ -63,6 +64,7 @@ contentArea.classList.add('width-' + colWidth);
 if (showStats) statsEl.classList.add('visible');
 applyFontSize();
 if (isMac) body.classList.add('mac');
+if (isTauri) body.classList.add('tauri');
 
 // ==========================
 //  CodeMirror 6 setup
@@ -582,34 +584,6 @@ function setText(text) {
 }
 
 // ==========================
-//  IPC helpers
-// ==========================
-
-async function ipcSetTitle(title)         { try { await invoke('set_title', { title }); } catch (_) {} }
-async function ipcSaveFile(path, content) { return invoke('save_file', { path, content }); }
-async function ipcSaveFileAs(content)     { return invoke('save_file_as', { content }); }
-async function ipcAddRecent(filePath)     { try { await invoke('add_recent_file', { filePath }); } catch (_) {} }
-async function ipcSaveScratch(content, currentFile) {
-  try { await invoke('save_scratch', { content, currentFile }); } catch (_) {}
-}
-async function ipcReadScratch()  { try { return await invoke('read_scratch'); } catch (_) { return null; } }
-async function ipcClearScratch() { try { await invoke('clear_scratch'); } catch (_) {} }
-async function ipcConfirmQuit()  { return invoke('confirm_quit'); }
-async function ipcTakeLaunchFile() { try { return await invoke('take_launch_file'); } catch (_) { return null; } }
-async function ipcFrontendReady()  { try { await invoke('frontend_ready'); } catch (_) {} }
-async function ipcWatchFile(path) {
-  // External-edit detection depends on this succeeding. If the OS denies
-  // the watch (sandbox, permissions, network FS), surface it once so the
-  // user knows reload-on-external-change is dead for this file.
-  try { await invoke('watch_file', { path }); }
-  catch (err) { flashStatus('File watcher failed: ' + (err?.message || err)); }
-}
-async function ipcUnwatchFile()  { try { await invoke('unwatch_file'); } catch (_) {} }
-async function ipcSyncThemeMenu(family) { try { await invoke('sync_theme_menu', { family }); } catch (_) {} }
-async function ipcExportHtml(content, suggestedName) { return invoke('export_html', { content, suggestedName }); }
-async function ipcOpenPath(path) { return invoke('open_path', { path }); }
-
-// ==========================
 //  Font size
 // ==========================
 
@@ -839,15 +813,18 @@ function closePalette() {
 const aboutEl       = document.getElementById('about');
 const aboutIcon     = document.getElementById('about-icon');
 const aboutVersion  = document.getElementById('about-version');
+const aboutTech     = document.getElementById('about-tech');
 const aboutExample  = document.getElementById('about-example');
 
 function initAbout() {
   aboutIcon.src = new URL('./icon.png', import.meta.url).href;
   aboutIcon.onerror = () => { aboutIcon.style.display = 'none'; };
-  // Single source of truth: the version Tauri was built with.
+  // Single source of truth: the version Tauri was built with (or, on web,
+  // the version this build was published from).
   getVersion()
     .then((v) => { aboutVersion.textContent = `Version ${v}`; })
     .catch(() => { aboutVersion.textContent = ''; });
+  if (!isTauri) aboutTech.textContent = 'MIT licensed. Built with CodeMirror 6.';
 }
 
 function openAbout() {
@@ -863,6 +840,7 @@ function closeAbout() {
 // ==========================
 
 const welcomeEl           = document.getElementById('welcome');
+const welcomeLedeEl       = document.getElementById('welcome-lede');
 const welcomeInstrEl      = document.getElementById('welcome-instructions');
 const welcomeGotItBtn     = document.getElementById('welcome-got-it');
 
@@ -902,7 +880,18 @@ function showWelcomeIfFirstLaunch() {
     STORE.setBool('welcomeSeen', true);
     return;
   }
-  welcomeInstrEl.innerHTML = welcomeInstructionsForOS();
+  if (isTauri) {
+    welcomeInstrEl.innerHTML = welcomeInstructionsForOS();
+  } else {
+    // File-association setup is meaningless on the web build — there's no
+    // OS integration to configure, just the in-page toolbar.
+    welcomeLedeEl.textContent = 'Use the toolbar above to open, save, and export files.';
+    welcomeInstrEl.innerHTML = `
+      <ol>
+        <li>Chrome/Edge: files open and save in place, just like a native app.</li>
+        <li>Firefox/Safari: opening uses a file picker and saving downloads a copy (no File System Access API yet).</li>
+      </ol>`;
+  }
   welcomeEl.classList.remove('hidden');
 }
 function closeWelcome() {
@@ -927,7 +916,9 @@ aboutEl.querySelectorAll('a[data-url]').forEach(a => {
 aboutExample.addEventListener('click', (e) => {
   e.preventDefault();
   closeAbout();
-  invoke('open_example').catch(() => {});
+  // Tauri: fire-and-forget, Rust emits file-opened and the existing
+  // listener picks it up. Web: the payload comes straight back.
+  ipcOpenExample().then((payload) => { if (payload) loadFile(payload); }).catch(() => {});
 });
 
 // ==========================
@@ -965,7 +956,7 @@ async function runUpdateCheck(manual = false) {
   updateCheckInFlight = true;
   if (manual) flashStatus('Checking for updates…');
   try {
-    const info = await invoke('check_for_update');
+    const info = await ipcCheckForUpdate();
     if (info) {
       showUpdateBanner(info);
       if (manual) flashStatus(`Loomings ${info.version} is available.`);
@@ -1152,6 +1143,11 @@ function flashStatus(msg) {
   statusApp._timeout = setTimeout(refreshStatusBar, 2000);
 }
 
+// ipcWatchFile has no push equivalent on web (a true no-op there); on
+// Tauri, surface a denied watch once so the user knows reload-on-
+// external-change is dead for this file.
+function onWatchFail(err) { flashStatus('File watcher failed: ' + (err?.message || err)); }
+
 function basename(p) {
   if (!p) return '';
   const parts = p.split(/[\\/]/);
@@ -1191,7 +1187,8 @@ async function handleSaveAs() {
       lastScratchContent = null;
       writeScratch(text, path);
       await ipcAddRecent(path);
-      await ipcWatchFile(path);
+      refreshRecents();
+      await ipcWatchFile(path, onWatchFail);
       ipcSetTitle(displayName(path));
       markClean(); refreshStatusBar();
     }
@@ -1432,7 +1429,8 @@ async function loadFile(payload) {
     currentFile = payload.path;
     ipcSetTitle(displayName(payload.path));
     ipcAddRecent(payload.path);
-    await ipcWatchFile(payload.path);
+    refreshRecents();
+    await ipcWatchFile(payload.path, onWatchFail);
   }
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
   view.focus();
@@ -1508,36 +1506,76 @@ async function registerListeners() {
 }
 
 // ==========================
-//  Window drag (titlebar)
+//  Window drag (titlebar) + drag-and-drop to open
 // ==========================
 
 const titlebar = document.getElementById('titlebar');
-if (titlebar) {
-  titlebar.addEventListener('mousedown', async (e) => {
-    if (e.button !== 0) return;
-    const win = getCurrentWindow();
-    if (e.detail === 2) {
-      try { await win.toggleMaximize(); } catch (_) {}
-      return;
-    }
-    try { await win.startDragging(); } catch (_) {}
-  });
+initTitlebarDrag(titlebar); // no-op on web — no window to drag in a browser tab
+
+// Both platforms' onFile payload is {path, content}, same shape loadFile
+// already takes — Tauri's is unused internally (its own drop-open flow
+// goes through the existing file-opened listener instead) but kept for a
+// uniform call site.
+initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
+
+// ==========================
+//  Web toolbar (no native menu bar on the web build)
+// ==========================
+
+async function openFile() {
+  // loadFile itself runs the dirty-check on the result; the file picker
+  // showing regardless of current buffer state matches how the native
+  // Open dialog already behaves.
+  const payload = await ipcOpenFile();
+  if (payload) await loadFile(payload);
 }
 
-// ==========================
-//  Drag-and-drop to open
-// ==========================
+const tbRecent = document.getElementById('tb-recent');
 
-const OPENABLE = /\.(md|markdown|mdown|mkd|qmd|rmd|txt)$/i;
+async function refreshRecents() {
+  if (isTauri || !getRecents) return; // native "Open Recent" menu covers Tauri
+  const recents = await getRecents();
+  if (!recents.length) {
+    tbRecent.classList.add('hidden');
+    tbRecent.innerHTML = '';
+    return;
+  }
+  tbRecent.innerHTML = '<option value="" disabled selected>Recent…</option>' +
+    recents.map((r, i) => `<option value="${i}">${escHtml(r.name)}</option>`).join('');
+  tbRecent.classList.remove('hidden');
+}
 
-getCurrentWebview().onDragDropEvent((e) => {
-  if (e.payload.type !== 'drop' || !e.payload.paths?.length) return;
-  const path = e.payload.paths.find((p) => OPENABLE.test(p));
-  // open_path emits file-opened; loadFile handles the dirty-check prompt.
-  if (path) ipcOpenPath(path).catch((err) => {
-    flashStatus('Open failed: ' + (err?.message || err));
-  });
-}).catch(() => {});
+tbRecent?.addEventListener('change', async () => {
+  const idx = parseInt(tbRecent.value, 10);
+  tbRecent.value = '';
+  const recents = await getRecents();
+  const entry = recents[idx];
+  if (!entry) return;
+  const payload = await openRecent(entry);
+  if (payload) await loadFile(payload);
+  else flashStatus('Could not reopen — permission declined');
+  refreshRecents();
+});
+
+const THEME_FAMILY_ORDER = ['pequod', 'glauca', 'tryworks'];
+function cycleThemeFamily() {
+  const next = THEME_FAMILY_ORDER[(THEME_FAMILY_ORDER.indexOf(themeFamily) + 1) % THEME_FAMILY_ORDER.length];
+  setThemeFamily(next);
+}
+
+document.getElementById('tb-new')?.addEventListener('click', fileNew);
+document.getElementById('tb-open')?.addEventListener('click', openFile);
+document.getElementById('tb-save')?.addEventListener('click', handleSave);
+document.getElementById('tb-export')?.addEventListener('click', exportHtml);
+document.getElementById('tb-theme')?.addEventListener('click', cycleThemeFamily);
+document.getElementById('tb-about')?.addEventListener('click', openAbout);
+
+// A dirty buffer left open in a closed tab is otherwise silently lost —
+// blunter than the native flush-and-ask flow (generic browser dialog, no
+// custom copy, can't await the async scratch-flush first) but real insurance.
+window.addEventListener('beforeunload', (e) => {
+  if (isDirty) e.preventDefault();
+});
 
 // ==========================
 //  Init + scratch recovery
@@ -1547,6 +1585,7 @@ getCurrentWebview().onDragDropEvent((e) => {
   await registerListeners();
   initAbout();
   ipcSyncThemeMenu(themeFamily);
+  refreshRecents();
 
   // Drain the launch-file cache BEFORE scratch recovery — if the user
   // double-clicked an .md file in Finder, that's the document they want,
@@ -1567,7 +1606,7 @@ getCurrentWebview().onDragDropEvent((e) => {
         currentFile = scratch.current_file || null;
         if (currentFile) {
           ipcSetTitle(displayName(currentFile));
-          await ipcWatchFile(currentFile);
+          await ipcWatchFile(currentFile, onWatchFail);
         }
         markDirty();
       } else {

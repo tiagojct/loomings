@@ -733,8 +733,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<()> {
             .version(Some(env!("CARGO_PKG_VERSION").to_string()))
             .authors(Some(vec!["Tiago Jacinto".to_string()]))
             .license(Some("MIT".to_string()))
-            .website(Some("https://tiagojct.eu/loomings".to_string()))
-            .website_label(Some("tiagojct.eu/loomings".to_string()))
+            .website(Some("https://loomings.tiagojct.eu".to_string()))
+            .website_label(Some("loomings.tiagojct.eu".to_string()))
             .copyright(Some("© 2026 Tiago Jacinto".to_string()))
             .comments(Some("A markdown writing app. Built with Tauri 2 + CodeMirror 6.".to_string()))
             .build();
@@ -934,7 +934,7 @@ pub fn run() {
                     });
                 }
                 "help-check-update" => { let _ = app.emit("manual-update-check", ()); }
-                "help-website"   => { let _ = app.emit("open-url", "https://tiagojct.eu/loomings"); }
+                "help-website"   => { let _ = app.emit("open-url", "https://loomings.tiagojct.eu"); }
                 "help-github"    => { let _ = app.emit("open-url", "https://github.com/tiagojct/loomings"); }
                 "font-inc"       => { let _ = app.emit("font-size", 1i32); }
                 "font-dec"       => { let _ = app.emit("font-size", -1i32); }

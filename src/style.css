@@ -123,6 +123,34 @@ body { display: flex; flex-direction: column; }
   background: transparent;
 }
 
+/* Web build only — no native window to drag, no native menu bar, so
+   File/Export/About/theme-family need an in-page affordance. Hidden by
+   default; editor.js toggles body.tauri based on the Tauri runtime check. */
+#web-toolbar { display: none; }
+body:not(.tauri) #titlebar { display: none; }
+body:not(.tauri) #web-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 6px 10px;
+  background: var(--bg-deep);
+  border-bottom: 1px solid var(--border);
+}
+#web-toolbar button, #web-toolbar select {
+  padding: 4px 10px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+#web-toolbar button:hover { border-color: var(--accent); color: var(--accent-light); }
+#web-toolbar select { max-width: 160px; }
+
 #dirty {
   color: var(--accent);
   font-size: 10px;
