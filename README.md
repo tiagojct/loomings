@@ -36,9 +36,10 @@ xattr -dr com.apple.quarantine /Applications/Loomings.app
 | Linux (other) | `Loomings_<ver>_amd64.AppImage` |
 | Linux (Fedora/RHEL) | `Loomings-<ver>-1.x86_64.rpm` |
 
-> **Intel Macs:** the pre-built Intel `.dmg` is not published — the free-tier
-> `macos-13` runner queue is too long for it to land before the release goes
-> out. Intel Mac users should [build from source](#build-from-source) for now.
+> **Intel Macs:** no pre-built Intel `.dmg` is published — the free-tier
+> `macos-13` runner queue was consistently too long/unreliable for it to
+> land with the rest of the release. Intel Mac users should
+> [build from source](#build-from-source).
 
 ### macOS Gatekeeper
 
