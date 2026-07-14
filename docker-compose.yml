@@ -1,8 +1,8 @@
 services:
   loomings:
-    build: .
-    # Once the image is published, swap the line above for:
-    # image: ghcr.io/tiagojct/loomings:latest
+    image: ghcr.io/tiagojct/loomings:latest
+    # For local dev/testing against uncommitted changes, swap the line
+    # above for: build: .
     ports:
       # Bind to loopback only: reachable solely via the reverse proxy on
       # the same host. Left-hand port is the host port the proxy targets

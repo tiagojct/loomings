@@ -4,6 +4,36 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] — 2026-07-14
+
+Web version, alongside the desktop app. Same editor, same CodeMirror core,
+now also runs as a static site with no install.
+
+### Added
+
+- **Web build** at [loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app)
+  — a `platform.js` seam picks a Tauri or browser adapter at runtime, so
+  `editor.js` itself is unchanged between the two. Real open/save via the
+  File System Access API in Chromium/Edge; other browsers get a file-picker
+  open and a download-based save/export. Scratch (crash recovery) and
+  recent files persist in IndexedDB. A small toolbar (New/Open/Save/
+  Export/Theme/About) replaces the native menu, since a browser tab has
+  none.
+- **Self-hosted deploy**: `Dockerfile`/`nginx.conf`/`docker-compose.yml`
+  ship the landing page at the root and the app at `/app` as one static
+  site; `docker-publish.yml` publishes a multi-arch image to
+  `ghcr.io/tiagojct/loomings` on every release, and a `watchtower`
+  sidecar redeploys automatically.
+
+### Changed
+
+- Landing page moved from GitHub Pages (`tiagojct.eu/loomings`) to
+  `loomings.tiagojct.eu`, hosted alongside the app. The desktop app's
+  About panel and Help → Website menu item point here now too.
+- Desktop release CI dropped the Intel Mac (`macos-13`) target — its
+  free-tier runner queue was consistently too long to land with the rest
+  of a release. Intel Mac users build from source.
+
 ## [1.1.0] — 2026-07-13
 
 Performance release plus two new theme families. Typing is now free of
