@@ -4,6 +4,15 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] — 2026-09-21
+
+### Fixed
+
+- Visiting `/app` without the trailing slash redirected to `http://`,
+  because nginx behind the TLS-terminating proxy only sees plain HTTP.
+  The redirect is now relative, and the landing page links to `/app/`
+  directly.
+
 ## [2.0.2] — 2026-09-21
 
 ### Fixed
@@ -438,6 +447,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.3]: https://github.com/tiagojct/loomings/releases/tag/v2.0.3
 [2.0.2]: https://github.com/tiagojct/loomings/releases/tag/v2.0.2
 [2.0.1]: https://github.com/tiagojct/loomings/releases/tag/v2.0.1
 [2.0.0]: https://github.com/tiagojct/loomings/releases/tag/v2.0.0
