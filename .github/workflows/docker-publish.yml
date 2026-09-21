@@ -68,4 +68,6 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # The cache export runs after the push and is only an optimisation;
+          # a cache-service hiccup must not turn a published release red.
+          cache-to: type=gha,mode=max,ignore-error=true
