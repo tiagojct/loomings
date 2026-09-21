@@ -1,6 +1,6 @@
 /* ========================================
-   Loomings — Pequod Theme
-   Below deck. Lantern light. The inkwell.
+   Loomings — editor stylesheet
+   Colours are CSS custom properties fed from src/palettes.js.
    ======================================== */
 
 :root {
@@ -11,7 +11,9 @@
   --line-h: calc(var(--editor-fs) * 1.8);
 }
 
-/* Dark — below deck, deeper than before */
+/* Pre-script fallback only: editor.js writes every family's variables
+   onto <html> from src/palettes.js as soon as it loads. These Pequod
+   values just keep the first paint from flashing white. */
 :root,
 [data-theme="dark"] {
   --bg:           #061826;
@@ -24,82 +26,28 @@
   --accent-light: #D4A882;
   --accent-dim:   #8B6348;
   --border:       #0E2D44;
+  --heading:      var(--accent-light);
+  --emphasis:     var(--accent-light);
+  --code:         var(--accent-light);
+  --marker:       var(--accent);
 }
-
-/* Light — parchment / aged paper, ink, sea-glass accents */
-[data-theme="light"] {
-  --bg:           #F1E7D2;
-  --bg-elev:      #F8F0DD;
-  --bg-deep:      #E2D5B7;
-  --fg:           #1A2D3C;
-  --fg-dim:       #3F5566;
-  --fg-ghost:     #7A8B9A;
-  --accent:       #8B6348;
-  --accent-light: #BD8C68;
-  --accent-dim:   #4F3825;
-  --border:       #D7C9A8;
-}
-
-/* ========================================
-   Glauca — the glaucous bloom
-   Profundum (dark) / Pruina (light)
-   ======================================== */
-
-[data-palette="glauca"][data-theme="dark"] {
-  --bg:           #10161c;
-  --bg-elev:      #1f2932;
-  --bg-deep:      #0b1218;
-  --fg:           #e8eef2;
-  --fg-dim:       #93b7c9;
-  --fg-ghost:     #4d7391;
-  --accent:       #3d97ff;
-  --accent-light: #6cb2ff;
-  --accent-dim:   #007aff;
-  --border:       #2a3540;
-}
-
-[data-palette="glauca"][data-theme="light"] {
-  --bg:           #f0f4f6;
-  --bg-elev:      #ffffff;
-  --bg-deep:      #e8eef2;
-  --fg:           #16222a;
-  --fg-dim:       #55646d;
-  --fg-ghost:     #8c8c8c;
-  --accent:       #0b62cf;
-  --accent-light: #007aff;
-  --accent-dim:   #084b96;
-  --border:       #cdd7dc;
-}
-
-/* ========================================
-   Try-Works — the furnace on the Pequod's deck
-   Try-Fire (dark) / True Lamp (light)
-   ======================================== */
-
-[data-palette="tryworks"][data-theme="dark"] {
-  --bg:           #12161b;
-  --bg-elev:      #232b32;
-  --bg-deep:      #11151a;
-  --fg:           #f1efe9;
-  --fg-dim:       #8fb6bd;
-  --fg-ghost:     #4d7680;
-  --accent:       #c9651d;
-  --accent-light: #e0832a;
-  --accent-dim:   #9a4a16;
-  --border:       #2c3640;
-}
-
-[data-palette="tryworks"][data-theme="light"] {
-  --bg:           #dee7e4;
-  --bg-elev:      #f2f7f4;
-  --bg-deep:      #b4ccc9;
-  --fg:           #18272b;
-  --fg-dim:       #52646a;
-  --fg-ghost:     #97a0a4;
-  --accent:       #9e5017;
-  --accent-light: #b85f1c;
-  --accent-dim:   #7a3a10;
-  --border:       #c4d2cd;
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg:           #F1E7D2;
+    --bg-elev:      #F8F0DD;
+    --bg-deep:      #E2D5B7;
+    --fg:           #1A2D3C;
+    --fg-dim:       #3F5566;
+    --fg-ghost:     #7A8B9A;
+    --accent:       #8B6348;
+    --accent-light: #BD8C68;
+    --accent-dim:   #4F3825;
+    --border:       #D7C9A8;
+    --heading:      var(--accent);
+    --emphasis:     var(--accent);
+    --code:         var(--accent);
+    --marker:       var(--accent);
+  }
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -139,6 +87,62 @@ body { display: flex; flex-direction: column; }
 }
 #web-toolbar button:hover { border-color: var(--accent); color: var(--accent-light); }
 #web-toolbar select { max-width: 160px; }
+#web-toolbar button[aria-expanded="true"] { border-color: var(--accent); color: var(--accent-light); }
+
+.tb-menu-wrap { position: relative; }
+.tb-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 80;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  font-size: 13px;
+}
+.tb-menu-section {
+  padding: 6px 10px 4px;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-ghost);
+}
+#web-toolbar .tb-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+#web-toolbar .tb-menu-item:hover { background: var(--bg-deep); color: var(--fg); border-color: transparent; }
+#web-toolbar .tb-menu-item.on { color: var(--accent-light); }
+#web-toolbar .tb-menu-item.on .tb-menu-label::after { content: ' ✓'; }
+.tb-menu-label { flex: 1; }
+.tb-menu-hint { font-size: 11px; color: var(--fg-ghost); font-style: italic; }
+.swatch {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.swatch i {
+  position: absolute;
+  inset: 0 0 0 50%;
+  display: block;
+}
 
 #dirty {
   color: var(--accent);
@@ -229,7 +233,7 @@ body.focus-mode #statusbar:hover {
   margin-top: 1.5em;
   margin-bottom: 0.5em;
 }
-#preview h1 { font-size: 1.8em; color: var(--accent-light); }
+#preview h1 { font-size: 1.8em; color: var(--heading); }
 #preview h2 { font-size: 1.4em; }
 #preview h3 { font-size: 1.1em; }
 #preview p  { margin-bottom: 0.8em; }
@@ -238,7 +242,7 @@ body.focus-mode #statusbar:hover {
   font-family: var(--font-mono);
   font-size: 0.9em;
   background: var(--bg-deep);
-  color: var(--accent-light);
+  color: var(--code);
   padding: 2px 6px;
   border-radius: 3px;
 }
@@ -260,7 +264,7 @@ body.focus-mode #statusbar:hover {
 }
 #preview ul, #preview ol { margin: 0.5em 0 0.8em 1.5em; }
 #preview li { margin-bottom: 0.3em; }
-#preview em     { color: var(--accent-light); }
+#preview em     { color: var(--emphasis); }
 #preview strong { color: var(--fg); }
 #preview a      { color: var(--accent); text-decoration: underline; }
 #preview hr     { border: none; border-top: 1px solid var(--border); margin: 2em 0; }

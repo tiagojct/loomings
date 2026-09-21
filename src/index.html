@@ -13,7 +13,15 @@
     <select id="tb-recent" title="Recent files" class="hidden"></select>
     <button id="tb-save" title="Save">Save</button>
     <button id="tb-export" title="Export HTML">Export</button>
-    <button id="tb-theme" title="Cycle theme family">Theme</button>
+    <div class="tb-menu-wrap">
+      <button id="tb-theme" title="Theme" aria-haspopup="menu" aria-expanded="false">Theme</button>
+      <div id="theme-menu" class="tb-menu hidden" role="menu" aria-label="Theme">
+        <div class="tb-menu-section">Family</div>
+        <div id="theme-families"></div>
+        <div class="tb-menu-section">Mode</div>
+        <div id="theme-modes"></div>
+      </div>
+    </div>
     <button id="tb-about" title="About">About</button>
   </div>
 

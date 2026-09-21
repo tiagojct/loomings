@@ -10,6 +10,7 @@ import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syn
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import MarkdownIt from 'markdown-it';
+import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles, cssVars } from './palettes.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
   saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml,
@@ -68,108 +69,23 @@ if (isMac) body.classList.add('mac');
 //  CodeMirror 6 setup
 // ==========================
 
-// Three theme families, each with a dark + light mode. Pequod is the
-// original. Glauca and Try-Works are ports of the design systems of the
-// same names (github.com/tiagojct/glauca, github.com/tiagojct/try-works);
-// all values come straight from their source token JSONs.
-const PALETTES = {
-  pequod: {
-    dark: {
-      bg:           '#061826',
-      bgElev:       '#0E2D44',
-      bgDeep:       '#02101B',
-      fg:           '#F7F3EE',
-      fgDim:        '#C4BCAE',
-      fgGhost:      '#8B8578',
-      accent:       '#BD8C68',
-      accentLight:  '#D4A882',
-      accentDim:    '#8B6348',
-      border:       '#0E2D44',
-    },
-    light: {
-      bg:           '#F1E7D2',
-      bgElev:       '#F8F0DD',
-      bgDeep:       '#E2D5B7',
-      fg:           '#1A2D3C',
-      fgDim:        '#3F5566',
-      fgGhost:      '#7A8B9A',
-      accent:       '#8B6348',
-      accentLight:  '#BD8C68',
-      accentDim:    '#4F3825',
-      border:       '#D7C9A8',
-    },
-  },
-  glauca: {
-    dark: {   // Profundum
-      bg:           '#10161c',
-      bgElev:       '#1f2932',
-      bgDeep:       '#0b1218',
-      fg:           '#e8eef2',
-      fgDim:        '#93b7c9',
-      fgGhost:      '#4d7391',
-      accent:       '#3d97ff',
-      accentLight:  '#6cb2ff',
-      accentDim:    '#007aff',
-      border:       '#2a3540',
-    },
-    light: {  // Pruina
-      bg:           '#f0f4f6',
-      bgElev:       '#ffffff',
-      bgDeep:       '#e8eef2',
-      fg:           '#16222a',
-      fgDim:        '#55646d',
-      fgGhost:      '#8c8c8c',
-      accent:       '#0b62cf',
-      accentLight:  '#007aff',
-      accentDim:    '#084b96',
-      border:       '#cdd7dc',
-    },
-  },
-  tryworks: {
-    dark: {   // Try-Fire
-      bg:           '#12161b',
-      bgElev:       '#232b32',
-      bgDeep:       '#11151a',
-      fg:           '#f1efe9',
-      fgDim:        '#8fb6bd',
-      fgGhost:      '#4d7680',
-      accent:       '#c9651d',
-      accentLight:  '#e0832a',
-      accentDim:    '#9a4a16',
-      border:       '#2c3640',
-    },
-    light: {  // True Lamp
-      bg:           '#dee7e4',
-      bgElev:       '#f2f7f4',
-      bgDeep:       '#b4ccc9',
-      fg:           '#18272b',
-      fgDim:        '#52646a',
-      fgGhost:      '#97a0a4',
-      accent:       '#9e5017',
-      accentLight:  '#b85f1c',
-      accentDim:    '#7a3a10',
-      border:       '#c4d2cd',
-    },
-  },
-};
-
 function makeHighlight(p) {
   return HighlightStyle.define([
-    { tag: t.heading1,   color: p.accentLight, fontWeight: '700', fontSize: '1.6em' },
-    { tag: t.heading2,   color: p.accentLight, fontWeight: '700', fontSize: '1.35em' },
-    { tag: t.heading3,   color: p.accentLight, fontWeight: '700', fontSize: '1.15em' },
-    { tag: t.heading4,   color: p.accentLight, fontWeight: '700', fontSize: '1.05em' },
-    { tag: t.heading5,   color: p.accentLight, fontWeight: '700' },
-    { tag: t.heading6,   color: p.accentLight, fontWeight: '700' },
-    { tag: t.strong,     color: p.fg,          fontWeight: '700' },
-    { tag: t.emphasis,   color: p.accentLight, fontStyle: 'italic' },
-    { tag: t.monospace,  color: p.accentLight, class: 'tok-code' },
+    { tag: t.heading1,   color: p.heading,  fontWeight: '700', fontSize: '1.6em' },
+    { tag: t.heading2,   color: p.heading,  fontWeight: '700', fontSize: '1.35em' },
+    { tag: t.heading3,   color: p.heading,  fontWeight: '700', fontSize: '1.15em' },
+    { tag: t.heading4,   color: p.heading,  fontWeight: '700', fontSize: '1.05em' },
+    { tag: t.heading5,   color: p.heading,  fontWeight: '700' },
+    { tag: t.heading6,   color: p.heading,  fontWeight: '700' },
+    { tag: t.strong,     color: p.fg,       fontWeight: '700' },
+    { tag: t.emphasis,   color: p.emphasis, fontStyle: 'italic' },
+    { tag: t.monospace,  color: p.code,     class: 'tok-code' },
     { tag: t.link,       color: p.accent,      textDecoration: 'underline' },
     { tag: t.url,        color: p.accentDim },
     { tag: t.quote,      color: p.fgDim,       fontStyle: 'italic' },
     { tag: t.processingInstruction, color: p.fgGhost },
     { tag: t.contentSeparator,      color: p.fgGhost },
-    { tag: t.list,       color: p.accent },
+    { tag: t.list,       color: p.marker },
   ]);
 }
 
@@ -225,8 +141,9 @@ const highlightCompartment   = new Compartment();
 const lineNumbersCompartment = new Compartment();
 
 let themeMode  = STORE.get('themeMode', 'system');
-let themeFamily = STORE.get('themeFamily', 'pequod');
-if (!PALETTES[themeFamily]) themeFamily = 'pequod';
+let themeFamily = STORE.get('themeFamily', DEFAULT_FAMILY);
+if (!PALETTES[themeFamily]) themeFamily = DEFAULT_FAMILY;
+if (!['system', 'light', 'dark'].includes(themeMode)) themeMode = 'system';
 let activeTheme = resolveTheme(themeMode);
 let lineNumbersOn = STORE.getBool('lineNumbers', false);
 
@@ -235,9 +152,15 @@ function resolveTheme(mode) {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
+// style.css only carries Pequod as a pre-script fallback; every family's
+// variables are written here from palettes.js, the single source.
 function applyThemeAttr(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  document.documentElement.setAttribute('data-palette', themeFamily);
+  const root = document.documentElement;
+  root.setAttribute('data-theme', theme);
+  root.setAttribute('data-palette', themeFamily);
+  for (const [name, value] of Object.entries(cssVars(themeFamily, theme))) {
+    root.style.setProperty(name, value);
+  }
 }
 
 applyThemeAttr(activeTheme);
@@ -506,7 +429,7 @@ const continueListKey = {
 };
 
 function buildState(doc = '') {
-  const p = PALETTES[themeFamily][activeTheme];
+  const p = roles(themeFamily, activeTheme);
   return EditorState.create({
     doc,
     extensions: [
@@ -619,33 +542,90 @@ function cycleWidth() {
 function applyTheme(next) {
   activeTheme = next;
   applyThemeAttr(next);
-  const p = PALETTES[themeFamily][next];
+  const p = roles(themeFamily, next);
   view.dispatch({
     effects: [
       themeCompartment.reconfigure(makeTheme(p, next === 'dark')),
       highlightCompartment.reconfigure(syntaxHighlighting(makeHighlight(p))),
     ],
   });
+  renderThemeMenu();
+}
+
+const MODE_ORDER = ['system', 'light', 'dark'];
+const MODE_LABELS = { system: 'System', light: 'Light', dark: 'Dark' };
+
+function setThemeMode(mode) {
+  if (!MODE_ORDER.includes(mode)) return;
+  themeMode = mode;
+  STORE.set('themeMode', mode);
+  applyTheme(resolveTheme(mode));
+  flashStatus(`Theme: ${MODE_LABELS[mode]}`);
 }
 
 function cycleTheme() {
-  const order = ['system', 'light', 'dark'];
-  const next = order[(order.indexOf(themeMode) + 1) % order.length];
-  themeMode = next;
-  STORE.set('themeMode', next);
-  applyTheme(resolveTheme(next));
-  flashStatus(`Theme: ${next}`);
+  setThemeMode(MODE_ORDER[(MODE_ORDER.indexOf(themeMode) + 1) % MODE_ORDER.length]);
 }
-
-const FAMILY_LABELS = { pequod: 'Pequod', glauca: 'Glauca', tryworks: 'Try-Works' };
 
 function setThemeFamily(family) {
   if (!PALETTES[family] || family === themeFamily) return;
   themeFamily = family;
   STORE.set('themeFamily', family);
   applyTheme(resolveTheme(themeMode));
-  flashStatus(`Theme: ${FAMILY_LABELS[family]}`);
+  flashStatus(`Theme: ${PALETTES[family].label}`);
 }
+
+// ==========================
+//  Theme menu (toolbar)
+// ==========================
+
+const themeMenuEl     = document.getElementById('theme-menu');
+const themeMenuBtn    = document.getElementById('tb-theme');
+const themeFamiliesEl = document.getElementById('theme-families');
+const themeModesEl    = document.getElementById('theme-modes');
+
+function renderThemeMenu() {
+  if (!themeMenuEl) return;
+  themeFamiliesEl.innerHTML = FAMILY_ORDER.map((f) => {
+    const fam = PALETTES[f];
+    const sw = fam[activeTheme];
+    return `<button type="button" class="tb-menu-item ${f === themeFamily ? 'on' : ''}" role="menuitemradio"
+              aria-checked="${f === themeFamily}" data-family="${f}">
+      <span class="swatch" style="background:${sw.bg};border-color:${sw.border}"><i style="background:${sw.accent}"></i></span>
+      <span class="tb-menu-label">${escHtml(fam.label)}</span>
+      <span class="tb-menu-hint">${escHtml(fam.modes[activeTheme])}</span>
+    </button>`;
+  }).join('');
+  themeModesEl.innerHTML = MODE_ORDER.map((m) =>
+    `<button type="button" class="tb-menu-item ${m === themeMode ? 'on' : ''}" role="menuitemradio"
+       aria-checked="${m === themeMode}" data-mode="${m}">
+      <span class="tb-menu-label">${MODE_LABELS[m]}</span>
+    </button>`
+  ).join('');
+}
+
+function openThemeMenu() {
+  renderThemeMenu();
+  themeMenuEl.classList.remove('hidden');
+  themeMenuBtn.setAttribute('aria-expanded', 'true');
+}
+function closeThemeMenu() {
+  themeMenuEl.classList.add('hidden');
+  themeMenuBtn.setAttribute('aria-expanded', 'false');
+}
+function toggleThemeMenu() {
+  if (themeMenuEl.classList.contains('hidden')) openThemeMenu(); else closeThemeMenu();
+}
+
+themeMenuBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggleThemeMenu(); });
+themeMenuEl?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const item = e.target.closest('[data-family],[data-mode]');
+  if (!item) return;
+  if (item.dataset.family) setThemeFamily(item.dataset.family);
+  if (item.dataset.mode) setThemeMode(item.dataset.mode);
+});
+document.addEventListener('click', () => { if (themeMenuEl) closeThemeMenu(); });
 
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   if (themeMode === 'system') applyTheme(resolveTheme('system'));
@@ -1063,7 +1043,7 @@ async function handleSaveAs() {
 }
 
 async function exportHtml() {
-  const p = PALETTES[themeFamily][activeTheme];
+  const p = roles(themeFamily, activeTheme);
   const title = currentFile ? displayName(currentFile) : 'Untitled';
   const rendered = renderMarkdown(getText());
   const html = `<!DOCTYPE html>
@@ -1076,10 +1056,11 @@ async function exportHtml() {
   body { max-width: 680px; margin: 0 auto; padding: 48px 24px;
          font-family: Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 1.8;
          background: ${p.bg}; color: ${p.fg}; }
-  h1, h2, h3, h4, h5, h6 { color: ${p.accentLight}; line-height: 1.3; }
+  h1, h2, h3, h4, h5, h6 { color: ${p.heading}; line-height: 1.3; }
   a { color: ${p.accent}; }
+  em { color: ${p.emphasis}; }
   code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.9em;
-         background: ${p.bgDeep}; color: ${p.accentLight}; padding: 2px 6px; border-radius: 3px; }
+         background: ${p.bgDeep}; color: ${p.code}; padding: 2px 6px; border-radius: 3px; }
   pre { background: ${p.bgDeep}; border: 1px solid ${p.border}; padding: 16px;
         border-radius: 4px; overflow-x: auto; }
   pre code { background: none; padding: 0; color: ${p.fgDim}; }
@@ -1251,6 +1232,7 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
+    if (themeMenuEl && !themeMenuEl.classList.contains('hidden')) { closeThemeMenu(); return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
     if (isPreviewVisible)                        { togglePreview();   return; }
     if (isFocusMode)                             { toggleFocusMode(); return; }
@@ -1340,17 +1322,10 @@ tbRecent?.addEventListener('change', async () => {
   refreshRecents();
 });
 
-const THEME_FAMILY_ORDER = ['pequod', 'glauca', 'tryworks'];
-function cycleThemeFamily() {
-  const next = THEME_FAMILY_ORDER[(THEME_FAMILY_ORDER.indexOf(themeFamily) + 1) % THEME_FAMILY_ORDER.length];
-  setThemeFamily(next);
-}
-
 document.getElementById('tb-new')?.addEventListener('click', fileNew);
 document.getElementById('tb-open')?.addEventListener('click', openFile);
 document.getElementById('tb-save')?.addEventListener('click', handleSave);
 document.getElementById('tb-export')?.addEventListener('click', exportHtml);
-document.getElementById('tb-theme')?.addEventListener('click', cycleThemeFamily);
 document.getElementById('tb-about')?.addEventListener('click', openAbout);
 
 // A dirty buffer left open in a closed tab is otherwise silently lost —
