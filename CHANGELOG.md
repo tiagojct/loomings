@@ -4,6 +4,25 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.5] — 2026-09-21
+
+Landing page only — no app changes.
+
+### Fixed
+
+- 2.0.4's landing-page rewrite (new copy, new screenshot, new
+  social-share card) never actually reached visitors: Cloudflare had
+  already cached the old `style.css` and `screenshot.png` at the edge
+  from an earlier fetch, and nginx's own "cache forever" rule for
+  `.js`/`.css` — meant for the app's content-hashed bundle — also
+  matched the landing page's unhashed `style.css`, so both stayed stuck
+  behind a long, unpurgeable cache regardless of what the origin served.
+- `nginx.conf`'s long-cache rule is now scoped to `/app/assets/`, and
+  `style.css`, `screenshot.png` and the social-share card are referenced
+  from `docs/index.html` with a `?v=` query string, so a release is
+  always a new URL rather than a bet on cache headers the CDN doesn't
+  have to honour.
+
 ## [2.0.4] — 2026-09-21
 
 Landing page only — no app changes.
@@ -470,6 +489,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.5]: https://github.com/tiagojct/loomings/releases/tag/v2.0.5
 [2.0.4]: https://github.com/tiagojct/loomings/releases/tag/v2.0.4
 [2.0.3]: https://github.com/tiagojct/loomings/releases/tag/v2.0.3
 [2.0.2]: https://github.com/tiagojct/loomings/releases/tag/v2.0.2

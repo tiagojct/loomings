@@ -77,10 +77,18 @@ browser pane.
 - **nginx never sees TLS.** Cloudflare and Caddy terminate it, so any
   absolute redirect nginx builds says `http://`. `absolute_redirect off`
   keeps redirects relative; link to `/app/` with the slash.
-- **CDN cache:** Cloudflare fronts the site and caches `.js`/`.css` for the
-  year nginx advertises. Only content-hashed assets may be long-cached;
-  `sw.js` is registered by a versioned URL and served `no-cache`. The VPS
-  DNS token cannot purge the cache.
+- **CDN cache:** Cloudflare fronts the site and cannot be purged with the
+  VPS's token (`purge_cache` fails with an auth error — it's DNS-scoped
+  only), and it caches by file extension at the edge even for files nginx
+  sends no explicit `Cache-Control` for. nginx's own 1-year immutable rule
+  in `nginx.conf` is scoped to `/app/assets/` (Vite's hashed output)
+  precisely because it once also matched the landing page's unhashed
+  `docs/style.css` and pinned a stale copy for a year (2026-09-21). Any
+  unhashed file under `docs/` that changes — `style.css`, `screenshot.png`,
+  `og.png` — is referenced from `docs/index.html` with a `?v=<version>`
+  query string, the same trick `sw.js` uses, so a new release is always a
+  new URL rather than a bet on cache headers. Bump those query strings
+  whenever the file changes, not just the version number.
 - **Version** lives in `package.json` only. The service worker's cache
   name and the About dialog read it from there.
 - Lessons are plain Markdown without raw HTML (the preview has
