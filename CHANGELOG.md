@@ -4,6 +4,29 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] — 2026-09-21
+
+Landing page only — no app changes.
+
+### Changed
+
+- Rewrote the landing page copy: tighter sections named after the app's
+  own verbs (Write, Teach, Keep), a trimmed "what is not" list, and a
+  unified tagline across the title, meta tags and header.
+- Replaced the screenshot and social-share card. Both were stale — the
+  screenshot still showed the retired desktop app, and the share card
+  still read v1.0.0 and the old domain. The new screenshot is a live
+  capture of split view.
+
+### Fixed
+
+- The landing page's `@import` of Source Serif 4 / JetBrains Mono from
+  Google Fonts was silently blocked by the site's own CSP (`style-src
+  'self'`) and had never actually loaded; removed it and documented the
+  system-font fallback it was already rendering with.
+- Removed two leftover `TODO` comments and the CSS for a downloads grid
+  and a shortcuts-pill list that no longer exist in the markup.
+
 ## [2.0.3] — 2026-09-21
 
 ### Fixed
@@ -447,6 +470,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.4]: https://github.com/tiagojct/loomings/releases/tag/v2.0.4
 [2.0.3]: https://github.com/tiagojct/loomings/releases/tag/v2.0.3
 [2.0.2]: https://github.com/tiagojct/loomings/releases/tag/v2.0.2
 [2.0.1]: https://github.com/tiagojct/loomings/releases/tag/v2.0.1

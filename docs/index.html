@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loomings — A markdown editor in your browser</title>
-  <meta name="description" content="A markdown editor in your browser. Write, share with students, teach markdown side by side. No account, nothing sent to a server.">
+  <title>Loomings — a markdown editor for writing and teaching</title>
+  <meta name="description" content="A markdown editor, for writing and teaching. Runs in the browser. No account, nothing sent to a server.">
   <meta property="og:title" content="Loomings">
-  <meta property="og:description" content="A markdown editor in your browser. Write, share with students, teach markdown side by side.">
+  <meta property="og:description" content="A markdown editor, for writing and teaching. Runs in the browser. No account, nothing sent to a server.">
   <meta property="og:url" content="https://loomings.tiagojacinto.eu/">
   <meta property="og:image" content="https://loomings.tiagojacinto.eu/assets/og.png">
   <meta property="og:image:width" content="1200">
@@ -27,8 +27,8 @@
     <header>
       <img src="assets/icon.png" alt="" class="mark" width="84" height="84">
       <h1>Loomings</h1>
-      <p class="sub">A markdown editor in your browser.</p>
-      <p class="version">v2.0.3</p>
+      <p class="sub">A markdown editor, for writing and teaching.</p>
+      <p class="version">v2.0.4</p>
     </header>
 
     <article>
@@ -37,12 +37,12 @@
       </p>
 
       <p>
-        Loomings is a markdown editor that runs in your browser. It opens to a blank page. You write. It stays out of the way. Nothing you type leaves your machine. The first chapter of Moby-Dick is called <em>Loomings</em>, and that is where this came from.
+        Loomings is a markdown editor that runs in the browser. It opens to a blank page, and stays out of the way while you write on it, hand it to a student, or teach from it with the source next to the result. Nothing you type leaves your machine unless you turn it into a link yourself. The first chapter of <em>Moby-Dick</em> is called <em>Loomings</em>, and that is where the name came from.
       </p>
 
       <figure class="shot">
-        <img src="assets/screenshot.png" alt="Loomings editor showing chapter 1 of Moby-Dick" loading="lazy">
-        <figcaption>The editor showing the bundled example — chapter 1 of <em>Moby-Dick</em>.</figcaption>
+        <img src="assets/screenshot.png" alt="Loomings in split view, chapter 1 of Moby-Dick in the source pane on the left and the rendered result on the right." loading="lazy" width="2800" height="1800">
+        <figcaption>Split view — the bundled example, chapter 1 of <em>Moby-Dick</em>.</figcaption>
       </figure>
 
       <p class="actions">
@@ -50,47 +50,30 @@
         <a class="link" href="https://github.com/tiagojct/loomings">Source on GitHub</a>
       </p>
 
-      <h2>What is there</h2>
+      <h2>Write</h2>
       <p>
-        Real markdown in the editor — bold reads bold, headings read heading, code reads code. List lines that continue themselves when you press <em>return</em>, and stop when you press it twice. An outline you can jump to with <em>⌘P</em>. A focus mode that dims everything outside the sentence under the cursor. Word counts. A word goal if you want one. Find and replace. A split view that shows the source beside the result and keeps the two in step.
+        Real markdown in the editor — bold reads bold, headings read heading, code reads code. Lists continue themselves on <em>return</em>, and stop when you press it twice. An outline you can jump through with <em>⌘P</em>, a focus mode that dims everything outside the sentence under the cursor, a word goal if you want one. <em>Split</em> shows the source beside the result and keeps the two in step as you scroll either one. Every shortcut is listed in the app itself, one keystroke away (<em>⌘?</em>).
       </p>
 
-      <h2>For teaching</h2>
+      <h2>Teach</h2>
       <p>
-        Six short lessons live under the <em>Learn</em> menu, written to demonstrate themselves: the syntax on the left, what it becomes on the right, an exercise at the end. A cheatsheet sits one keystroke away. And any document can be turned into a link: <em>Export → Copy share link</em> folds the whole text into the address, so a student opens it in their own editor with nothing uploaded anywhere. Hand in with <em>Print / PDF</em>, or send the link back.
+        Six short lessons live under the <em>Learn</em> menu, written to demonstrate themselves: the syntax on the left, what it becomes on the right, an exercise at the end. Any document can be turned into a link — <em>Export → Copy share link</em> folds the whole text into the address, so a student opens it in their own editor with nothing uploaded anywhere. Hand in with <em>Print / PDF</em>, or send the link back.
       </p>
 
       <h2>Four colours, two moods</h2>
       <p>
-        Pequod, the parchment and lantern light of this page, is the default. Glauca is frost and one sky blue. Try-Works is cold sea and try-pot fire. Ambergris is near-monochrome grey with a teal that only marks what you can click. Each has a dark and a light side, and will follow the system if you let it.
+        Pequod — the parchment and lantern light of this page — is the default. Glauca is frost and one sky blue. Try-Works is cold sea and try-pot fire. Ambergris is near-monochrome grey with a teal that only marks what you can click. Each has a dark side and a light side, and follows the system if you let it.
       </p>
 
-      <h2>Where the files go</h2>
+      <h2>Keep</h2>
       <p>
-        In Chrome and Edge, to real files on disk, and recent ones are remembered. Elsewhere — Safari, Firefox, an iPad — <em>Save</em> keeps the draft in the browser itself, listed under <em>Documents</em>. Either way the buffer is scratched as you type and offered back if the tab dies. Install it from the browser's menu and it becomes an app that works offline and opens <code>.md</code> files.
+        In Chrome and Edge, real files on disk, with recent ones remembered. Elsewhere — Safari, Firefox, an iPad — <em>Save</em> keeps the draft in the browser itself, listed under <em>Documents</em>. Either way the buffer is scratched as you type and offered back if the tab closes early. Install it from the browser's own menu and it becomes an app that works offline and opens <code>.md</code> files.
       </p>
-      <!-- TODO: focus.png — capture in app via Cmd+Shift+4 then drop into docs/assets/screenshot-focus.png -->
-      <!-- TODO: preview.png — capture preview pane via Cmd+Shift+4 then drop into docs/assets/screenshot-preview.png -->
-
-      <h2>How it works</h2>
-      <div class="shortcuts">
-        <span class="key"><kbd>⌘P</kbd> Outline</span>
-        <span class="key"><kbd>⌘F</kbd> Find</span>
-        <span class="key"><kbd>⌘⇧D</kbd> Focus</span>
-        <span class="key"><kbd>⌘\</kbd> Split</span>
-        <span class="key"><kbd>⌘⇧P</kbd> Preview</span>
-        <span class="key"><kbd>⌘?</kbd> Cheatsheet</span>
-        <span class="key"><kbd>⌘⇧W</kbd> Width</span>
-        <span class="key"><kbd>⌘⇧T</kbd> Theme</span>
-        <span class="key"><kbd>⌘⇧G</kbd> Goal</span>
-      </div>
 
       <h2>What is not</h2>
       <ul class="not-list">
-        <li>No cloud sync.</li>
-        <li>No account.</li>
+        <li>No account, no cloud sync.</li>
         <li>No tracking.</li>
-        <li>No newsletter.</li>
         <li>No themes marketplace.</li>
         <li>No AI assistant pestering the margin.</li>
         <li>No server that sees your text.</li>
@@ -101,7 +84,7 @@
 
       <h2>Built with</h2>
       <p>
-        CodeMirror 6 and markdown-it, served as static files. The source is MIT-licensed. The icon is set in italic Didot. The body in this page is Source Serif. The colours come from a chapter that opens with a man bored of land.
+        CodeMirror 6 and markdown-it, served as static files. The source is MIT-licensed. The icon is set in italic Didot. The colours come from a chapter that opens with a man bored of land.
       </p>
 
     </article>
@@ -111,7 +94,7 @@
       <p class="foot-links">
         <a href="#top">Loomings</a>
         <span class="dot">·</span>
-        <span class="version">v2.0.3</span>
+        <span class="version">v2.0.4</span>
         <span class="dot">·</span>
         by <a href="https://tiagojacinto.eu">Tiago Jacinto</a>
         <span class="dot">·</span>

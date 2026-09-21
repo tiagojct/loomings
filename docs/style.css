@@ -27,7 +27,11 @@
   }
 }
 
-@import url('https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400..800;1,8..60,400..800&family=JetBrains+Mono:wght@400;500&display=swap');
+/* No @import for the display faces: the CSP here is self-only (see
+   nginx.conf), so a Google Fonts request would just be dropped by the
+   browser. These stacks fall through to Hoefler Text / SF Mono, which
+   ship on the platforms that matter and read close enough to the app's
+   own faces that nothing here needs a network request. */
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -244,119 +248,6 @@ footer a { color: var(--ink-soft); }
   color: var(--paper);
 }
 
-/* === Downloads grid (B1) === */
-.downloads-block { margin: 2.4em 0 3em; }
-.brew-line {
-  margin: 0 0 18px !important;
-  font-size: 15px;
-  color: var(--ink-soft);
-  font-style: italic;
-}
-.brew-line code {
-  font-style: normal;
-  background: var(--paper-soft);
-  padding: 2px 8px;
-  border-radius: 2px;
-  font-size: 13px;
-  color: var(--ink);
-  border: 1px solid var(--rule);
-}
-.downloads {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.dl {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border: 1px solid var(--rule);
-  background: var(--paper-soft);
-  color: var(--ink);
-  text-decoration: none;
-  border-radius: 2px;
-  transition: border-color 0.15s, transform 0.1s, background 0.15s;
-}
-.dl:hover {
-  border-color: var(--accent);
-  background: var(--paper);
-  color: var(--ink);
-  transform: translateY(-1px);
-}
-.dl-platform {
-  font-family: var(--font-serif);
-  font-size: 16px;
-  font-weight: 500;
-}
-.dl-ext {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
-}
-.dl-extras {
-  margin: 1.2em 0 0 !important;
-  font-size: 15px;
-  color: var(--ink-soft);
-}
-.dl-extras a {
-  color: var(--ink-soft);
-  text-decoration: none;
-  border-bottom: 1px solid var(--rule);
-}
-.dl-extras a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
-.dl-note {
-  margin: 0.6em 0 0 !important;
-  font-size: 13px;
-  color: var(--ink-faint);
-  font-style: italic;
-}
-.dl-note a {
-  color: var(--ink-soft);
-  text-decoration: none;
-  border-bottom: 1px solid var(--rule);
-}
-.dl-note a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
-.dl-note code {
-  font-style: normal;
-  font-size: 12px;
-  padding: 0 4px;
-  background: var(--paper-soft);
-  border-radius: 2px;
-}
-
-/* === Shortcut pills (B3) === */
-.shortcuts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 1.4em 0 2em;
-}
-.key {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  font-size: 14px;
-  color: var(--ink);
-  background: transparent;
-  font-family: var(--font-serif);
-}
-.key kbd {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--accent-deep);
-  background: var(--paper-soft);
-  padding: 1px 6px;
-  border-radius: 2px;
-  border: none;
-}
-
 /* === Not-list (B4) === */
 .not-list {
   list-style: none;
@@ -415,6 +306,5 @@ footer .tag {
   .dropcap { font-size: 60px; }
   body { font-size: 18px; padding: 0 18px; }
   h2 { font-size: 22px; }
-  .downloads { grid-template-columns: 1fr; }
   .not-list li { font-size: 18px; }
 }

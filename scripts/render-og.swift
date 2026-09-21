@@ -96,7 +96,7 @@ let tagAttrs: [NSAttributedString.Key: Any] = [
     .font: tagFont,
     .foregroundColor: color(0xBD, 0xB2, 0x9B),
 ]
-let tagStr = NSAttributedString(string: "A markdown writing app.", attributes: tagAttrs)
+let tagStr = NSAttributedString(string: "A markdown editor, for writing and teaching.", attributes: tagAttrs)
 let tagSize = tagStr.size()
 tagStr.draw(at: NSPoint(x: titleX, y: tagY - tagSize.height))
 
@@ -111,7 +111,7 @@ let verAttrs: [NSAttributedString.Key: Any] = [
     .foregroundColor: color(0xD4, 0xA8, 0x82),
     .kern: 1.5,
 ]
-let verStr = NSAttributedString(string: "v1.0.0", attributes: verAttrs)
+let verStr = NSAttributedString(string: "v2.0.3", attributes: verAttrs)
 verStr.draw(at: NSPoint(x: margin, y: margin))
 
 // Tag URL — bottom-right.
@@ -125,7 +125,7 @@ let urlAttrs: [NSAttributedString.Key: Any] = [
     .foregroundColor: color(0x7E, 0x76, 0x60),
     .kern: 1.2,
 ]
-let urlStr = NSAttributedString(string: "tiagojct.eu/loomings", attributes: urlAttrs)
+let urlStr = NSAttributedString(string: "loomings.tiagojacinto.eu", attributes: urlAttrs)
 let urlSize = urlStr.size()
 urlStr.draw(at: NSPoint(x: width - margin - urlSize.width, y: margin))
 
