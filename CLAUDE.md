@@ -74,6 +74,9 @@ browser pane.
   import. Use `window.history`.
 - **CSP is strict** (`nginx.conf`). The app makes no network requests
   beyond its own origin; keep it that way.
+- **nginx never sees TLS.** Cloudflare and Caddy terminate it, so any
+  absolute redirect nginx builds says `http://`. `absolute_redirect off`
+  keeps redirects relative; link to `/app/` with the slash.
 - **CDN cache:** Cloudflare fronts the site and caches `.js`/`.css` for the
   year nginx advertises. Only content-hashed assets may be long-cached;
   `sw.js` is registered by a versioned URL and served `no-cache`. The VPS
