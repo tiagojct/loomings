@@ -1,18 +1,21 @@
 // ========================================
-// Loomings — Web platform adapter
-// Implements the same contract as platform-tauri.js using browser-standard
-// APIs: File System Access (Chromium) with input[type=file]/download
-// fallback, IndexedDB for scratch/recents. See platform.js for selection.
+// Loomings — browser adapter
+// Everything that touches the browser's file, storage and window APIs:
+// File System Access (Chromium) with input[type=file]/download fallback,
+// IndexedDB for scratch/recents, document.title, window.confirm.
+// editor.js never calls these APIs directly.
 // ========================================
 
 import exampleContent from '../examples/loomings.md?raw';
 import { version as pkgVersion } from '../package.json';
 
-const hasFS = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+export const hasFileSystemAccess = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+
 const OPEN_TYPES = {
   description: 'Markdown',
   accept: { 'text/markdown': ['.md', '.markdown', '.mdown', '.mkd', '.qmd', '.rmd', '.txt'] },
 };
+const OPENABLE = /\.(md|markdown|mdown|mkd|qmd|rmd|txt)$/i;
 
 // The handle behind the currently open file (Chromium only) — paired with
 // editor.js's own `currentFile` display-string. Only this module reads or
@@ -47,7 +50,7 @@ function openDb() {
   });
 }
 
-async function idbGet(key) {
+export async function idbGet(key) {
   try {
     const db = await openDb();
     return await new Promise((resolve, reject) => {
@@ -59,7 +62,7 @@ async function idbGet(key) {
   } catch (_) { return null; }
 }
 
-async function idbSet(key, value) {
+export async function idbSet(key, value) {
   try {
     const db = await openDb();
     await new Promise((resolve, reject) => {
@@ -71,7 +74,7 @@ async function idbSet(key, value) {
   } catch (_) {}
 }
 
-async function idbDelete(key) {
+export async function idbDelete(key) {
   try {
     const db = await openDb();
     await new Promise((resolve, reject) => {
@@ -84,16 +87,8 @@ async function idbDelete(key) {
 }
 
 // ==========================
-//  Web-standard stand-ins for Tauri plugins
+//  Window-ish
 // ==========================
-
-// Total no-op subscribe — matches Tauri's listen() shape (Promise<unlisten
-// fn>) so registerListeners()'s Promise.all(...) in editor.js needs no
-// changes, but nothing on web actually emits these events: every one of
-// them already has a direct function call or keyboard shortcut on the web
-// side (see the toolbar wiring / keydown handler in editor.js) instead of
-// routing through the native-menu-driven event system.
-export async function listen(_event, _cb) { return () => {}; }
 
 export async function getVersion() { return pkgVersion; }
 
@@ -102,22 +97,21 @@ export async function openUrl(url) {
 }
 
 export async function ask(message) {
-  // Blunter than the native dialog (no title/kind styling, blocks the
-  // main thread) but correct — a custom in-page modal is a nice-to-have,
-  // not required for this to work.
+  // Blunter than a styled dialog (blocks the main thread) but correct — a
+  // custom in-page modal is a nice-to-have, not required for this to work.
   return window.confirm(message);
+}
+
+export async function setTitle(title) {
+  document.title = title ? `${title} — Loomings` : 'Loomings';
 }
 
 // ==========================
 //  File I/O
 // ==========================
 
-export async function ipcSetTitle(title) {
-  document.title = title ? `Loomings — ${title}` : 'Loomings';
-}
-
-export async function ipcSaveFile(path, content) {
-  if (!currentFileHandle) return ipcSaveFileAs(content);
+export async function saveFile(path, content) {
+  if (!currentFileHandle) return saveFileAs(content);
   const perm = await currentFileHandle.queryPermission({ mode: 'readwrite' });
   if (perm !== 'granted') {
     const granted = await currentFileHandle.requestPermission({ mode: 'readwrite' });
@@ -129,11 +123,11 @@ export async function ipcSaveFile(path, content) {
   return path;
 }
 
-export async function ipcSaveFileAs(content) {
-  if (hasFS) {
+export async function saveFileAs(content, suggestedName = 'untitled.md') {
+  if (hasFileSystemAccess) {
     let handle;
     try {
-      handle = await window.showSaveFilePicker({ types: [OPEN_TYPES], suggestedName: 'untitled.md' });
+      handle = await window.showSaveFilePicker({ types: [OPEN_TYPES], suggestedName });
     } catch (_) { return null; } // user cancelled
     const writable = await handle.createWritable();
     await writable.write(content);
@@ -143,13 +137,13 @@ export async function ipcSaveFileAs(content) {
   }
   // No File System Access API (Firefox/Safari): a plain download, not an
   // in-place save. The caller surfaces this distinction to the user.
-  downloadBlob(content, 'untitled.md', 'text/markdown');
+  downloadBlob(content, suggestedName, 'text/markdown');
   currentFileHandle = null;
   return null;
 }
 
-export async function ipcOpenFile() {
-  if (hasFS) {
+export async function openFile() {
+  if (hasFileSystemAccess) {
     let handle;
     try {
       [handle] = await window.showOpenFilePicker({ types: [OPEN_TYPES] });
@@ -172,24 +166,39 @@ export async function ipcOpenFile() {
   });
 }
 
-export async function ipcOpenExample() {
+// Adopts a handle that arrived from outside the pickers (PWA file_handlers
+// launch queue, drag-and-drop) so later Save writes back to it.
+export async function openHandle(handle) {
+  if (!handle || handle.kind !== 'file' || !OPENABLE.test(handle.name)) return null;
+  const file = await handle.getFile();
+  currentFileHandle = handle;
+  return { path: file.name, content: await file.text() };
+}
+
+// Detaches the buffer from any file handle — used when loading content
+// that has no file behind it (example, lesson, shared link).
+export function forgetFile() { currentFileHandle = null; }
+
+export async function openExample() {
   currentFileHandle = null;
   return { path: '', content: exampleContent };
 }
 
-// A hosted web app is always latest on reload — there's nothing to check.
-export async function ipcCheckForUpdate() { return null; }
-
-export async function ipcExportHtml(content, suggestedName) {
-  // Always a uniform download — a reusable Save handle doesn't help a
-  // one-shot export, so there's no need to branch on FS Access here.
+export async function downloadHtml(content, suggestedName) {
   downloadBlob(content, suggestedName, 'text/html');
   return suggestedName;
 }
 
-// FileSystemFileHandle is structured-cloneable (Chromium), so it goes into
-// IndexedDB directly alongside its display metadata.
-export async function ipcAddRecent(filePath) {
+export async function downloadMarkdown(content, suggestedName) {
+  downloadBlob(content, suggestedName, 'text/markdown');
+  return suggestedName;
+}
+
+// ==========================
+//  Recents (Chromium only — handles are structured-cloneable into IndexedDB)
+// ==========================
+
+export async function addRecent(filePath) {
   if (!currentFileHandle) return;
   const recents = (await idbGet('recents')) || [];
   const next = [
@@ -216,35 +225,29 @@ export async function openRecent(entry) {
   return { path: file.name, content: await file.text() };
 }
 
-export async function ipcSaveScratch(content, currentFile) {
+// ==========================
+//  Scratch (crash recovery)
+// ==========================
+
+export async function saveScratch(content, currentFile) {
   await idbSet('scratch', { content, current_file: currentFile });
 }
-export async function ipcReadScratch() { return idbGet('scratch'); }
-export async function ipcClearScratch() { return idbDelete('scratch'); }
+export async function readScratch() { return idbGet('scratch'); }
+export async function clearScratch() { return idbDelete('scratch'); }
 
-// Explicit cuts for the web build — see the plan's "explicit cuts" list.
-export async function ipcConfirmQuit()    {}
-export async function ipcTakeLaunchFile() { return null; }
-export async function ipcFrontendReady()  {}
-export async function ipcWatchFile()      {} // no push file-change API on the web
-export async function ipcUnwatchFile()    {}
-export async function ipcSyncThemeMenu()  {} // no native menu to mirror into
-
-export function initTitlebarDrag() {} // no window to drag in a browser tab
+// ==========================
+//  Drag-and-drop to open
+// ==========================
 
 export function initDragDrop(onFile, onFail) {
-  const OPENABLE = /\.(md|markdown|mdown|mkd|qmd|rmd|txt)$/i;
   document.addEventListener('dragover', (e) => e.preventDefault());
   document.addEventListener('drop', async (e) => {
     e.preventDefault(); // otherwise the browser navigates the tab to the file
     const item = e.dataTransfer?.items?.[0];
     try {
       if (item?.kind === 'file' && item.getAsFileSystemHandle) {
-        const handle = await item.getAsFileSystemHandle();
-        if (handle.kind !== 'file' || !OPENABLE.test(handle.name)) return;
-        const file = await handle.getFile();
-        currentFileHandle = handle;
-        onFile({ path: file.name, content: await file.text() });
+        const payload = await openHandle(await item.getAsFileSystemHandle());
+        if (payload) onFile(payload);
         return;
       }
       const file = e.dataTransfer?.files?.[0];

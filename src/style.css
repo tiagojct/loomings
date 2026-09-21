@@ -117,18 +117,7 @@ html, body {
 }
 body { display: flex; flex-direction: column; }
 
-#titlebar {
-  flex-shrink: 0;
-  height: 28px;
-  background: transparent;
-}
-
-/* Web build only — no native window to drag, no native menu bar, so
-   File/Export/About/theme-family need an in-page affordance. Hidden by
-   default; editor.js toggles body.tauri based on the Tauri runtime check. */
-#web-toolbar { display: none; }
-body:not(.tauri) #titlebar { display: none; }
-body:not(.tauri) #web-toolbar {
+#web-toolbar {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -159,12 +148,12 @@ body:not(.tauri) #web-toolbar {
   margin-left: 2px;
 }
 
-body.focus-mode #titlebar,
+body.focus-mode #web-toolbar,
 body.focus-mode #statusbar {
   opacity: 0;
   transition: opacity 0.4s ease;
 }
-body.focus-mode #titlebar:hover,
+body.focus-mode #web-toolbar:hover,
 body.focus-mode #statusbar:hover {
   opacity: 1;
 }
@@ -471,134 +460,4 @@ body.focus-mode #statusbar:hover {
   font-size: 11px;
   color: var(--fg-ghost);
   letter-spacing: 0.04em;
-}
-
-#update-banner {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 36px;
-  z-index: 90;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 14px 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  font-size: 13px;
-  color: var(--fg);
-  font-family: var(--font-ui);
-  max-width: calc(100% - 32px);
-}
-#update-message { color: var(--fg); }
-#update-link {
-  color: var(--accent-light);
-  text-decoration: none;
-  cursor: pointer;
-  font-weight: 500;
-}
-#update-link:hover { color: var(--accent); text-decoration: underline; }
-#update-dismiss {
-  background: transparent;
-  border: none;
-  color: var(--fg-ghost);
-  font-size: 18px;
-  line-height: 1;
-  padding: 0 4px;
-  cursor: pointer;
-  font-family: inherit;
-}
-#update-dismiss:hover { color: var(--fg); }
-
-/* === Welcome modal === */
-#welcome {
-  position: fixed;
-  inset: 0;
-  z-index: 110;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-#welcome-inner {
-  width: min(480px, 100%);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 34px 32px 26px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
-  color: var(--fg);
-  font-family: var(--font-ui);
-}
-#welcome-inner h2 {
-  font-family: var(--font-serif);
-  font-size: 26px;
-  font-weight: 400;
-  font-style: italic;
-  margin-bottom: 14px;
-  color: var(--fg);
-}
-.welcome-lede {
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--fg-dim);
-  margin-bottom: 20px;
-}
-.welcome-lede code {
-  font-family: var(--font-mono);
-  font-size: 0.92em;
-  background: var(--bg-deep);
-  color: var(--accent-light);
-  padding: 1px 5px;
-  border-radius: 2px;
-}
-#welcome-instructions {
-  background: var(--bg-deep);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 14px 16px;
-  margin-bottom: 22px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--fg);
-}
-#welcome-instructions ol { padding-left: 18px; margin: 0; }
-#welcome-instructions li { margin: 4px 0; color: var(--fg-dim); }
-#welcome-instructions strong { color: var(--accent-light); font-weight: 600; }
-#welcome-instructions code {
-  font-family: var(--font-mono);
-  font-size: 0.92em;
-  background: var(--bg-elev);
-  color: var(--accent-light);
-  padding: 1px 5px;
-  border-radius: 2px;
-}
-.welcome-actions { display: flex; justify-content: flex-end; }
-.welcome-btn {
-  padding: 8px 18px;
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 500;
-  border: 1px solid var(--border);
-  background: transparent;
-  color: var(--fg);
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.welcome-btn:hover { border-color: var(--accent); color: var(--accent-light); }
-.welcome-btn-primary {
-  background: var(--accent);
-  color: var(--bg-deep);
-  border-color: var(--accent);
-}
-.welcome-btn-primary:hover {
-  background: var(--accent-light);
-  color: var(--bg-deep);
-  border-color: var(--accent-light);
 }

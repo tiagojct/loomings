@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loomings — A markdown writing app</title>
-  <meta name="description" content="A markdown writing app for macOS, Windows, and Linux. Stays out of the way.">
+  <title>Loomings — A markdown editor in your browser</title>
+  <meta name="description" content="A markdown editor in your browser. Write, share with students, teach markdown side by side. No account, nothing sent to a server.">
   <meta property="og:title" content="Loomings">
-  <meta property="og:description" content="A markdown writing app for macOS, Windows, and Linux. Stays out of the way.">
+  <meta property="og:description" content="A markdown editor in your browser. Write, share with students, teach markdown side by side.">
   <meta property="og:url" content="https://loomings.tiagojct.eu/">
   <meta property="og:image" content="https://loomings.tiagojct.eu/assets/og.png">
   <meta property="og:image:width" content="1200">
@@ -27,8 +27,8 @@
     <header>
       <img src="assets/icon.png" alt="" class="mark" width="84" height="84">
       <h1>Loomings</h1>
-      <p class="sub">A markdown writing app.</p>
-      <p class="version">v1.2.0</p>
+      <p class="sub">A markdown editor in your browser.</p>
+      <p class="version">v2.0.0</p>
     </header>
 
     <article>
@@ -37,7 +37,7 @@
       </p>
 
       <p>
-        Loomings is a markdown editor for macOS, Windows, and Linux. It opens to a blank page. You write. It stays out of the way. The first chapter of Moby-Dick is called <em>Loomings</em>, and that is where this came from.
+        Loomings is a markdown editor that runs in your browser. It opens to a blank page. You write. It stays out of the way. Nothing you type leaves your machine. The first chapter of Moby-Dick is called <em>Loomings</em>, and that is where this came from.
       </p>
 
       <figure class="shot">
@@ -45,40 +45,10 @@
         <figcaption>The editor showing the bundled example — chapter 1 of <em>Moby-Dick</em>.</figcaption>
       </figure>
 
-      <section class="downloads-block">
-        <p class="brew-line">
-          Nothing to install: <a href="/app">try Loomings in your browser</a> (Chrome/Edge get real open/save; other browsers, opening and exporting via download).
-        </p>
-        <p class="brew-line">
-          On macOS with Homebrew: <code>brew install --cask --no-quarantine tiagojct/loomings/loomings</code>
-        </p>
-        <div class="downloads">
-          <a class="dl" href="https://github.com/tiagojct/loomings/releases/download/v1.2.0/Loomings_1.2.0_aarch64.dmg">
-            <span class="dl-platform">macOS · Apple Silicon</span>
-            <span class="dl-ext">.dmg</span>
-          </a>
-          <a class="dl" href="https://github.com/tiagojct/loomings/releases/download/v1.2.0/Loomings_1.2.0_x64-setup.exe">
-            <span class="dl-platform">Windows</span>
-            <span class="dl-ext">.exe</span>
-          </a>
-          <a class="dl" href="https://github.com/tiagojct/loomings/releases/download/v1.2.0/Loomings_1.2.0_amd64.deb">
-            <span class="dl-platform">Linux · Debian / Ubuntu</span>
-            <span class="dl-ext">.deb</span>
-          </a>
-          <a class="dl" href="https://github.com/tiagojct/loomings/releases/download/v1.2.0/Loomings_1.2.0_amd64.AppImage">
-            <span class="dl-platform">Linux · portable</span>
-            <span class="dl-ext">.AppImage</span>
-          </a>
-        </div>
-        <p class="dl-extras">
-          <a href="https://github.com/tiagojct/loomings/releases/latest">All downloads (.msi, .rpm)</a>
-          ·
-          <a href="https://github.com/tiagojct/loomings">Source on GitHub</a>
-        </p>
-        <p class="dl-note">
-          Intel Macs: <a href="https://github.com/tiagojct/loomings#build-from-source">build from source</a>. The pre-built Intel <code>.dmg</code> queues forever on free CI runners.
-        </p>
-      </section>
+      <p class="actions">
+        <a class="btn" href="/app">Open Loomings</a>
+        <a class="link" href="https://github.com/tiagojct/loomings">Source on GitHub</a>
+      </p>
 
       <h2>What is there</h2>
       <p>
@@ -106,7 +76,6 @@
         <li>No newsletter.</li>
         <li>No themes marketplace.</li>
         <li>No AI assistant pestering the margin.</li>
-        <li>No mobile companion.</li>
       </ul>
       <p class="not-coda">
         The files are your files; they live wherever you put them.
@@ -114,17 +83,9 @@
 
       <h2>Built with</h2>
       <p>
-        Tauri 2 and CodeMirror 6. The macOS build is about twelve megabytes and idles at thirty of RAM. The source is MIT-licensed. The icon is set in italic Didot. The body in this page is Source Serif. The colours come from a chapter that opens with a man bored of land.
+        CodeMirror 6 and markdown-it, served as static files. The source is MIT-licensed. The icon is set in italic Didot. The body in this page is Source Serif. The colours come from a chapter that opens with a man bored of land.
       </p>
 
-      <h2>If macOS calls it damaged</h2>
-      <p>
-        The build is unsigned — no Apple Developer ID at the moment. Sequoia and Tahoe refuse the right-click trick now, so after moving <code>Loomings.app</code> into <code>/Applications</code>, run:
-      </p>
-      <pre><code>xattr -dr com.apple.quarantine /Applications/Loomings.app</code></pre>
-      <p>
-        That removes the quarantine flag Safari attached on download. The app opens normally afterwards. Alternatively, attempt to launch once, then approve it in System Settings under <em>Privacy &amp; Security</em>.
-      </p>
     </article>
 
     <footer>
@@ -132,13 +93,13 @@
       <p class="foot-links">
         <a href="#top">Loomings</a>
         <span class="dot">·</span>
-        <span class="version">v1.2.0</span>
+        <span class="version">v2.0.0</span>
         <span class="dot">·</span>
         by <a href="https://tiagojct.eu">Tiago Jacinto</a>
         <span class="dot">·</span>
         <a href="https://github.com/tiagojct/loomings">GitHub</a>
         <span class="dot">·</span>
-        <a href="https://github.com/tiagojct/loomings/releases">Releases</a>
+        <a href="https://github.com/tiagojct/loomings/releases">Desktop builds (archived)</a>
       </p>
       <p class="tag">The shapes loom before they take form.</p>
     </footer>

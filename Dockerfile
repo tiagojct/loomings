@@ -5,10 +5,9 @@ RUN npm ci
 COPY vite.config.js ./
 COPY src ./src
 COPY examples ./examples
-# --base overrides vite.config.js's default ('/') for this build only — the
-# Tauri desktop build (tauri.conf.json's frontendDist) still needs the
-# default, so this stays a CLI flag here rather than a config change.
-RUN npm run vite:build -- --base /app/
+COPY lessons ./lessons
+# vite.config.js sets base to /app/, matching nginx.conf's /app mount.
+RUN npm run build
 
 FROM nginx:alpine
 # Landing page (docs/) owns the root; the editor app lives at /app.

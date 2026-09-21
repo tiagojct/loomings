@@ -1,5 +1,5 @@
 // ========================================
-// Loomings — Editor (Tauri v2 + CodeMirror 6)
+// Loomings — Editor (CodeMirror 6, browser only)
 // ========================================
 
 import { EditorState, Compartment, RangeSetBuilder, StateEffect } from '@codemirror/state';
@@ -11,13 +11,12 @@ import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import MarkdownIt from 'markdown-it';
 import {
-  isTauri, listen, getVersion, openUrl, ask,
-  ipcSetTitle, ipcSaveFile, ipcSaveFileAs, ipcAddRecent, ipcSaveScratch,
-  ipcReadScratch, ipcClearScratch, ipcConfirmQuit, ipcTakeLaunchFile,
-  ipcFrontendReady, ipcWatchFile, ipcUnwatchFile, ipcSyncThemeMenu,
-  ipcExportHtml, ipcOpenFile, ipcOpenExample, ipcCheckForUpdate,
-  initTitlebarDrag, initDragDrop, getRecents, openRecent,
-} from './platform.js';
+  hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
+  saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml,
+  addRecent, getRecents, openRecent,
+  saveScratch, readScratch, clearScratch,
+  initDragDrop,
+} from './browser.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
 
@@ -64,7 +63,6 @@ contentArea.classList.add('width-' + colWidth);
 if (showStats) statsEl.classList.add('visible');
 applyFontSize();
 if (isMac) body.classList.add('mac');
-if (isTauri) body.classList.add('tauri');
 
 // ==========================
 //  CodeMirror 6 setup
@@ -642,17 +640,10 @@ function cycleTheme() {
 const FAMILY_LABELS = { pequod: 'Pequod', glauca: 'Glauca', tryworks: 'Try-Works' };
 
 function setThemeFamily(family) {
-  if (!PALETTES[family]) return;
-  if (family === themeFamily) {
-    // Re-clicking the active radio item: muda already auto-unchecked it on
-    // click, so re-sync the checkmark even though nothing else changes.
-    ipcSyncThemeMenu(family);
-    return;
-  }
+  if (!PALETTES[family] || family === themeFamily) return;
   themeFamily = family;
   STORE.set('themeFamily', family);
   applyTheme(resolveTheme(themeMode));
-  ipcSyncThemeMenu(family);
   flashStatus(`Theme: ${FAMILY_LABELS[family]}`);
 }
 
@@ -813,18 +804,15 @@ function closePalette() {
 const aboutEl       = document.getElementById('about');
 const aboutIcon     = document.getElementById('about-icon');
 const aboutVersion  = document.getElementById('about-version');
-const aboutTech     = document.getElementById('about-tech');
 const aboutExample  = document.getElementById('about-example');
 
 function initAbout() {
   aboutIcon.src = new URL('./icon.png', import.meta.url).href;
   aboutIcon.onerror = () => { aboutIcon.style.display = 'none'; };
-  // Single source of truth: the version Tauri was built with (or, on web,
-  // the version this build was published from).
+  // The version this build was published from (package.json).
   getVersion()
     .then((v) => { aboutVersion.textContent = `Version ${v}`; })
     .catch(() => { aboutVersion.textContent = ''; });
-  if (!isTauri) aboutTech.textContent = 'MIT licensed. Built with CodeMirror 6.';
 }
 
 function openAbout() {
@@ -834,75 +822,6 @@ function closeAbout() {
   aboutEl.classList.add('hidden');
   view.focus();
 }
-
-// ==========================
-//  Welcome modal (first launch)
-// ==========================
-
-const welcomeEl           = document.getElementById('welcome');
-const welcomeLedeEl       = document.getElementById('welcome-lede');
-const welcomeInstrEl      = document.getElementById('welcome-instructions');
-const welcomeGotItBtn     = document.getElementById('welcome-got-it');
-
-function welcomeInstructionsForOS() {
-  const p = (navigator.platform || '').toLowerCase();
-  const ua = (navigator.userAgent || '').toLowerCase();
-  if (/mac/.test(p) || /mac/.test(ua)) {
-    return `
-      <ol>
-        <li>In <strong>Finder</strong>, right-click any <code>.md</code> file.</li>
-        <li>Choose <strong>Get Info</strong> (<code>⌘ I</code>).</li>
-        <li>Under <strong>Open with</strong>, pick <strong>Loomings</strong>.</li>
-        <li>Click <strong>Change All…</strong> and confirm.</li>
-      </ol>`;
-  }
-  if (/win/.test(p) || /win/.test(ua)) {
-    return `
-      <ol>
-        <li>In <strong>Explorer</strong>, right-click any <code>.md</code> file.</li>
-        <li>Choose <strong>Open with → Choose another app</strong>.</li>
-        <li>Pick <strong>Loomings</strong>, tick <strong>Always use this app</strong>, then <strong>OK</strong>.</li>
-      </ol>`;
-  }
-  return `
-    <ol>
-      <li>In your file manager, right-click any <code>.md</code> file.</li>
-      <li>Pick <strong>Open With → Other Application</strong> (or <strong>Properties → Open With</strong>).</li>
-      <li>Choose <strong>Loomings</strong> and mark it as the default.</li>
-    </ol>`;
-}
-
-function showWelcomeIfFirstLaunch() {
-  if (STORE.getBool('welcomeSeen', false)) return;
-  // If the app was launched by opening a file (Finder / argv), skip the
-  // welcome — the user already discovered the file-association story.
-  if (currentFile) {
-    STORE.setBool('welcomeSeen', true);
-    return;
-  }
-  if (isTauri) {
-    welcomeInstrEl.innerHTML = welcomeInstructionsForOS();
-  } else {
-    // File-association setup is meaningless on the web build — there's no
-    // OS integration to configure, just the in-page toolbar.
-    welcomeLedeEl.textContent = 'Use the toolbar above to open, save, and export files.';
-    welcomeInstrEl.innerHTML = `
-      <ol>
-        <li>Chrome/Edge: files open and save in place, just like a native app.</li>
-        <li>Firefox/Safari: opening uses a file picker and saving downloads a copy (no File System Access API yet).</li>
-      </ol>`;
-  }
-  welcomeEl.classList.remove('hidden');
-}
-function closeWelcome() {
-  welcomeEl.classList.add('hidden');
-  STORE.setBool('welcomeSeen', true);
-  view.focus();
-}
-welcomeGotItBtn.addEventListener('click', closeWelcome);
-welcomeEl.addEventListener('click', (e) => {
-  if (e.target === welcomeEl) closeWelcome();
-});
 
 aboutEl.addEventListener('click', (e) => {
   if (e.target === aboutEl) closeAbout();
@@ -916,59 +835,8 @@ aboutEl.querySelectorAll('a[data-url]').forEach(a => {
 aboutExample.addEventListener('click', (e) => {
   e.preventDefault();
   closeAbout();
-  // Tauri: fire-and-forget, Rust emits file-opened and the existing
-  // listener picks it up. Web: the payload comes straight back.
-  ipcOpenExample().then((payload) => { if (payload) loadFile(payload); }).catch(() => {});
+  openExample().then((payload) => { if (payload) loadFile(payload); }).catch(() => {});
 });
-
-// ==========================
-//  Update banner
-// ==========================
-
-const updateBannerEl  = document.getElementById('update-banner');
-const updateMessageEl = document.getElementById('update-message');
-const updateLinkEl    = document.getElementById('update-link');
-const updateDismissEl = document.getElementById('update-dismiss');
-
-let latestUpdateUrl = null;
-
-function showUpdateBanner(info) {
-  updateMessageEl.textContent = `Loomings ${info.version} is available.`;
-  latestUpdateUrl = info.url;
-  updateBannerEl.classList.remove('hidden');
-}
-function hideUpdateBanner() {
-  updateBannerEl.classList.add('hidden');
-}
-updateLinkEl.addEventListener('click', (e) => {
-  e.preventDefault();
-  if (latestUpdateUrl) openUrl(latestUpdateUrl).catch(() => {});
-});
-updateDismissEl.addEventListener('click', hideUpdateBanner);
-
-let updateCheckInFlight = false;
-
-async function runUpdateCheck(manual = false) {
-  if (updateCheckInFlight) {
-    if (manual) flashStatus('Already checking…');
-    return;
-  }
-  updateCheckInFlight = true;
-  if (manual) flashStatus('Checking for updates…');
-  try {
-    const info = await ipcCheckForUpdate();
-    if (info) {
-      showUpdateBanner(info);
-      if (manual) flashStatus(`Loomings ${info.version} is available.`);
-    } else if (manual) {
-      flashStatus('You’re up to date.');
-    }
-  } catch (_) {
-    if (manual) flashStatus('Update check failed.');
-  } finally {
-    updateCheckInFlight = false;
-  }
-}
 
 function jumpToHeading(idx) {
   const list = filteredHeadings();
@@ -1025,11 +893,9 @@ function markDirty() {
   schedulePreview();
 }
 
-// NOTE: deliberately does NOT clear the scratch buffer — markClean fires on
-// every 2s autosave and deleting scratch.json each time is pointless churn.
-// read_scratch (Rust) drops a scratch that matches the file on disk, so a
-// stale scratch never produces a bogus recovery prompt. Scratch is cleared
-// explicitly on New / close / recovery-decline.
+// NOTE: deliberately does NOT touch the scratch buffer — markClean fires on
+// every 2s autosave. doSave clears scratch itself once disk has the content;
+// New / Open / recovery-decline clear it explicitly.
 function markClean() {
   isDirty = false;
   dirtyEl.classList.add('hidden');
@@ -1060,19 +926,16 @@ function writeScratch(text, forFile) {
   if (text === lastScratchContent) return;
   lastScratchContent = text;
   const gen = docGeneration;
-  // Chain behind any write already in flight — write_atomic's temp filename
-  // isn't unique per call, so two concurrent scratch writes (a slow one from
-  // resetScratchSave's timer overlapping one from doSave) can race each
-  // other's rename, same as doSave's saveInFlight guards against for the
-  // real file.
+  // Chain behind any write already in flight so two overlapping scratch
+  // writes can't land out of order (same idea as doSave's saveInFlight).
   const previous = scratchSaveInFlight;
   scratchSaveInFlight = (async () => {
     if (previous) await previous;
-    await ipcSaveScratch(text, forFile);
+    await saveScratch(text, forFile);
     // A discard that ran while this write was still in flight can't have
     // cleared content this write hadn't landed yet — re-clear now so a
-    // stalled write can't resurrect an abandoned buffer's scratch file.
-    if (gen !== docGeneration) await ipcClearScratch();
+    // stalled write can't resurrect an abandoned buffer's scratch record.
+    if (gen !== docGeneration) await clearScratch();
   })();
 }
 
@@ -1087,7 +950,7 @@ async function discardScratch() {
   docGeneration++;
   await Promise.race([scratchSaveInFlight, new Promise((r) => setTimeout(r, 2000))]);
   lastScratchContent = null;
-  await ipcClearScratch();
+  await clearScratch();
 }
 
 function resetScratchSave() {
@@ -1098,15 +961,12 @@ function resetScratchSave() {
   }, 800);
 }
 
-// Last content we wrote to disk ourselves — lets handleExternalChange tell
-// our own write's watcher echo apart from a real external edit.
+// Last content we wrote to disk ourselves.
 let lastSavedContent = null;
 
 // Serializes doSave calls — the 2s autosave timer and an explicit Cmd+S can
-// fire close enough together that two ipcSaveFile calls for the same path
-// would overlap; write_atomic's temp filename isn't unique per-call, so
-// concurrent writes can race each other's rename. Awaiting any save already
-// in flight before starting a new one keeps writes to one at a time.
+// fire close enough together that two writes to the same handle would
+// overlap. Awaiting any save already in flight keeps writes one at a time.
 let saveInFlight = null;
 
 async function doSave(path, content) {
@@ -1114,19 +974,17 @@ async function doSave(path, content) {
   if (saveInFlight) await saveInFlight;
   const save = (async () => {
     try {
-      await ipcSaveFile(path, content);
+      await saveFile(path, content);
       // The buffer moved on (New/Open/reload/Save As) while this write was
       // in flight — the write itself is harmless (it landed on the path it
       // targeted), but its result no longer describes the current buffer,
       // so don't let it stomp fresher state.
       if (gen !== docGeneration) return;
       lastSavedContent = content;
-      // Keep scratch in sync with what's now safely on disk. Without this, a
-      // scratch write from before this save can go stale — read_scratch's
-      // dedup (scratch content vs. disk content) only catches up on the next
-      // edit, so a crash between this save and the next keystroke would offer
-      // to "recover" content older than what's already saved.
-      writeScratch(content, path);
+      // Disk has this content now — a scratch copy of it would only produce
+      // a bogus "recover draft?" prompt on the next visit.
+      lastScratchContent = content;
+      clearScratchAfterInFlight();
       markClean();
       flashStatus('Saved');
     }
@@ -1137,16 +995,16 @@ async function doSave(path, content) {
   if (saveInFlight === save) saveInFlight = null;
 }
 
+async function clearScratchAfterInFlight() {
+  await scratchSaveInFlight;
+  await clearScratch();
+}
+
 function flashStatus(msg) {
   statusApp.textContent = msg;
   clearTimeout(statusApp._timeout);
   statusApp._timeout = setTimeout(refreshStatusBar, 2000);
 }
-
-// ipcWatchFile has no push equivalent on web (a true no-op there); on
-// Tauri, surface a denied watch once so the user knows reload-on-
-// external-change is dead for this file.
-function onWatchFail(err) { flashStatus('File watcher failed: ' + (err?.message || err)); }
 
 function basename(p) {
   if (!p) return '';
@@ -1157,6 +1015,14 @@ function basename(p) {
 // Window-title name: basename minus any extension we open (not just .md).
 function displayName(p) {
   return basename(p).replace(/\.(md|markdown|mdown|mkd|qmd|rmd|txt)$/i, '');
+}
+
+// Filename offered by Save As: the current file, else the first heading.
+function suggestedFilename() {
+  if (currentFile) return basename(currentFile);
+  const m = getText().match(/^#\s+(.+)$/m);
+  const slug = m ? m[1].trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') : '';
+  return (slug || 'untitled') + '.md';
 }
 
 function refreshStatusBar() {
@@ -1177,20 +1043,21 @@ async function handleSave() {
 async function handleSaveAs() {
   try {
     const text = getText();
-    const path = await ipcSaveFileAs(text);
+    const path = await saveFileAs(text, suggestedFilename());
     if (path) {
       docGeneration++; // any save still in flight for the old path/target must not stomp this
       currentFile = path;
       lastSavedContent = text;
-      // Re-point scratch at the new path so it stays in sync with disk —
-      // the old scratch (current_file: null, untitled) is superseded.
-      lastScratchContent = null;
-      writeScratch(text, path);
-      await ipcAddRecent(path);
+      lastScratchContent = text;
+      clearScratchAfterInFlight();
+      await addRecent(path);
       refreshRecents();
-      await ipcWatchFile(path, onWatchFail);
-      ipcSetTitle(displayName(path));
+      setTitle(displayName(path));
       markClean(); refreshStatusBar();
+    } else if (!hasFileSystemAccess) {
+      // Firefox/Safari: the "save" was a download, so the buffer is still
+      // only in this tab — say so instead of pretending it's on disk.
+      flashStatus('Downloaded a copy — this browser can’t save in place');
     }
   } catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
 }
@@ -1229,7 +1096,7 @@ ${rendered}
 </html>
 `;
   try {
-    const path = await ipcExportHtml(html, title + '.html');
+    const path = await downloadHtml(html, title + '.html');
     if (path) flashStatus('Exported ' + basename(path));
   } catch (err) {
     flashStatus('Export failed: ' + (err?.message || err));
@@ -1256,8 +1123,7 @@ async function fileNew() {
   setText('');
   currentFile = null;
   lastSavedContent = null;
-  ipcUnwatchFile();
-  ipcSetTitle(null);
+  setTitle(null);
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
   view.focus();
 }
@@ -1363,15 +1229,14 @@ function updatePreview() {
   if (isPreviewVisible) preview.innerHTML = renderMarkdown(getText());
 }
 
-// Links in the rendered preview must open in the system browser, not
-// navigate the webview (Tauri blocks external navigation anyway).
+// Links in the rendered preview open in a new tab rather than navigating
+// the editor away from an unsaved buffer.
 preview.addEventListener('click', (e) => {
   const a = e.target.closest('a[href]');
   if (!a) return;
   const href = a.getAttribute('href');
-  // Only http(s)/mailto need routing to the system browser/mail client;
-  // in-page anchors (#heading) and relative links keep default webview
-  // navigation so they still work.
+  // Only http(s)/mailto need routing; in-page anchors (#heading) keep
+  // default navigation so they still work.
   if (/^(https?:|mailto:)/i.test(href)) {
     e.preventDefault();
     openUrl(href).catch(() => {});
@@ -1386,7 +1251,6 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
-    if (!welcomeEl.classList.contains('hidden')) { closeWelcome();    return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
     if (isPreviewVisible)                        { togglePreview();   return; }
     if (isFocusMode)                             { toggleFocusMode(); return; }
@@ -1408,7 +1272,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // ==========================
-//  IPC listeners
+//  Loading documents
 // ==========================
 
 async function loadFile(payload) {
@@ -1421,119 +1285,38 @@ async function loadFile(payload) {
   lastSavedContent = null;
   if (!payload.path) {
     // Untitled buffer with content (the bundled example) — no autosave
-    // target, no watcher, no recents. Saving goes through Save As.
+    // target, no recents. Saving goes through Save As.
     currentFile = null;
-    ipcUnwatchFile();
-    ipcSetTitle('Moby-Dick');
+    setTitle(payload.title || null);
   } else {
     currentFile = payload.path;
-    ipcSetTitle(displayName(payload.path));
-    ipcAddRecent(payload.path);
+    setTitle(displayName(payload.path));
+    addRecent(payload.path);
     refreshRecents();
-    await ipcWatchFile(payload.path, onWatchFail);
   }
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
   view.focus();
 }
 
-async function handleExternalChange(payload) {
-  if (!currentFile || payload.path !== currentFile) return;
-  if (payload.content === getText()) return;
-  // Watcher echo of our own save (the user kept typing during the 400ms
-  // watcher debounce, so buffer ≠ disk) — not an external edit.
-  if (payload.content === lastSavedContent) return;
-  const message = isDirty
-    ? 'File changed on disk:\n' + basename(currentFile) +
-      '\n\nYour buffer has unsaved changes. Reload from disk and lose them?'
-    : 'File changed on disk:\n' + basename(currentFile) + '\n\nReload?';
-  const reload = await ask(message, { title: 'Loomings', kind: 'warning' });
-  if (!reload) return;
-  // Let any of our own in-flight save finish first — otherwise it can
-  // physically write to this path after we've reloaded, leaving disk out
-  // of sync with what's now in the buffer. Bounded so a stalled write
-  // can't block the reload indefinitely.
-  await Promise.race([saveInFlight, new Promise((r) => setTimeout(r, 2000))]);
-  await discardScratch(); // the pre-reload buffer being discarded shouldn't come back on recovery
-  setText(payload.content);
-  lastSavedContent = payload.content;
-  markClean();
-  updateStats(); updatePreview();
-}
-
-async function registerListeners() {
-  await Promise.all([
-    listen('file-opened',          (e) => loadFile(e.payload)),
-    listen('file-changed-on-disk', (e) => handleExternalChange(e.payload)),
-    listen('file-new',             ()  => fileNew()),
-    listen('request-save',         ()  => handleSave()),
-    listen('request-save-as',      ()  => handleSaveAs()),
-    listen('toggle-focus',         ()  => toggleFocusMode()),
-    listen('toggle-preview',       ()  => togglePreview()),
-    listen('toggle-stats',         ()  => toggleStats()),
-    listen('toggle-width',         ()  => cycleWidth()),
-    listen('toggle-theme',         ()  => cycleTheme()),
-    listen('cycle-goal',           ()  => cycleWordGoal()),
-    listen('toggle-typo',          ()  => toggleSmartTypo()),
-    listen('toggle-line-numbers',  ()  => toggleLineNumbers()),
-    listen('toggle-typewriter',    ()  => toggleTypewriter()),
-    listen('set-theme-family',     (e) => setThemeFamily(e.payload)),
-    listen('menu-rebuilt',         ()  => ipcSyncThemeMenu(themeFamily)),
-    listen('request-export-html',  ()  => exportHtml()),
-    listen('open-palette',         ()  => openPalette()),
-    listen('open-about',           ()  => openAbout()),
-    listen('manual-update-check',  ()  => runUpdateCheck(true)),
-    listen('open-url',             (e) => { if (e.payload) openUrl(e.payload).catch(() => {}); }),
-    listen('font-size',            (e) => changeFontSize(e.payload)),
-    listen('request-close',     async () => {
-      // Named files autosave — flush the pending save instead of scaring
-      // the user with a "changes will be lost" prompt that isn't true.
-      if (isDirty && currentFile) {
-        clearTimeout(autoSaveTimer);
-        await doSave(currentFile, getText());
-      }
-      if (isDirty) {
-        // Untitled buffer, or the flush above failed.
-        const proceed = await confirmDiscard('Quit Loomings?');
-        // No cancel-side IPC: the Rust handler always intercepts the close
-        // and waits for confirm_quit. Doing nothing leaves the window open.
-        if (!proceed) return;
-      }
-      clearTimeout(autoSaveTimer);
-      await discardScratch();
-      await ipcConfirmQuit();
-    }),
-  ]);
-}
-
 // ==========================
-//  Window drag (titlebar) + drag-and-drop to open
+//  Drag-and-drop to open
 // ==========================
 
-const titlebar = document.getElementById('titlebar');
-initTitlebarDrag(titlebar); // no-op on web — no window to drag in a browser tab
-
-// Both platforms' onFile payload is {path, content}, same shape loadFile
-// already takes — Tauri's is unused internally (its own drop-open flow
-// goes through the existing file-opened listener instead) but kept for a
-// uniform call site.
 initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
 
 // ==========================
-//  Web toolbar (no native menu bar on the web build)
+//  Toolbar
 // ==========================
 
 async function openFile() {
-  // loadFile itself runs the dirty-check on the result; the file picker
-  // showing regardless of current buffer state matches how the native
-  // Open dialog already behaves.
-  const payload = await ipcOpenFile();
+  // loadFile itself runs the dirty-check on the result.
+  const payload = await pickFile();
   if (payload) await loadFile(payload);
 }
 
 const tbRecent = document.getElementById('tb-recent');
 
 async function refreshRecents() {
-  if (isTauri || !getRecents) return; // native "Open Recent" menu covers Tauri
   const recents = await getRecents();
   if (!recents.length) {
     tbRecent.classList.add('hidden');
@@ -1581,48 +1364,30 @@ window.addEventListener('beforeunload', (e) => {
 //  Init + scratch recovery
 // ==========================
 
-(async () => {
-  await registerListeners();
-  initAbout();
-  ipcSyncThemeMenu(themeFamily);
-  refreshRecents();
-
-  // Drain the launch-file cache BEFORE scratch recovery — if the user
-  // double-clicked an .md file in Finder, that's the document they want,
-  // not "do you want to recover yesterday's draft?".
-  const launch = await ipcTakeLaunchFile();
-  if (launch && launch.content !== undefined) {
-    await loadFile(launch);
+async function offerScratchRecovery() {
+  const scratch = await readScratch();
+  if (!scratch || !scratch.content || scratch.content.length === 0) return;
+  const recover = await ask(
+    'Unsaved draft found from previous session. Recover it?\n\n' +
+    (scratch.current_file ? 'File: ' + basename(scratch.current_file) : '(untitled)')
+  );
+  if (recover) {
+    setText(scratch.content);
+    // The file handle can't be restored without a picker, so the recovered
+    // buffer is untitled — Save goes through Save As. The name still shows.
+    currentFile = null;
+    if (scratch.current_file) flashStatus('Recovered draft of ' + basename(scratch.current_file));
+    markDirty();
   } else {
-    const scratch = await ipcReadScratch();
-    if (scratch && scratch.content && scratch.content.length > 0) {
-      const recover = await ask(
-        'Unsaved draft found from previous session. Recover it?\n\n' +
-        (scratch.current_file ? 'File: ' + basename(scratch.current_file) : '(untitled)'),
-        { title: 'Loomings', kind: 'info' }
-      );
-      if (recover) {
-        setText(scratch.content);
-        currentFile = scratch.current_file || null;
-        if (currentFile) {
-          ipcSetTitle(displayName(currentFile));
-          await ipcWatchFile(currentFile, onWatchFail);
-        }
-        markDirty();
-      } else {
-        await ipcClearScratch();
-      }
-    }
+    await clearScratch();
   }
+}
 
+(async () => {
+  initAbout();
+  refreshRecents();
+  await offerScratchRecovery();
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();
-  ipcSetTitle(currentFile ? displayName(currentFile) : null);
-
-  // Tell Rust the frontend is alive — subsequent macOS RunEvent::Opened
-  // events (warm "Open With") will go straight to the file-opened listener.
-  await ipcFrontendReady();
-
-  setTimeout(() => runUpdateCheck(false), 3000);
-  setTimeout(showWelcomeIfFirstLaunch, 600);
+  setTitle(currentFile ? displayName(currentFile) : null);
 })();
