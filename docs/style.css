@@ -1,21 +1,22 @@
-/* Loomings — publisher's cloth.
+/* Loomings — publisher's cloth, second pass: quieter and older.
    Harper & Brothers bound the 1851 first edition of Moby-Dick in plain
-   cloth boards — no illustration, no whale, just a colour, a single thick
-   rule around the cover, and a blind-stamped life-buoy at the centre. The
-   title was gilt-stamped on the spine. This page borrows that: one solid
-   field, one frame, gilt type, and the life-buoy that gives its name to
-   chapter 123 — the thing Ishmael survives by holding onto. */
+   cloth boards — no illustration, no whale, just a colour, a single
+   blind-stamped rule around the cover, and a blind-stamped life-buoy at
+   the centre. Blind-stamping means pressed, not inked — visible mostly
+   as a shadow, not a bold line. This pass mutes the colours (new cloth
+   and fresh gilt read as a costume; a hundred and seventy years of
+   handling reads as the object itself), thins the frame to a hairline
+   double rule, and adds a faint grain so the field isn't flat CSS colour. */
 
 :root {
-  /* "Original red cloth" — the binding colour rare-book dealers reach
-     for first when they describe a first edition. */
-  --field:      #6E1B1B;
-  --field-deep: #4E1212;
-  --gilt:       #C9A24E;
-  --gilt-dim:   #8C7038;
-  --cream:      #F1E4CC;
-  --cream-dim:  #B79E7C;
-  --ink:        #241010;
+  /* Aged cloth and worn gilt, not a fresh binding. */
+  --field:      #551713;
+  --field-deep: #34100D;
+  --gilt:       #A08246;
+  --gilt-dim:   #6B5730;
+  --cream:      #DFD3B8;
+  --cream-dim:  #9C8A6C;
+  --ink:        #1D0F0C;
   --font-serif:  'Source Serif 4', 'Source Serif Pro', Charter, 'Iowan Old Style', Georgia, serif;
   --font-display:'Source Serif 4', 'Hoefler Text', 'Didot', Georgia, serif;
   --font-mono:   'JetBrains Mono', 'SF Mono', Menlo, monospace;
@@ -26,12 +27,12 @@
     /* Publishers issued the same edition in whatever cloth was on hand —
        black, blue, green, slate. This is the dark-cloth half of that
        same custom, not an inverted colour scheme. */
-    --field:      #172038;
-    --field-deep: #0D1426;
-    --gilt:       #D3B268;
-    --gilt-dim:   #6E7896;
-    --cream:      #ECE4D4;
-    --cream-dim:  #97A0B8;
+    --field:      #131A2B;
+    --field-deep: #0A0F1A;
+    --gilt:       #A9905C;
+    --gilt-dim:   #545C72;
+    --cream:      #D6CDB9;
+    --cream-dim:  #7C8397;
   }
 }
 
@@ -61,13 +62,30 @@ body {
   position: relative;
 }
 
-/* The cover's "thick one-line border," fixed to the viewport so it reads
-   as the edge of the object rather than a scrolling page element. */
+/* Blind-stamping shows as a shadow, not a line — a hairline double rule
+   reads closer to that than one bold stroke does. Fixed to the viewport
+   so it reads as the edge of the object, not a scrolling page element. */
 body::before {
   content: "";
   position: fixed;
-  inset: 16px;
-  border: 3px solid var(--gilt);
+  inset: 18px;
+  border: 1px solid var(--gilt-dim);
+  outline: 1px solid var(--gilt-dim);
+  outline-offset: 6px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* A faint grain over the whole field — flat colour reads as a screen;
+   even a little noise reads as cloth. Covers text too, at an opacity low
+   enough not to cost legibility, the way a scan of a real page would. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  opacity: 0.05;
+  mix-blend-mode: overlay;
   pointer-events: none;
   z-index: 1;
 }
@@ -86,6 +104,7 @@ main {
   margin: 0 auto;
   padding: 84px 0 72px;
   position: relative;
+  z-index: 3;
 }
 
 header {
@@ -96,16 +115,17 @@ header {
 }
 .buoy {
   display: block;
-  margin: 0 auto 28px;
+  margin: 0 auto 26px;
+  opacity: 0.92;
 }
 h1 {
   font-family: var(--font-display);
-  font-weight: 800;
+  font-weight: 700;
   font-style: normal;
   text-transform: uppercase;
-  font-size: 52px;
+  font-size: 42px;
   line-height: 1;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.04em;
   margin: 0 0 14px;
   color: var(--gilt);
 }
@@ -132,8 +152,8 @@ article p {
   font-style: italic;
   color: var(--cream);
   margin: 0 0 2em;
-  padding-left: 22px;
-  border-left: 3px solid var(--gilt);
+  padding-left: 20px;
+  border-left: 1px solid var(--gilt-dim);
 }
 
 h2 {
@@ -141,17 +161,17 @@ h2 {
   font-weight: 700;
   font-style: normal;
   text-transform: uppercase;
-  font-size: 15px;
-  letter-spacing: 0.14em;
+  font-size: 14px;
+  letter-spacing: 0.11em;
   margin: 2.8em 0 1em;
   color: var(--gilt);
 }
 h2::before {
   content: "";
   display: block;
-  width: 64px;
-  height: 2px;
-  background: var(--gilt);
+  width: 40px;
+  height: 1px;
+  background: var(--gilt-dim);
   margin-bottom: 16px;
 }
 
@@ -167,20 +187,20 @@ article strong { color: var(--cream); font-weight: 700; }
 }
 .btn {
   display: inline-block;
-  padding: 13px 30px;
-  background: var(--gilt);
-  color: var(--ink);
+  padding: 12px 28px;
+  background: transparent;
+  color: var(--gilt);
   text-decoration: none;
-  border: 2px solid var(--gilt);
+  border: 1px solid var(--gilt);
   border-radius: 0;
   font-family: var(--font-serif);
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 14px;
+  letter-spacing: 0.07em;
+  font-size: 13px;
   transition: background 0.15s, color 0.15s;
 }
-.btn:hover { background: transparent; color: var(--gilt); }
+.btn:hover { background: var(--gilt); color: var(--field); }
 .link {
   font-size: 13px;
   text-transform: uppercase;
@@ -200,7 +220,7 @@ article strong { color: var(--cream); font-weight: 700; }
   width: 100%;
   height: auto;
   display: block;
-  border: 2px solid var(--gilt);
+  border: 1px solid var(--gilt-dim);
 }
 .shot figcaption {
   margin-top: 14px;
@@ -223,7 +243,7 @@ code {
 }
 pre {
   background: var(--field-deep);
-  border-left: 2px solid var(--gilt);
+  border-left: 2px solid var(--gilt-dim);
   padding: 14px 18px;
   overflow-x: auto;
   margin: 1.4em 0;

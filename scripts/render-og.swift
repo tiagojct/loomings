@@ -32,22 +32,30 @@ func color(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> NSColor {
     NSColor(red: CGFloat(r)/255, green: CGFloat(g)/255, blue: CGFloat(b)/255, alpha: a)
 }
 
-let field = color(0x6E, 0x1B, 0x1B)   // original red cloth
-let gilt  = color(0xC9, 0xA2, 0x4E)
-let cream = color(0xF1, 0xE4, 0xCC)
-let creamDim = color(0xB7, 0x9E, 0x7C)
+let field = color(0x55, 0x17, 0x13)   // aged red cloth, not fresh
+let gilt  = color(0xA0, 0x82, 0x46)   // worn gilt, not shiny gold
+let giltDim = color(0x6B, 0x57, 0x30)
+let cream = color(0xDF, 0xD3, 0xB8)
+let creamDim = color(0x9C, 0x8A, 0x6C)
 
 // Field.
 field.setFill()
 NSRect(x: 0, y: 0, width: width, height: height).fill()
 
-// The cover's "thick one-line border," inset from the card edge.
+// Blind-stamping is pressed, not inked — a hairline double rule reads
+// closer to that than one bold stroke does, matching docs/style.css.
 let margin: CGFloat = 40
 let frame = NSRect(x: margin, y: margin, width: width - margin * 2, height: height - margin * 2)
 let framePath = NSBezierPath(rect: frame)
-framePath.lineWidth = 4
-gilt.setStroke()
+framePath.lineWidth = 1
+giltDim.setStroke()
 framePath.stroke()
+let innerMargin: CGFloat = margin + 8
+let innerFrame = NSRect(x: innerMargin, y: innerMargin, width: width - innerMargin * 2, height: height - innerMargin * 2)
+let innerFramePath = NSBezierPath(rect: innerFrame)
+innerFramePath.lineWidth = 1
+giltDim.setStroke()
+innerFramePath.stroke()
 
 // Life-buoy device — a gilt ring on the field, quartered by two straps,
 // exactly as docs/index.html's inline SVG (same construction, drawn here
@@ -72,17 +80,13 @@ NSRect(x: buoyCenter.x - outerR - 4, y: buoyCenter.y - strapW / 2, width: (outer
 NSRect(x: buoyCenter.x - strapW / 2, y: buoyCenter.y - outerR - 4, width: strapW, height: (outerR + 4) * 2).fill()
 circlePath(center: buoyCenter, radius: innerR).fill()
 
-gilt.setStroke()
-let outerRing = circlePath(center: buoyCenter, radius: outerR); outerRing.lineWidth = 2; outerRing.stroke()
-let innerRing = circlePath(center: buoyCenter, radius: innerR); innerRing.lineWidth = 2; innerRing.stroke()
-
 // Wordmark — bold gilt caps, the same treatment as the page's <h1>.
 let textX = buoyCenter.x + outerR + 56
-let titleFont = NSFont(name: "Georgia-Bold", size: 96) ?? NSFontManager.shared.font(withFamily: "Georgia", traits: .boldFontMask, weight: 9, size: 96)!
+let titleFont = NSFont(name: "Georgia-Bold", size: 78) ?? NSFontManager.shared.font(withFamily: "Georgia", traits: .boldFontMask, weight: 9, size: 78)!
 let titleAttrs: [NSAttributedString.Key: Any] = [
     .font: titleFont,
     .foregroundColor: gilt,
-    .kern: 6.0,
+    .kern: 3.0,
 ]
 let titleStr = NSAttributedString(string: "LOOMINGS", attributes: titleAttrs)
 let titleY = height / 2 + 18
@@ -99,7 +103,7 @@ tagStr.draw(at: NSPoint(x: textX, y: titleY - 52))
 
 // Version — bottom-left, inside the frame.
 let verFont = NSFont.monospacedSystemFont(ofSize: 22, weight: .regular)
-let verAttrs: [NSAttributedString.Key: Any] = [.font: verFont, .foregroundColor: gilt, .kern: 1.5]
+let verAttrs: [NSAttributedString.Key: Any] = [.font: verFont, .foregroundColor: giltDim, .kern: 1.5]
 let verStr = NSAttributedString(string: versionArg, attributes: verAttrs)
 verStr.draw(at: NSPoint(x: margin + 32, y: margin + 28))
 

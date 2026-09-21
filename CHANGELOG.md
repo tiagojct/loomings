@@ -4,6 +4,25 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.7] — 2026-09-21
+
+Landing page only — no app changes.
+
+### Changed
+
+- Pulled the publisher's-cloth redesign back from a bold poster toward
+  an actually old object: muted the red cloth and gilt (fresh cloth and
+  bright gold read as a costume; this is closer to a hundred and
+  seventy years of handling), replaced the single bold rule frame with
+  a hairline double rule (blind-stamping is pressed, not inked — it
+  reads as a shadow, not a line), added a faint grain over the whole
+  page so the field isn't flat CSS colour, simplified the life-buoy
+  device to a plain ring instead of a doubled outline, shrank the
+  wordmark and tightened its tracking, and turned the primary button
+  from a solid gilt block into an outlined stamp that fills on hover.
+- The social-share card follows the same pass: muted colours, the
+  double hairline frame, the simplified buoy, tighter kerning.
+
 ## [2.0.6] — 2026-09-21
 
 Landing page only — no app changes.
@@ -512,6 +531,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.7]: https://github.com/tiagojct/loomings/releases/tag/v2.0.7
 [2.0.6]: https://github.com/tiagojct/loomings/releases/tag/v2.0.6
 [2.0.5]: https://github.com/tiagojct/loomings/releases/tag/v2.0.5
 [2.0.4]: https://github.com/tiagojct/loomings/releases/tag/v2.0.4
