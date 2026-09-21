@@ -112,6 +112,7 @@ body { display: flex; flex-direction: column; }
   left: 0;
   z-index: 80;
   min-width: 220px;
+  max-width: min(340px, calc(100vw - 20px));
   padding: 6px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -144,7 +145,10 @@ body { display: flex; flex-direction: column; }
 #web-toolbar .tb-menu-item:hover { background: var(--bg-deep); color: var(--fg); border-color: transparent; }
 #web-toolbar .tb-menu-item.on { color: var(--accent-light); }
 #web-toolbar .tb-menu-item.on .tb-menu-label::after { content: ' ✓'; }
-.tb-menu-label { flex: 1; }
+.tb-menu-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tb-menu-x { color: var(--fg-ghost); font-size: 16px; line-height: 1; padding: 0 2px 0 6px; }
+.tb-menu-x:hover { color: var(--accent-light); }
+.tb-menu-empty { padding: 6px 10px; color: var(--fg-ghost); font-style: italic; font-size: 12px; }
 .tb-menu-hint { font-size: 11px; color: var(--fg-ghost); font-style: italic; }
 .tb-menu-num { font-family: var(--font-mono); font-size: 11px; color: var(--fg-ghost); min-width: 14px; }
 

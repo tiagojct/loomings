@@ -4,6 +4,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY vite.config.js ./
 COPY src ./src
+COPY public ./public
 COPY examples ./examples
 COPY lessons ./lessons
 # vite.config.js sets base to /app/, matching nginx.conf's /app mount.

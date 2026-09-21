@@ -4,17 +4,34 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Loomings</title>
+  <meta name="description" content="A markdown editor in your browser.">
+  <meta name="theme-color" content="#061826">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="web-toolbar">
     <button id="tb-new" title="New">New</button>
     <button id="tb-open" title="Open">Open</button>
-    <select id="tb-recent" title="Recent files" class="hidden"></select>
+    <div class="tb-menu-wrap">
+      <button id="tb-docs" title="Documents kept in this browser" aria-haspopup="menu" aria-expanded="false">Documents</button>
+      <div id="docs-menu" class="tb-menu hidden" role="menu" aria-label="Documents">
+        <div class="tb-menu-section">In this browser</div>
+        <div id="docs-list"></div>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="save-here"><span class="tb-menu-label">Save a copy here</span></button>
+        <div id="docs-recents-section" class="hidden">
+          <div class="tb-menu-section">Recent files</div>
+          <div id="docs-recents"></div>
+        </div>
+      </div>
+    </div>
     <button id="tb-save" title="Save">Save</button>
     <div class="tb-menu-wrap">
       <button id="tb-export" title="Export" aria-haspopup="menu" aria-expanded="false">Export</button>
       <div id="export-menu" class="tb-menu hidden" role="menu" aria-label="Export">
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="md"><span class="tb-menu-label">Markdown file (.md)</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="html"><span class="tb-menu-label">HTML file</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="print"><span class="tb-menu-label">Print / PDF…</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="share"><span class="tb-menu-label">Copy share link</span><span class="tb-menu-hint">whole document in the URL</span></button>

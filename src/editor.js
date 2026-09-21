@@ -13,10 +13,11 @@ import MarkdownIt from 'markdown-it';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles, cssVars } from './palettes.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
-  saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml,
+  saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml, downloadMarkdown,
   addRecent, getRecents, openRecent,
+  listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
-  initDragDrop, forgetFile,
+  initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
@@ -45,7 +46,8 @@ const STORE = {
   getNum(k, fb)   { const v = parseFloat(this.get(k, String(fb))); return isNaN(v) ? fb : v; }
 };
 
-let currentFile      = null;
+let currentFile      = null; // name of the file on disk (handle lives in browser.js)
+let currentDocId     = null; // id of the document in this browser's IndexedDB
 let isDirty          = false;
 let autoSaveTimer    = null;
 let scratchTimer     = null;
@@ -624,7 +626,7 @@ function attachMenu(btn, menuEl, { onOpen, onPick } = {}) {
     const item = e.target.closest('.tb-menu-item');
     if (!item) return;
     close();
-    onPick?.(item);
+    onPick?.(item, e.target);
   });
   return { close };
 }
@@ -896,7 +898,7 @@ function markClean() {
 function resetAutoSave() {
   clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
-    if (isDirty && currentFile) doSave(currentFile, getText());
+    if (isDirty && (currentFile || currentDocId)) doSave(getText());
   }, 2000);
 }
 
@@ -961,24 +963,30 @@ let lastSavedContent = null;
 // overlap. Awaiting any save already in flight keeps writes one at a time.
 let saveInFlight = null;
 
-async function doSave(path, content) {
+// Writes the buffer to wherever it currently lives: the file on disk, or
+// the document in this browser. Untitled buffers have no target — Save
+// goes through handleSave, which picks one.
+async function doSave(content) {
   const gen = docGeneration;
   if (saveInFlight) await saveInFlight;
   const save = (async () => {
     try {
-      await saveFile(path, content);
+      if (currentFile)       await saveFile(currentFile, content);
+      else if (currentDocId) await putDocument({ id: currentDocId, title: docTitle(content), content });
+      else return;
       // The buffer moved on (New/Open/reload/Save As) while this write was
-      // in flight — the write itself is harmless (it landed on the path it
-      // targeted), but its result no longer describes the current buffer,
-      // so don't let it stomp fresher state.
+      // in flight — the write itself is harmless (it landed on the target
+      // it was aimed at), but its result no longer describes the current
+      // buffer, so don't let it stomp fresher state.
       if (gen !== docGeneration) return;
       lastSavedContent = content;
-      // Disk has this content now — a scratch copy of it would only produce
-      // a bogus "recover draft?" prompt on the next visit.
+      // Storage has this content now — a scratch copy of it would only
+      // produce a bogus "recover draft?" prompt on the next visit.
       lastScratchContent = content;
       clearScratchAfterInFlight();
       markClean();
-      flashStatus('Saved');
+      if (currentDocId) { setTitle(docTitle(content)); refreshStatusBar(); }
+      flashStatus(currentFile ? 'Saved' : 'Saved in this browser');
     }
     catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
   })();
@@ -1017,10 +1025,15 @@ function suggestedFilename() {
   return (slug || 'untitled') + '.md';
 }
 
+function docTitle(text) { return firstHeading(text) || 'Untitled'; }
+
 function refreshStatusBar() {
   statusApp.textContent = 'Loomings';
   if (currentFile) {
     statusFile.textContent = '— ' + basename(currentFile);
+    statusFile.classList.remove('hidden');
+  } else if (currentDocId) {
+    statusFile.textContent = '— ' + docTitle(getText()) + ' (in this browser)';
     statusFile.classList.remove('hidden');
   } else {
     statusFile.classList.add('hidden');
@@ -1028,8 +1041,30 @@ function refreshStatusBar() {
 }
 
 async function handleSave() {
-  if (currentFile) await doSave(currentFile, getText());
-  else            await handleSaveAs();
+  if (currentFile || currentDocId) return doSave(getText());
+  // Untitled: a real file where the browser can write one, otherwise this
+  // browser's own storage (Safari, Firefox, iPad) so Save always means
+  // "kept", never "downloaded a copy and still unsaved".
+  if (hasFileSystemAccess) return handleSaveAs();
+  return saveInBrowser();
+}
+
+// Save (a copy of) the buffer as a new document in this browser's storage.
+async function saveInBrowser() {
+  const text = getText();
+  docGeneration++;
+  try {
+    const doc = await putDocument({ id: null, title: docTitle(text), content: text });
+    currentFile = null;
+    forgetFile();
+    currentDocId = doc.id;
+    lastSavedContent = text;
+    lastScratchContent = text;
+    clearScratchAfterInFlight();
+    setTitle(doc.title);
+    markClean(); refreshStatusBar();
+    flashStatus('Saved in this browser');
+  } catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
 }
 
 async function handleSaveAs() {
@@ -1039,6 +1074,7 @@ async function handleSaveAs() {
     if (path) {
       docGeneration++; // any save still in flight for the old path/target must not stomp this
       currentFile = path;
+      currentDocId = null;
       lastSavedContent = text;
       lastScratchContent = text;
       clearScratchAfterInFlight();
@@ -1115,6 +1151,8 @@ async function fileNew() {
   await discardScratch();
   setText('');
   currentFile = null;
+  currentDocId = null;
+  forgetFile();
   lastSavedContent = null;
   setTitle(null);
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
@@ -1400,6 +1438,7 @@ async function loadFile(payload) {
   await discardScratch(); // the buffer we're replacing is no longer relevant to recover
   setText(payload.content);
   lastSavedContent = null;
+  currentDocId = payload.docId || null;
   if (!payload.path) {
     // Untitled buffer with content (example, lesson, share link) — no
     // autosave target, no recents, and no file handle left behind that a
@@ -1511,30 +1550,71 @@ async function openFile() {
   if (payload) await loadFile(payload);
 }
 
-const tbRecent = document.getElementById('tb-recent');
+// ==========================
+//  Documents menu: this browser's storage + recent files (Chromium)
+// ==========================
 
-async function refreshRecents() {
-  const recents = await getRecents();
-  if (!recents.length) {
-    tbRecent.classList.add('hidden');
-    tbRecent.innerHTML = '';
-    return;
-  }
-  tbRecent.innerHTML = '<option value="" disabled selected>Recent…</option>' +
-    recents.map((r, i) => `<option value="${i}">${escHtml(r.name)}</option>`).join('');
-  tbRecent.classList.remove('hidden');
+const docsListEl       = document.getElementById('docs-list');
+const docsRecentsEl    = document.getElementById('docs-recents');
+const docsRecentsSecEl = document.getElementById('docs-recents-section');
+let recentEntries = []; // handles kept from the last render so a pick uses the click's activation
+
+function relTime(ts) {
+  const s = Math.round((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.round(s / 60) + ' min ago';
+  if (s < 86400) return Math.round(s / 3600) + ' h ago';
+  if (s < 172800) return 'yesterday';
+  return new Date(ts).toLocaleDateString();
 }
 
-tbRecent?.addEventListener('change', async () => {
-  const idx = parseInt(tbRecent.value, 10);
-  tbRecent.value = '';
-  const recents = await getRecents();
-  const entry = recents[idx];
-  if (!entry) return;
-  const payload = await openRecent(entry);
-  if (payload) await loadFile(payload);
-  else flashStatus('Could not reopen — permission declined');
-  refreshRecents();
+async function renderDocsMenu() {
+  const [docs, recents] = await Promise.all([listDocuments(), getRecents()]);
+  docsListEl.innerHTML = docs.length
+    ? docs.map((d) =>
+        `<button type="button" class="tb-menu-item ${d.id === currentDocId ? 'on' : ''}" role="menuitem" data-doc="${escHtml(d.id)}">
+           <span class="tb-menu-label">${escHtml(d.title)}</span>
+           <span class="tb-menu-hint">${relTime(d.updated)}</span>
+           <span class="tb-menu-x" data-delete="${escHtml(d.id)}" role="button" title="Delete" aria-label="Delete ${escHtml(d.title)}">×</span>
+         </button>`).join('')
+    : '<div class="tb-menu-empty">Nothing saved in this browser yet</div>';
+  recentEntries = recents;
+  docsRecentsSecEl.classList.toggle('hidden', !recents.length);
+  docsRecentsEl.innerHTML = recents.map((r, i) =>
+    `<button type="button" class="tb-menu-item" role="menuitem" data-recent="${i}"><span class="tb-menu-label">${escHtml(r.name)}</span></button>`
+  ).join('');
+}
+
+// Kept as a hook for callers that used to refresh the recents <select>.
+function refreshRecents() {}
+
+attachMenu(document.getElementById('tb-docs'), document.getElementById('docs-menu'), {
+  onOpen: renderDocsMenu,
+  onPick: async (item, target) => {
+    const del = target.closest('[data-delete]');
+    if (del) {
+      const doc = await getDocument(del.dataset.delete);
+      if (!doc) return;
+      if (!(await ask(`Delete “${doc.title}” from this browser?`))) return;
+      await deleteDocument(doc.id);
+      if (currentDocId === doc.id) { currentDocId = null; refreshStatusBar(); if (!isDirty) markDirty(); }
+      flashStatus('Deleted');
+      return;
+    }
+    if (item.dataset.action === 'save-here') { saveInBrowser(); return; }
+    if (item.dataset.doc) {
+      const doc = await getDocument(item.dataset.doc);
+      if (doc) await loadFile({ path: '', content: doc.content, title: doc.title, docId: doc.id });
+      return;
+    }
+    if (item.dataset.recent !== undefined) {
+      const entry = recentEntries[parseInt(item.dataset.recent, 10)];
+      if (!entry) return;
+      const payload = await openRecent(entry);
+      if (payload) await loadFile(payload);
+      else flashStatus('Could not reopen — permission declined');
+    }
+  },
 });
 
 document.getElementById('tb-new')?.addEventListener('click', fileNew);
@@ -1545,6 +1625,7 @@ attachMenu(document.getElementById('tb-export'), document.getElementById('export
     if (item.dataset.action === 'html')  exportHtml();
     if (item.dataset.action === 'print') printPreview();
     if (item.dataset.action === 'share') copyShareLink();
+    if (item.dataset.action === 'md')    downloadMarkdown(getText(), suggestedFilename());
   },
 });
 
@@ -1592,6 +1673,7 @@ async function offerScratchRecovery() {
     // The file handle can't be restored without a picker, so the recovered
     // buffer is untitled — Save goes through Save As. The name still shows.
     currentFile = null;
+    currentDocId = null;
     if (scratch.current_file) flashStatus('Recovered draft of ' + basename(scratch.current_file));
     markDirty();
   } else {
@@ -1601,9 +1683,12 @@ async function offerScratchRecovery() {
 
 (async () => {
   initAbout();
-  refreshRecents();
   applyViewMode();
+  // Files handed over by the OS (installed app) arrive asynchronously and
+  // go through loadFile's own dirty check.
+  initLaunchQueue(loadFile);
   if (!(await loadFromLocation())) await offerScratchRecovery();
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();
+  registerServiceWorker(() => flashStatus('A new version of Loomings is ready — reload to use it'));
 })();

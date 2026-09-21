@@ -226,6 +226,36 @@ export async function openRecent(entry) {
 }
 
 // ==========================
+//  Documents kept in this browser (IndexedDB)
+//  {id, title, content, created, updated} — the only save target on
+//  browsers without the File System Access API, and a drafts shelf on
+//  the others. Newest first.
+// ==========================
+
+export async function listDocuments() { return (await idbGet('documents')) || []; }
+
+export async function getDocument(id) {
+  return (await listDocuments()).find((d) => d.id === id) || null;
+}
+
+export async function putDocument({ id, title, content }) {
+  const docs = await listDocuments();
+  const now = Date.now();
+  const existing = id ? docs.find((d) => d.id === id) : null;
+  const doc = {
+    id: existing ? existing.id : (crypto.randomUUID ? crypto.randomUUID() : String(now) + Math.random().toString(16).slice(2)),
+    title, content, created: existing ? existing.created : now, updated: now,
+  };
+  await idbSet('documents', [doc, ...docs.filter((d) => d.id !== doc.id)]);
+  return doc;
+}
+
+export async function deleteDocument(id) {
+  const docs = await listDocuments();
+  await idbSet('documents', docs.filter((d) => d.id !== id));
+}
+
+// ==========================
 //  Scratch (crash recovery)
 // ==========================
 
@@ -234,6 +264,35 @@ export async function saveScratch(content, currentFile) {
 }
 export async function readScratch() { return idbGet('scratch'); }
 export async function clearScratch() { return idbDelete('scratch'); }
+
+// ==========================
+//  Installed app: files opened from the OS, offline shell
+// ==========================
+
+// When the PWA is registered as a handler for .md files (manifest
+// file_handlers), the OS hands them over through launchQueue.
+export function initLaunchQueue(onFile) {
+  if (!('launchQueue' in window)) return;
+  window.launchQueue.setConsumer(async (params) => {
+    for (const handle of params.files || []) {
+      const payload = await openHandle(handle);
+      if (payload) onFile(payload);
+    }
+  });
+}
+
+export function registerServiceWorker(onUpdateReady) {
+  if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').then((reg) => {
+    reg.addEventListener('updatefound', () => {
+      const worker = reg.installing;
+      if (!worker) return;
+      worker.addEventListener('statechange', () => {
+        if (worker.state === 'installed' && navigator.serviceWorker.controller) onUpdateReady?.();
+      });
+    });
+  }).catch(() => {});
+}
 
 // ==========================
 //  Drag-and-drop to open
