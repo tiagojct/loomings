@@ -7,7 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Loomings is a browser-only Markdown editor for writing, sharing with
 students and teaching Markdown side by side. Plain JS, Vite, CodeMirror 6,
 markdown-it. No framework, no backend: a static site (`docs/` landing page
-at the root, the app at `/app`) deployed via Docker/nginx. The Tauri
+at the root, the app at `/app`) deployed via Docker/nginx at
+loomings.tiagojacinto.eu (VPS: /opt/vps/apps/loomings, Caddy + Cloudflare Tunnel). The Tauri
 desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 
 - `src/editor.js` (~1700 lines) — the editor: CodeMirror setup, in-place

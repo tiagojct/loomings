@@ -7,8 +7,8 @@ Built with CodeMirror 6 and markdown-it, served as static files. No
 account, no server-side state: nothing you type leaves your machine
 unless you put it in a link.
 
-**Use it:** [loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app)
-**Site:** [loomings.tiagojct.eu](https://loomings.tiagojct.eu)
+**Use it:** [loomings.tiagojacinto.eu/app](https://loomings.tiagojacinto.eu/app)
+**Site:** [loomings.tiagojacinto.eu](https://loomings.tiagojacinto.eu)
 **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ![Loomings editor showing chapter 1 of Moby-Dick](docs/assets/screenshot.png)

@@ -6,9 +6,9 @@ A link has two parts: the text in square brackets, then the address in round bra
 
 Read the [Markdown guide](https://www.markdownguide.org/) if you want more.
 
-You can add a title that shows when the mouse rests on the link: [Loomings](https://loomings.tiagojct.eu "The editor you are using").
+You can add a title that shows when the mouse rests on the link: [Loomings](https://loomings.tiagojacinto.eu "The editor you are using").
 
-A bare address becomes a link on its own: https://tiagojct.eu
+A bare address becomes a link on its own: https://tiagojacinto.eu
 
 ## Reference links
 
@@ -22,7 +22,7 @@ Both [this link][guide] and [this other link][guide] point to the same place.
 
 An image looks like a link with an exclamation mark in front. The text in the square brackets is the *alternative text*, read aloud by screen readers and shown when the image cannot load. Always write it.
 
-![Loomings icon: a letter L on a dark blue tile](https://loomings.tiagojct.eu/assets/icon.png)
+![Loomings icon: a letter L on a dark blue tile](https://loomings.tiagojacinto.eu/assets/icon.png)
 
 ## Try it
 

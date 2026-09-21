@@ -40,7 +40,8 @@ Markdown side by side.
 - Vite 5 → 8. `base: /app/` moved into `vite.config.js`.
 - `platform-web.js` became `browser.js`, the only adapter; the platform
   seam and every `ipc*` name are gone.
-- Landing page rewritten for the web app.
+- Landing page rewritten for the web app. Loomings now lives at
+  [loomings.tiagojacinto.eu](https://loomings.tiagojacinto.eu).
 
 ### Removed
 
