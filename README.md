@@ -1,220 +1,129 @@
 # Loomings
 
-A markdown writing app for macOS, Windows, and Linux. The shapes loom before they take form.
+A markdown editor in your browser. Write, share with students, teach
+markdown side by side. The shapes loom before they take form.
 
-Built with Tauri 2 + CodeMirror 6. ~12 MB binary, native system WebView, Rust backend.
+Built with CodeMirror 6 and markdown-it, served as static files. No
+account, no server-side state: nothing you type leaves your machine
+unless you put it in a link.
 
+**Use it:** [loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app)
 **Site:** [loomings.tiagojct.eu](https://loomings.tiagojct.eu)
-**Try it in your browser:** [loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app)
-**Downloads:** [Latest release](https://github.com/tiagojct/loomings/releases/latest)
 **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
 ![Loomings editor showing chapter 1 of Moby-Dick](docs/assets/screenshot.png)
 
-## Install
+## What it does
 
-### Web (no install)
+### Write
+- Real markdown in the editor: bold reads bold, headings read as headings, code reads as code.
+- Shortcuts: **⌘B / ⌘I** wrap, **⌘\`** code, **⌘K** link. Lists continue on Return, stop on a second Return.
+- Smart typography (curly quotes, em dashes, ellipses), YAML frontmatter dimmed.
+- **Outline** (⌘P), **find and replace** (⌘F), **focus mode** (⌘⇧D), typewriter scrolling, word goal, reading time, column width.
+- **Three views**: Write, Split (⌘\), Preview (⌘⇧P). Split keeps the two panes in step as you scroll either one.
+- **Export**: Markdown, standalone HTML in the current theme, or Print / PDF of the rendered document.
 
-[loomings.tiagojct.eu/app](https://loomings.tiagojct.eu/app) — runs entirely
-in the browser, nothing sent to a server. Chrome/Edge get real open/save via
-the File System Access API; other browsers fall back to a file picker for
-opening and a download for saving/exporting. See [Web build](#web-build)
-below for hosting it yourself.
+### Share and teach
+- **Copy share link** puts the whole document, compressed, in the URL fragment. Whoever opens it gets the text in their own editor. Nothing is uploaded; the fragment never reaches the server.
+- **Lessons**: six bundled exercises (basics, lists and quotes, links and images, code, tables, frontmatter) under the Learn menu, or `?lesson=basics` and so on. They open in Split view and are written to demonstrate themselves.
+- **Cheatsheet** drawer (⌘?) with syntax and shortcuts.
 
-### macOS (Homebrew, Apple Silicon)
-
-```sh
-brew install --cask --no-quarantine tiagojct/loomings/loomings
-```
-
-The `--no-quarantine` flag is required because the build is unsigned. Without it,
-macOS Sequoia / Tahoe Gatekeeper will reject the app on first launch with
-"Loomings.app is damaged". If you already installed without the flag, fix it with:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Loomings.app
-```
-
-### Direct download
-
-| Platform | File |
-|---|---|
-| macOS (Apple Silicon) | `Loomings_<ver>_aarch64.dmg` |
-| Windows | `Loomings_<ver>_x64-setup.exe` or `_x64_en-US.msi` |
-| Linux (Debian/Ubuntu) | `Loomings_<ver>_amd64.deb` |
-| Linux (other) | `Loomings_<ver>_amd64.AppImage` |
-| Linux (Fedora/RHEL) | `Loomings-<ver>-1.x86_64.rpm` |
-
-> **Intel Macs:** no pre-built Intel `.dmg` is published — the free-tier
-> `macos-13` runner queue was consistently too long/unreliable for it to
-> land with the rest of the release. Intel Mac users should
-> [build from source](#build-from-source).
-
-### macOS Gatekeeper
-
-App is unsigned (no Apple Developer ID, $99/yr). macOS Sequoia/Tahoe blocks "right-click → Open" for unsigned apps. After moving `Loomings.app` to `/Applications`, strip the quarantine attribute:
-
-```sh
-xattr -dr com.apple.quarantine /Applications/Loomings.app
-```
-
-App opens normally after that. Alternative: open System Settings → Privacy & Security, attempt to launch, then click "Open Anyway".
-
-## Features
-
-### Editor
-- Real markdown syntax in the editor — bold reads bold, headings read as headings (H1/H2/H3/H4 sized), code reads code, links underline.
-- Markdown shortcuts: **⌘B / ⌘I** wrap, **⌘\`** code, **⌘K** link.
-- Smart list auto-continue: `- `, `* `, `+ `, `1. `, `> ` extend on Enter; double-Enter exits.
-- Smart typography: straight quotes → curly, `--` → em-dash, `...` → ellipsis. Toggle in View menu.
-- YAML frontmatter detection (`---\n…\n---` at top is dimmed).
-- Native undo, IME, paste-as-plaintext, scroll, selection (CodeMirror 6).
-
-### Navigation
-- **Outline palette** (⌘P) — fuzzy-jump to any heading.
-- **Find/Replace** (⌘F) — CodeMirror panel with regex, case, replace.
-- **Recent files** menu (File → Open Recent).
-- Cursor position (`Ln 5, Col 12`) in statusbar.
-
-### Writing flow
-- **Focus mode** (⌘⇧D) — dims everything outside the current sentence.
-- **Typewriter scrolling** (View menu) — keeps the cursor line vertically centered.
-- **Preview** (⌘⇧P) — full markdown-it rendering with sanitized URLs.
-- **Word goal** (⌘⇧G) — set target, progress shows in statusbar.
-- Reading time + selection word count in the stats bar (⌘⇧L).
-- Column-width cycle (⌘⇧W) — wide / normal / narrow.
+### Keep
+- **Files** on disk in Chrome and Edge (File System Access API), with recent files remembered.
+- **Documents in this browser** everywhere else (Safari, Firefox, iPad): Save keeps the draft in IndexedDB, and the Documents menu lists, reopens and deletes them.
+- **Crash recovery**: the buffer is scratched to IndexedDB as you type and offered back on the next visit.
+- **Installable**: a web manifest and service worker make it an app that works offline and, on Chromium, opens `.md` files from the OS.
 
 ### Themes
-Three families, each with dark + light + system-follow (View → Theme):
-- **Pequod** — navy below-deck dark / parchment light. The original.
-- **Glauca** — Profundum dark / Pruina light, from the [Glauca](https://github.com/tiagojct/glauca) design system.
-- **Try-Works** — Try-Fire dark / True Lamp light, from the [Try-Works](https://github.com/tiagojct/try-works) design system.
+Four families from the author's design systems, each with dark and light modes and a system-follow setting (Theme menu, or ⌘⇧T to cycle modes):
 
-Cycle dark/light/system within the family with ⌘⇧T.
+| Family | Dark | Light | Source |
+|---|---|---|---|
+| **Pequod** (default) | Below deck | Parchment | [pequod](https://github.com/tiagojct/pequod) |
+| **Glauca** | Profundum | Pruina | [glauca](https://github.com/tiagojct/glauca) |
+| **Try-Works** | Try-Fire | True Lamp | [try-works](https://github.com/tiagojct/try-works) |
+| **Ambergris** | Dark | Light | [ambergris](https://github.com/tiagojct/ambergris) |
 
-### Files
-- **Auto-save** 2s after last edit, for named files. Atomic writes (temp + rename).
-- **Crash-recovery** scratch buffer — last buffer restored on next launch.
-- **External file watcher** — prompts reload if file changes on disk.
-- **Drag-and-drop** a markdown file onto the window to open it.
-- **Export HTML** (File menu) — standalone HTML styled with the current theme.
+Every palette is checked for WCAG contrast floors by the test suite.
 
-### App
-- **About modal** + populated macOS About panel (Help menu).
-- **Open Example** (Help menu) — chapter 1 of Moby-Dick, the namesake of the app.
-- **Update check** — banner appears if a newer release is published; links to GitHub. No auto-install (unsigned builds can't survive macOS quarantine).
+## Keyboard shortcuts
 
-## Build from source
+| Action | Shortcut |
+|---|---|
+| Save / Save As | ⌘S / ⌘⇧S |
+| Bold / Italic / Code / Link | ⌘B / ⌘I / ⌘\` / ⌘K |
+| Find | ⌘F |
+| Jump to heading | ⌘P |
+| Split view | ⌘\ |
+| Preview | ⌘⇧P |
+| Cheatsheet | ⌘? |
+| Focus mode | ⌘⇧D |
+| Stats | ⌘⇧L |
+| Column width | ⌘⇧W |
+| Theme mode | ⌘⇧T |
+| Word goal | ⌘⇧G |
+| Font size | ⌘= / ⌘- |
 
-Prerequisites: Xcode Command Line Tools (macOS) or build-essential (Linux) or Visual Studio Build Tools (Windows), Rust, Node 20+.
+⌘ is Ctrl on Windows and Linux.
 
-```sh
-git clone https://github.com/tiagojct/loomings
-cd loomings
-npm install
-npm run dev          # dev with hot reload
-npm run build        # produces installer in src-tauri/target/release/bundle/
-```
-
-Linux additionally needs:
-```sh
-sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-```
-
-First Rust compile: 3-5 min. Subsequent builds: seconds.
-
-## Web build
-
-The web build (no Rust, no Tauri) is a static site: `docs/` (landing page)
-at the root, the app at `/app`. Build and preview locally:
+## Develop
 
 ```sh
 npm install
-npm run vite:build -- --base /app/   # matches the /app mount point
-npm run vite:preview
+npm run dev        # Vite on http://127.0.0.1:1420/app/
+npm test           # Vitest: palettes, share links, lessons
+npm run build      # static site in dist/ (app at /app/, plus sw.js)
+npm run preview    # serve dist/ on http://127.0.0.1:4173/app/
 ```
 
-Or via Docker (matches what `docker-publish.yml` publishes to
-`ghcr.io/tiagojct/loomings`):
+## Self-host
+
+The Docker image serves `docs/` (landing page) at the root and the app at
+`/app`, via nginx with a strict Content-Security-Policy.
 
 ```sh
 docker build -t loomings .
 docker run --rm -p 8081:80 loomings
 ```
 
-`docker-compose.yml` is the VPS deploy shape: a loopback-bound port for a
-reverse proxy in front, plus a [watchtower](https://containrrr.dev/watchtower/)
-sidecar that redeploys on new `:latest` image pushes (which only happen on
-version-tagged releases, not every commit to main).
-
-## Keyboard shortcuts
-
-| Action | Shortcut |
-|---|---|
-| New | ⌘N |
-| Open | ⌘O |
-| Open Recent | File menu |
-| Open Example (Moby-Dick chapter) | Help menu |
-| Save / Save As | ⌘S / ⌘⇧S |
-| Close Window / Quit | ⌘W / ⌘Q |
-| Bold / Italic / Code / Link | ⌘B / ⌘I / ⌘\` / ⌘K |
-| Find | ⌘F |
-| Jump to Heading | ⌘P |
-| Focus Mode | ⌘⇧D |
-| Preview | ⌘⇧P |
-| Stats | ⌘⇧L |
-| Cycle Column Width | ⌘⇧W |
-| Cycle Theme | ⌘⇧T |
-| Cycle Word Goal | ⌘⇧G |
-| Font Size +/- | ⌘= / ⌘- |
-| Fullscreen | F11 |
-| DevTools | ⌘⌥I |
-
-(⌘ = Cmd on macOS, Ctrl on Windows/Linux.)
+`docker-compose.yml` is the VPS shape: a loopback-bound port for a reverse
+proxy in front, plus a [watchtower](https://containrrr.dev/watchtower/)
+sidecar. `.github/workflows/docker-publish.yml` pushes
+`ghcr.io/tiagojct/loomings` on every push to main and on version tags;
+`:latest` only moves on tags, so the VPS redeploys on releases.
 
 ## Project layout
 
 ```
 loomings/
-  src/                    # frontend (Vite + CodeMirror 6 + markdown-it)
-    editor.js             # everything: editor, UI, event listeners
-    platform.js            # picks the Tauri or web adapter at runtime
-    platform-tauri.js       # native file I/O, menu, window (desktop build)
-    platform-web.js         # File System Access API, IndexedDB (web build)
-    index.html
-    style.css
-    icon.png              # served via Vite at runtime (About modal)
-  src-tauri/              # Rust backend (Tauri v2, desktop build only)
-    src/lib.rs            # IPC commands, menu, file watcher, update check
-    capabilities/         # Tauri permission allowlist
-    icons/                # ICNS, ICO, sized PNGs
-    tauri.conf.json
-    Cargo.toml
-  examples/loomings.md    # Moby-Dick chapter 1 (bundled as resource)
-  icons/                  # Icon Composer .icon bundle + exports
-  scripts/                # icon build pipeline (Swift + sips)
-  docs/                   # landing page, served at the site root
-  Dockerfile              # web build: static site (docs/ + app at /app)
-  nginx.conf              # served config for the Docker image
-  docker-compose.yml       # VPS deploy (loopback port + watchtower)
-  .github/workflows/
-    release.yml            # 3-platform desktop release automation
-    docker-publish.yml     # web image build + push to ghcr.io
+  src/
+    index.html          # app shell: toolbar, panes, menus, cheatsheet, dialogs
+    editor.js           # the editor: CodeMirror setup, views, sync, menus, boot
+    browser.js          # file I/O, IndexedDB documents/scratch/recents, PWA hooks
+    palettes.js         # the four colour families (single source of colour)
+    share.js            # document ⇄ URL fragment (deflate + base64url)
+    lessons.js          # index of lessons/*.md
+    sw-template.js      # service worker, filled in at build time
+    style.css           # layout, menus, print stylesheet
+    *.test.js           # Vitest
+  lessons/              # NN-slug.md, bundled into the app
+  public/               # manifest.webmanifest + icons, copied verbatim
+  examples/loomings.md  # Moby-Dick chapter 1
+  docs/                 # landing page, served at the site root
+  icons/ scripts/       # icon sources and build pipeline
+  Dockerfile nginx.conf docker-compose.yml
+  vite.config.js        # base /app/, service-worker plugin
 ```
 
-## Stack
+## Desktop app
 
-- **Tauri 2** — Rust shell + system WebView (WKWebView / WebView2 / WebKitGTK). No bundled Chromium.
-- **Vite 5** — frontend bundler.
-- **CodeMirror 6** — editor with lezer markdown grammar + syntax highlighting + search + history.
-- **markdown-it 14** — preview renderer with linkify + typographer.
-- **notify** (Rust) — external file watcher (desktop build only).
-- **ureq** (Rust) — sync HTTP client for the update check (desktop build only).
-- **File System Access API** — real open/save in the web build (Chromium; other browsers fall back to a file picker/download).
-- **nginx** — serves the web build's static files + landing page.
+Loomings 1.x was a Tauri desktop app for macOS, Windows and Linux. That
+line stopped at v1.2.1; the last desktop build is kept as the
+`desktop-final` branch and the `v1.2.1-desktop-final` tag, with installers
+on the [releases page](https://github.com/tiagojct/loomings/releases).
+The web app covers the same editor, and installing it from the browser
+gives back an app icon and offline use.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
-
-Chapter 1 of *Moby-Dick* (bundled at `examples/loomings.md`) is public domain.
+MIT, see [LICENSE](LICENSE). Chapter 1 of *Moby-Dick* is public domain.

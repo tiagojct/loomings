@@ -4,6 +4,49 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] — 2026-09-21
+
+Loomings is now a web app only. The Tauri desktop line stops at 1.2.1
+(kept as branch `desktop-final` and tag `v1.2.1-desktop-final`, with its
+installers still on the releases page). The editor is the same; what
+surrounds it changed for writing, sharing with students, and teaching
+Markdown side by side.
+
+### Added
+
+- **Split view** (⌘\) beside Write and Preview, with scroll sync in both
+  directions. Below 760px it falls back to the editor.
+- **Share link** (Export → Copy share link): the whole document travels,
+  compressed, in the URL fragment. Opening such a link loads it. Nothing
+  is uploaded.
+- **Lessons**: six bundled Markdown exercises under a Learn menu, or
+  `?lesson=slug`. They open in split view.
+- **Cheatsheet** drawer (⌘?).
+- **Ambergris** theme family, alongside Pequod (default), Glauca and
+  Try-Works, each dark and light. A Theme menu replaces the cycling
+  button. Ink roles let Ambergris keep its accent for interaction only
+  and give Pequod light readable headings.
+- **Documents in this browser**: Save keeps drafts in IndexedDB where the
+  File System Access API is missing (Safari, Firefox, iPad); a Documents
+  menu lists, reopens and deletes them, and shows recent files on Chromium.
+- **Installable and offline**: web manifest with `.md` file handlers and a
+  service worker built with the exact asset list.
+- **Export** menu: Markdown, HTML, Print / PDF with a print stylesheet.
+- Vitest suite for palettes (shape and WCAG contrast), share links and
+  lessons.
+
+### Changed
+
+- Vite 5 → 8. `base: /app/` moved into `vite.config.js`.
+- `platform-web.js` became `browser.js`, the only adapter; the platform
+  seam and every `ipc*` name are gone.
+- Landing page rewritten for the web app.
+
+### Removed
+
+- `src-tauri/`, the release workflow, the welcome (file association)
+  dialog, the update banner, the external file watcher.
+
 ## [1.2.1] — 2026-07-14
 
 Web only — no desktop app changes.
@@ -377,6 +420,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.0]: https://github.com/tiagojct/loomings/releases/tag/v2.0.0
 [1.0.0]: https://github.com/tiagojct/loomings/releases/tag/v1.0.0
 [0.2.3]: https://github.com/tiagojct/loomings/releases/tag/v0.2.3
 [0.2.2]: https://github.com/tiagojct/loomings/releases/tag/v0.2.2

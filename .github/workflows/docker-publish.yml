@@ -22,7 +22,8 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci
-      - run: npm run vite:build
+      - run: npm test
+      - run: npm run build
 
   publish:
     needs: build-check
