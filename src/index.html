@@ -17,6 +17,7 @@
       <div id="export-menu" class="tb-menu hidden" role="menu" aria-label="Export">
         <button type="button" class="tb-menu-item" role="menuitem" data-action="html"><span class="tb-menu-label">HTML file</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="print"><span class="tb-menu-label">Print / PDF…</span></button>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="share"><span class="tb-menu-label">Copy share link</span><span class="tb-menu-hint">whole document in the URL</span></button>
       </div>
     </div>
     <span class="tb-spacer"></span>
@@ -27,8 +28,18 @@
     </div>
     <span class="tb-spacer"></span>
     <div class="tb-menu-wrap">
+      <button id="tb-learn" title="Learn Markdown" aria-haspopup="menu" aria-expanded="false">Learn</button>
+      <div id="learn-menu" class="tb-menu tb-menu-right hidden" role="menu" aria-label="Learn">
+        <div class="tb-menu-section">Lessons</div>
+        <div id="learn-lessons"></div>
+        <div class="tb-menu-section">Reference</div>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="cheatsheet"><span class="tb-menu-label">Cheatsheet</span><span class="tb-menu-hint">⌘?</span></button>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="example"><span class="tb-menu-label">Moby-Dick, chapter 1</span></button>
+      </div>
+    </div>
+    <div class="tb-menu-wrap">
       <button id="tb-theme" title="Theme" aria-haspopup="menu" aria-expanded="false">Theme</button>
-      <div id="theme-menu" class="tb-menu hidden" role="menu" aria-label="Theme">
+      <div id="theme-menu" class="tb-menu tb-menu-right hidden" role="menu" aria-label="Theme">
         <div class="tb-menu-section">Family</div>
         <div id="theme-families"></div>
         <div class="tb-menu-section">Mode</div>
@@ -61,6 +72,40 @@
       </div>
     </div>
   </div>
+
+  <aside id="cheatsheet" class="hidden" aria-label="Markdown cheatsheet">
+    <div class="cheatsheet-head">
+      <h2>Markdown cheatsheet</h2>
+      <button id="cheatsheet-close" type="button" aria-label="Close">×</button>
+    </div>
+    <table>
+      <tbody>
+        <tr><th colspan="2">Blocks</th></tr>
+        <tr><td><code># Title</code></td><td>Heading level 1 (## for 2, ### for 3)</td></tr>
+        <tr><td><code>(empty line)</code></td><td>New paragraph</td></tr>
+        <tr><td><code>- item</code></td><td>Bulleted list</td></tr>
+        <tr><td><code>1. item</code></td><td>Numbered list</td></tr>
+        <tr><td><code>&nbsp;&nbsp;- item</code></td><td>Nested list (indent two spaces)</td></tr>
+        <tr><td><code>&gt; text</code></td><td>Quotation</td></tr>
+        <tr><td><code>```</code></td><td>Code block (open and close)</td></tr>
+        <tr><td><code>---</code></td><td>Horizontal rule</td></tr>
+        <tr><td><code>| a | b |</code></td><td>Table row; <code>| --- | --- |</code> under the header</td></tr>
+        <tr><th colspan="2">Inline</th></tr>
+        <tr><td><code>*text*</code></td><td><em>Emphasis</em></td></tr>
+        <tr><td><code>**text**</code></td><td><strong>Strong</strong></td></tr>
+        <tr><td><code>`code`</code></td><td><code>Inline code</code></td></tr>
+        <tr><td><code>[text](url)</code></td><td>Link</td></tr>
+        <tr><td><code>![alt](url)</code></td><td>Image</td></tr>
+        <tr><td><code>\*</code></td><td>Literal character (escape)</td></tr>
+        <tr><th colspan="2">Shortcuts</th></tr>
+        <tr><td><kbd>⌘B</kbd> <kbd>⌘I</kbd> <kbd>⌘`</kbd> <kbd>⌘K</kbd></td><td>Bold, italic, code, link</td></tr>
+        <tr><td><kbd>⌘\</kbd> <kbd>⌘⇧P</kbd></td><td>Split, preview</td></tr>
+        <tr><td><kbd>⌘P</kbd> <kbd>⌘F</kbd></td><td>Jump to heading, find</td></tr>
+        <tr><td><kbd>⌘⇧D</kbd></td><td>Focus mode</td></tr>
+      </tbody>
+    </table>
+    <p class="cheatsheet-foot">⌘ is Ctrl on Windows and Linux.</p>
+  </aside>
 
   <div id="palette" class="hidden">
     <div id="palette-inner">

@@ -16,8 +16,10 @@ import {
   saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml,
   addRecent, getRecents, openRecent,
   saveScratch, readScratch, clearScratch,
-  initDragDrop,
+  initDragDrop, forgetFile,
 } from './browser.js';
+import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
+import { LESSONS, lessonBySlug } from './lessons.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
 
@@ -825,7 +827,7 @@ aboutEl.querySelectorAll('a[data-url]').forEach(a => {
 aboutExample.addEventListener('click', (e) => {
   e.preventDefault();
   closeAbout();
-  openExample().then((payload) => { if (payload) loadFile(payload); }).catch(() => {});
+  openExample().then((payload) => { if (payload) loadFile({ ...payload, title: 'Moby-Dick' }); }).catch(() => {});
 });
 
 function jumpToHeading(idx) {
@@ -1363,6 +1365,7 @@ document.addEventListener('keydown', (e) => {
 
   if (e.key === 'Escape') {
     if (openMenus.size) { closeAllMenus(); return; }
+    if (!cheatsheetEl.classList.contains('hidden')) { toggleCheatsheet(false); return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
     if (effectiveViewMode() === 'preview')       { setViewMode('editor'); return; }
     if (isFocusMode)                             { toggleFocusMode(); return; }
@@ -1377,6 +1380,7 @@ document.addEventListener('keydown', (e) => {
   if (mod && e.shiftKey && k === 'D') { e.preventDefault(); toggleFocusMode(); return; }
   if (mod && e.shiftKey && k === 'P') { e.preventDefault(); togglePreview();   return; }
   if (mod && !e.shiftKey && e.key === '\\') { e.preventDefault(); toggleSplit();  return; }
+  if (mod && e.key === '?')                   { e.preventDefault(); toggleCheatsheet(); return; }
   if (mod && e.shiftKey && k === 'L') { e.preventDefault(); toggleStats();     return; }
   if (mod && e.shiftKey && k === 'W') { e.preventDefault(); cycleWidth();      return; }
   if (mod && e.shiftKey && k === 'T') { e.preventDefault(); cycleTheme();      return; }
@@ -1397,9 +1401,11 @@ async function loadFile(payload) {
   setText(payload.content);
   lastSavedContent = null;
   if (!payload.path) {
-    // Untitled buffer with content (the bundled example) — no autosave
-    // target, no recents. Saving goes through Save As.
+    // Untitled buffer with content (example, lesson, share link) — no
+    // autosave target, no recents, and no file handle left behind that a
+    // later Save could overwrite. Saving goes through Save As.
     currentFile = null;
+    forgetFile();
     setTitle(payload.title || null);
   } else {
     currentFile = payload.path;
@@ -1416,6 +1422,84 @@ async function loadFile(payload) {
 // ==========================
 
 initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
+
+// ==========================
+//  Share links (document in the URL fragment)
+// ==========================
+
+function firstHeading(text) {
+  const m = text.match(/^#\s+(.+)$/m);
+  return m ? m[1].trim() : null;
+}
+
+async function copyShareLink() {
+  const text = getText();
+  if (!text.trim()) { flashStatus('Nothing to share yet'); return; }
+  try {
+    const url = await shareUrl(text, location.href);
+    const kb = Math.max(1, Math.round(url.length / 1024));
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+      flashStatus(`Link copied (${kb} KB) — the whole document travels in it`);
+    } else {
+      window.prompt('Copy this link:', url);
+    }
+  } catch (err) {
+    flashStatus('Could not build link: ' + (err?.message || err));
+  }
+}
+
+async function loadSharedPayload(payload) {
+  let content;
+  try { content = await decodeDoc(payload); }
+  catch (err) { flashStatus('Could not open shared link: ' + (err?.message || err)); return false; }
+  await loadFile({ path: '', content, title: firstHeading(content) || 'Shared document' });
+  return true;
+}
+
+// ==========================
+//  Lessons (bundled, ?lesson=slug)
+// ==========================
+
+async function openLesson(slug) {
+  const lesson = lessonBySlug(slug);
+  if (!lesson) { flashStatus('No lesson called ' + slug); return false; }
+  await loadFile({ path: '', content: lesson.content, title: lesson.title });
+  // Lessons are written to be read source-beside-result.
+  if (!narrowMq.matches) setViewMode('split');
+  return true;
+}
+
+// A document named in the URL wins over scratch recovery, the same way an
+// explicitly opened file always did. The URL is then cleaned so a reload
+// goes back through the normal (scratch-recovering) boot.
+async function loadFromLocation() {
+  const share = payloadFromUrl(location.href);
+  const lesson = new URLSearchParams(location.search).get('lesson');
+  if (!share && !lesson) return false;
+  window.history.replaceState(null, '', location.pathname);
+  if (share) return loadSharedPayload(share);
+  return openLesson(lesson);
+}
+
+window.addEventListener('hashchange', () => {
+  const share = payloadFromUrl(location.href);
+  if (!share) return;
+  window.history.replaceState(null, '', location.pathname);
+  loadSharedPayload(share);
+});
+
+// ==========================
+//  Cheatsheet drawer
+// ==========================
+
+const cheatsheetEl = document.getElementById('cheatsheet');
+function toggleCheatsheet(force) {
+  const show = force ?? cheatsheetEl.classList.contains('hidden');
+  cheatsheetEl.classList.toggle('hidden', !show);
+  if (!show) view.focus();
+}
+document.getElementById('cheatsheet-close')?.addEventListener('click', () => toggleCheatsheet(false));
 
 // ==========================
 //  Toolbar
@@ -1460,6 +1544,24 @@ attachMenu(document.getElementById('tb-export'), document.getElementById('export
   onPick: (item) => {
     if (item.dataset.action === 'html')  exportHtml();
     if (item.dataset.action === 'print') printPreview();
+    if (item.dataset.action === 'share') copyShareLink();
+  },
+});
+
+const learnMenuEl = document.getElementById('learn-menu');
+const learnLessonsEl = document.getElementById('learn-lessons');
+attachMenu(document.getElementById('tb-learn'), learnMenuEl, {
+  onOpen: () => {
+    learnLessonsEl.innerHTML = LESSONS.map((l, i) =>
+      `<button type="button" class="tb-menu-item" role="menuitem" data-lesson="${escHtml(l.slug)}">
+         <span class="tb-menu-num">${i + 1}</span><span class="tb-menu-label">${escHtml(l.title)}</span>
+       </button>`
+    ).join('');
+  },
+  onPick: (item) => {
+    if (item.dataset.lesson) openLesson(item.dataset.lesson);
+    if (item.dataset.action === 'cheatsheet') toggleCheatsheet();
+    if (item.dataset.action === 'example') openExample().then((p) => { if (p) loadFile({ ...p, title: 'Moby-Dick' }); });
   },
 });
 document.querySelectorAll('#web-toolbar [data-view]').forEach((b) => {
@@ -1501,8 +1603,7 @@ async function offerScratchRecovery() {
   initAbout();
   refreshRecents();
   applyViewMode();
-  await offerScratchRecovery();
+  if (!(await loadFromLocation())) await offerScratchRecovery();
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();
-  setTitle(currentFile ? displayName(currentFile) : null);
 })();
