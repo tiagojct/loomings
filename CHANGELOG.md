@@ -4,6 +4,14 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] — 2026-09-21
+
+### Fixed
+
+- The web manifest was served as `application/octet-stream`; nginx now
+  sends `application/manifest+json`, so browsers treat the app as
+  installable.
+
 ## [2.0.0] — 2026-09-21
 
 Loomings is now a web app only. The Tauri desktop line stops at 1.2.1
@@ -421,6 +429,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.1]: https://github.com/tiagojct/loomings/releases/tag/v2.0.1
 [2.0.0]: https://github.com/tiagojct/loomings/releases/tag/v2.0.0
 [1.0.0]: https://github.com/tiagojct/loomings/releases/tag/v1.0.0
 [0.2.3]: https://github.com/tiagojct/loomings/releases/tag/v0.2.3
