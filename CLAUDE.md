@@ -74,6 +74,10 @@ browser pane.
   import. Use `window.history`.
 - **CSP is strict** (`nginx.conf`). The app makes no network requests
   beyond its own origin; keep it that way.
+- **CDN cache:** Cloudflare fronts the site and caches `.js`/`.css` for the
+  year nginx advertises. Only content-hashed assets may be long-cached;
+  `sw.js` is registered by a versioned URL and served `no-cache`. The VPS
+  DNS token cannot purge the cache.
 - **Version** lives in `package.json` only. The service worker's cache
   name and the About dialog read it from there.
 - Lessons are plain Markdown without raw HTML (the preview has

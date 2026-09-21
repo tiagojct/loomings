@@ -283,7 +283,11 @@ export function initLaunchQueue(onFile) {
 
 export function registerServiceWorker(onUpdateReady) {
   if (!import.meta.env.PROD || !('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register(import.meta.env.BASE_URL + 'sw.js').then((reg) => {
+  // Versioned URL: the CDN in front of the site caches .js for a year, so
+  // a bare sw.js would keep serving the previous release's worker. A new
+  // URL per version is a new cache key; same scope, so it replaces the
+  // old registration.
+  navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js?v=${encodeURIComponent(pkgVersion)}`).then((reg) => {
     reg.addEventListener('updatefound', () => {
       const worker = reg.installing;
       if (!worker) return;
