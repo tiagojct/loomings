@@ -4,6 +4,25 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] — 2026-09-21
+
+### Added
+
+- **Full screen** (⌘⇧F, or Focus menu) — leaves the browser's own chrome
+  behind via the Fullscreen API, and hides the toolbar/statusbar the same
+  way focus mode does (revealed on hover).
+- **Typewriter scrolling** finally has a way to turn it on: ⌘⇧Y, or the
+  same Focus menu. The feature has existed since the desktop app, but
+  had no keyboard shortcut even there, and the move to the web dropped
+  its only trigger (a native "View" menu item) entirely — since 2.0.0
+  it was unreachable code. It keeps the cursor's line vertically
+  centred as you type or move around.
+- **Focus menu** — a new toolbar button next to the view-mode segmented
+  control, listing all three focus-related toggles (dim other
+  sentences, keep cursor centred, full screen) with checkmarks and
+  their shortcuts, for anyone who'd rather click than memorise a
+  shortcut.
+
 ## [2.0.7] — 2026-09-21
 
 Landing page only — no app changes.
@@ -531,6 +550,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.8]: https://github.com/tiagojct/loomings/releases/tag/v2.0.8
 [2.0.7]: https://github.com/tiagojct/loomings/releases/tag/v2.0.7
 [2.0.6]: https://github.com/tiagojct/loomings/releases/tag/v2.0.6
 [2.0.5]: https://github.com/tiagojct/loomings/releases/tag/v2.0.5

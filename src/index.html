@@ -43,6 +43,14 @@
       <button type="button" data-view="split" aria-pressed="false" title="Editor and preview (⌘\)">Split</button>
       <button type="button" data-view="preview" aria-pressed="false" title="Preview only (⌘⇧P)">Preview</button>
     </div>
+    <div class="tb-menu-wrap">
+      <button id="tb-focus" title="Focus" aria-haspopup="menu" aria-expanded="false">Focus</button>
+      <div id="focus-menu" class="tb-menu hidden" role="menu" aria-label="Focus">
+        <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="sentence"><span class="tb-menu-label">Dim other sentences</span><span class="tb-menu-hint">⌘⇧D</span></button>
+        <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="typewriter"><span class="tb-menu-label">Keep cursor centred</span><span class="tb-menu-hint">⌘⇧Y</span></button>
+        <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="fullscreen"><span class="tb-menu-label">Full screen</span><span class="tb-menu-hint">⌘⇧F</span></button>
+      </div>
+    </div>
     <span class="tb-spacer"></span>
     <div class="tb-menu-wrap">
       <button id="tb-learn" title="Learn Markdown" aria-haspopup="menu" aria-expanded="false">Learn</button>
@@ -118,7 +126,9 @@
         <tr><td><kbd>⌘B</kbd> <kbd>⌘I</kbd> <kbd>⌘`</kbd> <kbd>⌘K</kbd></td><td>Bold, italic, code, link</td></tr>
         <tr><td><kbd>⌘\</kbd> <kbd>⌘⇧P</kbd></td><td>Split, preview</td></tr>
         <tr><td><kbd>⌘P</kbd> <kbd>⌘F</kbd></td><td>Jump to heading, find</td></tr>
-        <tr><td><kbd>⌘⇧D</kbd></td><td>Focus mode</td></tr>
+        <tr><td><kbd>⌘⇧D</kbd></td><td>Focus mode (dim other sentences)</td></tr>
+        <tr><td><kbd>⌘⇧Y</kbd></td><td>Typewriter scrolling (keep cursor centred)</td></tr>
+        <tr><td><kbd>⌘⇧F</kbd></td><td>Full screen</td></tr>
       </tbody>
     </table>
     <p class="cheatsheet-foot">⌘ is Ctrl on Windows and Linux.</p>

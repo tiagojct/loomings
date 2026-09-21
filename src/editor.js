@@ -646,6 +646,32 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 });
 
 // ==========================
+//  Focus menu (toolbar)
+// ==========================
+
+const focusMenuEl = document.getElementById('focus-menu');
+
+function renderFocusMenu() {
+  if (!focusMenuEl) return;
+  focusMenuEl.querySelectorAll('[data-toggle]').forEach((btn) => {
+    const on = btn.dataset.toggle === 'sentence' ? isFocusMode
+      : btn.dataset.toggle === 'typewriter' ? typewriterOn
+      : isFullscreen();
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-checked', String(on));
+  });
+}
+
+attachMenu(document.getElementById('tb-focus'), focusMenuEl, {
+  onOpen: renderFocusMenu,
+  onPick: (item) => {
+    if (item.dataset.toggle === 'sentence') toggleFocusMode();
+    if (item.dataset.toggle === 'typewriter') toggleTypewriter();
+    if (item.dataset.toggle === 'fullscreen') toggleFullscreen();
+  },
+});
+
+// ==========================
 //  Stats
 // ==========================
 
@@ -1167,6 +1193,7 @@ function toggleFocusMode() {
   isFocusMode = !isFocusMode;
   body.classList.toggle('focus-mode', isFocusMode);
   view.dispatch({ effects: focusModeEffect.of(isFocusMode) });
+  renderFocusMenu();
 }
 
 // Coalesces rapid docChanged/selectionSet updates (fast typing, paste) into
@@ -1197,7 +1224,41 @@ function toggleTypewriter() {
     typewriterFrame = null;
   }
   flashStatus(`Typewriter scrolling: ${typewriterOn ? 'on' : 'off'}`);
+  renderFocusMenu();
 }
+
+// ==========================
+//  Full screen
+// ==========================
+// The Fullscreen API, not toggleFocusMode's sentence-dimming — this hides
+// the browser's own chrome (tab bar, address bar), which CSS cannot touch.
+// A viewer's own F11 keeps working regardless; this is an in-page control
+// for anyone who'd rather click, and it doubles as our hook for hiding the
+// toolbar/statusbar too (see body.fullscreen in style.css).
+
+function isFullscreen() { return !!document.fullscreenElement; }
+
+async function toggleFullscreen() {
+  // iOS Safari has no element Fullscreen API at all (video elements only);
+  // everywhere else this can still reject at runtime (permissions policy,
+  // an iframe without allowfullscreen), so both paths get a plain message
+  // instead of a raw error object.
+  if (!document.documentElement.requestFullscreen) {
+    flashStatus('Full screen isn\'t available in this browser');
+    return;
+  }
+  try {
+    if (isFullscreen()) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch (_) {
+    flashStatus('Full screen unavailable here');
+  }
+}
+
+document.addEventListener('fullscreenchange', () => {
+  body.classList.toggle('fullscreen', isFullscreen());
+  renderFocusMenu();
+});
 
 // ==========================
 //  View modes: editor / split / preview
@@ -1407,6 +1468,10 @@ document.addEventListener('keydown', (e) => {
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
     if (effectiveViewMode() === 'preview')       { setViewMode('editor'); return; }
     if (isFocusMode)                             { toggleFocusMode(); return; }
+    // Fullscreen is deliberately not handled here: the Fullscreen API spec
+    // has the browser itself exit fullscreen on Escape (and fire our own
+    // fullscreenchange listener below) before this handler would ever see
+    // the keystroke — an explicit branch here would just race it.
     return;
   }
 
@@ -1416,6 +1481,8 @@ document.addEventListener('keydown', (e) => {
   // toUpperCase: with caps lock on, shift+d reports key 'd'.
   const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   if (mod && e.shiftKey && k === 'D') { e.preventDefault(); toggleFocusMode(); return; }
+  if (mod && e.shiftKey && k === 'Y') { e.preventDefault(); toggleTypewriter(); return; }
+  if (mod && e.shiftKey && k === 'F') { e.preventDefault(); toggleFullscreen(); return; }
   if (mod && e.shiftKey && k === 'P') { e.preventDefault(); togglePreview();   return; }
   if (mod && !e.shiftKey && e.key === '\\') { e.preventDefault(); toggleSplit();  return; }
   if (mod && e.key === '?')                   { e.preventDefault(); toggleCheatsheet(); return; }

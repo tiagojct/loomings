@@ -211,13 +211,20 @@ body { display: flex; flex-direction: column; }
   margin-left: 2px;
 }
 
+/* Full screen hides the toolbar/statusbar the same way focus mode does —
+   the point of leaving the browser chrome behind is to leave ours behind
+   too, not just get a bigger canvas. */
 body.focus-mode #web-toolbar,
-body.focus-mode #statusbar {
+body.fullscreen #web-toolbar,
+body.focus-mode #statusbar,
+body.fullscreen #statusbar {
   opacity: 0;
   transition: opacity 0.4s ease;
 }
 body.focus-mode #web-toolbar:hover,
-body.focus-mode #statusbar:hover {
+body.fullscreen #web-toolbar:hover,
+body.focus-mode #statusbar:hover,
+body.fullscreen #statusbar:hover {
   opacity: 1;
 }
 

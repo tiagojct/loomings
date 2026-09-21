@@ -19,7 +19,7 @@ unless you put it in a link.
 - Real markdown in the editor: bold reads bold, headings read as headings, code reads as code.
 - Shortcuts: **⌘B / ⌘I** wrap, **⌘\`** code, **⌘K** link. Lists continue on Return, stop on a second Return.
 - Smart typography (curly quotes, em dashes, ellipses), YAML frontmatter dimmed.
-- **Outline** (⌘P), **find and replace** (⌘F), **focus mode** (⌘⇧D), typewriter scrolling, word goal, reading time, column width.
+- **Outline** (⌘P), **find and replace** (⌘F), **focus mode** (⌘⇧D), **typewriter scrolling** (⌘⇧Y), **full screen** (⌘⇧F), word goal, reading time, column width. All three sit in the toolbar's Focus menu too.
 - **Three views**: Write, Split (⌘\), Preview (⌘⇧P). Split keeps the two panes in step as you scroll either one.
 - **Export**: Markdown, standalone HTML in the current theme, or Print / PDF of the rendered document.
 
@@ -58,6 +58,8 @@ Every palette is checked for WCAG contrast floors by the test suite.
 | Preview | ⌘⇧P |
 | Cheatsheet | ⌘? |
 | Focus mode | ⌘⇧D |
+| Typewriter scrolling | ⌘⇧Y |
+| Full screen | ⌘⇧F |
 | Stats | ⌘⇧L |
 | Column width | ⌘⇧W |
 | Theme mode | ⌘⇧T |
