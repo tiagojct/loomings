@@ -4,6 +4,29 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] — 2026-09-21
+
+Landing page only — no app changes.
+
+### Changed
+
+- Redesigned the landing page around the actual 1851 Harper & Brothers
+  first edition, which carried no whale art at all: plain cloth boards,
+  blind-stamped with a single thick rule border and a central life-buoy
+  device, gilt-lettered spine. The page now uses that directly — a solid
+  cloth-red field (a deep cloth-blue field in dark mode, following the
+  period practice of binding the same edition in whatever cloth colour
+  was in stock), a fixed gilt rule frame, an inline SVG life-buoy in
+  place of the app-icon mark, and a bold gilt caps wordmark in place of
+  the italic serif one. Section headers become small-caps chapter
+  labels; buttons, the screenshot frame and inline code all move to hard
+  edges instead of rounded corners and soft shadows.
+- The social-share card was rewritten to match (`scripts/render-og.swift`),
+  with the same life-buoy device drawn in Core Graphics. Its version
+  string is now a command-line argument instead of a literal that goes
+  stale at the next release — the exact mistake `docs/style.css`'s dead
+  font import and 2.0.4's screenshot made before it.
+
 ## [2.0.5] — 2026-09-21
 
 Landing page only — no app changes.
@@ -489,6 +512,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.6]: https://github.com/tiagojct/loomings/releases/tag/v2.0.6
 [2.0.5]: https://github.com/tiagojct/loomings/releases/tag/v2.0.5
 [2.0.4]: https://github.com/tiagojct/loomings/releases/tag/v2.0.4
 [2.0.3]: https://github.com/tiagojct/loomings/releases/tag/v2.0.3

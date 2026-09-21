@@ -1,14 +1,21 @@
-/* Loomings — editorial parchment. Magazine, not landing page. */
+/* Loomings — publisher's cloth.
+   Harper & Brothers bound the 1851 first edition of Moby-Dick in plain
+   cloth boards — no illustration, no whale, just a colour, a single thick
+   rule around the cover, and a blind-stamped life-buoy at the centre. The
+   title was gilt-stamped on the spine. This page borrows that: one solid
+   field, one frame, gilt type, and the life-buoy that gives its name to
+   chapter 123 — the thing Ishmael survives by holding onto. */
 
 :root {
-  --paper:       #F1E7D2;
-  --paper-soft:  #E8DEC3;
-  --ink:         #1A2D3C;
-  --ink-soft:    #3F5566;
-  --ink-faint:   #7A8B9A;
-  --rule:        #D7C9A8;
-  --accent:      #8B6348;
-  --accent-deep: #4F3825;
+  /* "Original red cloth" — the binding colour rare-book dealers reach
+     for first when they describe a first edition. */
+  --field:      #6E1B1B;
+  --field-deep: #4E1212;
+  --gilt:       #C9A24E;
+  --gilt-dim:   #8C7038;
+  --cream:      #F1E4CC;
+  --cream-dim:  #B79E7C;
+  --ink:        #241010;
   --font-serif:  'Source Serif 4', 'Source Serif Pro', Charter, 'Iowan Old Style', Georgia, serif;
   --font-display:'Source Serif 4', 'Hoefler Text', 'Didot', Georgia, serif;
   --font-mono:   'JetBrains Mono', 'SF Mono', Menlo, monospace;
@@ -16,14 +23,15 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper:       #0B1F2D;
-    --paper-soft:  #102C40;
-    --ink:         #EDE3CC;
-    --ink-soft:    #BDB29B;
-    --ink-faint:   #7E7660;
-    --rule:        #1F3E54;
-    --accent:      #D4A882;
-    --accent-deep: #BD8C68;
+    /* Publishers issued the same edition in whatever cloth was on hand —
+       black, blue, green, slate. This is the dark-cloth half of that
+       same custom, not an inverted colour scheme. */
+    --field:      #172038;
+    --field-deep: #0D1426;
+    --gilt:       #D3B268;
+    --gilt-dim:   #6E7896;
+    --cream:      #ECE4D4;
+    --cream-dim:  #97A0B8;
   }
 }
 
@@ -41,64 +49,77 @@ html {
 }
 
 body {
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--field);
+  color: var(--cream);
   font-family: var(--font-serif);
   font-size: 19px;
   line-height: 1.7;
   font-feature-settings: "kern", "liga", "onum";
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  padding: 0 24px;
+  padding: 0 28px;
+  position: relative;
+}
+
+/* The cover's "thick one-line border," fixed to the viewport so it reads
+   as the edge of the object rather than a scrolling page element. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 16px;
+  border: 3px solid var(--gilt);
+  pointer-events: none;
+  z-index: 1;
 }
 
 a {
-  color: var(--accent-deep);
+  color: var(--gilt);
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: color 0.15s;
 }
-a:hover { color: var(--accent); }
+a:hover { color: var(--cream); }
 
 main {
-  max-width: 620px;
+  max-width: 600px;
   margin: 0 auto;
-  padding: 92px 0 64px;
+  padding: 84px 0 72px;
+  position: relative;
 }
 
 header {
-  text-align: left;
-  margin-bottom: 56px;
+  text-align: center;
+  margin-bottom: 48px;
+  padding-bottom: 40px;
+  border-bottom: 1px solid var(--gilt-dim);
 }
-.mark {
+.buoy {
   display: block;
-  margin-bottom: 32px;
-  border-radius: 19%;
-  box-shadow: 0 8px 24px rgba(26, 45, 60, 0.10);
+  margin: 0 auto 28px;
 }
 h1 {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-style: italic;
-  font-size: 64px;
-  line-height: 0.95;
-  letter-spacing: -0.02em;
-  margin: 0 0 8px;
-  color: var(--ink);
+  font-weight: 800;
+  font-style: normal;
+  text-transform: uppercase;
+  font-size: 52px;
+  line-height: 1;
+  letter-spacing: 0.07em;
+  margin: 0 0 14px;
+  color: var(--gilt);
 }
 .sub {
   font-style: italic;
-  color: var(--ink-soft);
-  font-size: 19px;
-  margin: 0;
+  color: var(--cream-dim);
+  font-size: 18px;
+  margin: 0 0 10px;
 }
 .version {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--ink-faint);
-  letter-spacing: 0.06em;
-  margin: 8px 0 0;
+  color: var(--gilt-dim);
+  letter-spacing: 0.08em;
 }
 
 article p {
@@ -106,205 +127,193 @@ article p {
 }
 
 .lede {
-  font-size: 22px;
-  line-height: 1.55;
+  font-size: 20px;
+  line-height: 1.6;
   font-style: italic;
-  color: var(--ink);
+  color: var(--cream);
   margin: 0 0 2em;
-}
-.dropcap {
-  font-style: normal;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 72px;
-  line-height: 0.85;
-  float: left;
-  margin: 8px 12px 0 -4px;
-  color: var(--accent-deep);
+  padding-left: 22px;
+  border-left: 3px solid var(--gilt);
 }
 
 h2 {
   font-family: var(--font-display);
-  font-weight: 600;
-  font-style: italic;
-  font-size: 26px;
-  letter-spacing: -0.01em;
-  margin: 2.2em 0 0.6em;
-  color: var(--ink);
+  font-weight: 700;
+  font-style: normal;
+  text-transform: uppercase;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  margin: 2.8em 0 1em;
+  color: var(--gilt);
 }
 h2::before {
   content: "";
   display: block;
-  width: 36px;
-  height: 1px;
-  background: var(--accent);
-  margin-bottom: 18px;
+  width: 64px;
+  height: 2px;
+  background: var(--gilt);
+  margin-bottom: 16px;
 }
 
-article em { color: var(--accent-deep); font-style: italic; }
-article strong { color: var(--ink); font-weight: 600; }
+article em { color: var(--gilt); font-style: italic; }
+article strong { color: var(--cream); font-weight: 700; }
 
 .actions {
-  margin: 2em 0 3em !important;
+  margin: 2.2em 0 3em !important;
   display: flex;
-  align-items: baseline;
-  gap: 28px;
+  align-items: center;
+  gap: 24px;
   flex-wrap: wrap;
 }
 .btn {
   display: inline-block;
-  padding: 10px 22px;
-  background: var(--ink);
-  color: var(--paper);
+  padding: 13px 30px;
+  background: var(--gilt);
+  color: var(--ink);
   text-decoration: none;
-  border-radius: 2px;
+  border: 2px solid var(--gilt);
+  border-radius: 0;
   font-family: var(--font-serif);
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  transition: background 0.15s, transform 0.1s;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
 }
-.btn:hover {
-  background: var(--accent-deep);
-  color: var(--paper);
-  transform: translateY(-1px);
-}
+.btn:hover { background: transparent; color: var(--gilt); }
 .link {
-  font-size: 16px;
-  color: var(--ink-soft);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cream-dim);
   text-decoration: none;
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: 1px;
+  border-bottom: 1px solid var(--gilt-dim);
+  padding-bottom: 3px;
 }
-.link:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
+.link:hover { color: var(--gilt); border-bottom-color: var(--gilt); }
 
 .shot {
-  margin: 2em -32px;
+  margin: 2em -28px;
   text-align: center;
 }
 .shot img {
   width: 100%;
   height: auto;
   display: block;
-  border-radius: 8px;
-  box-shadow: 0 18px 60px rgba(26, 45, 60, 0.18), 0 2px 8px rgba(26, 45, 60, 0.08);
-  border: 1px solid var(--rule);
+  border: 2px solid var(--gilt);
 }
 .shot figcaption {
   margin-top: 14px;
-  font-size: 14px;
+  font-size: 13px;
   font-style: italic;
-  color: var(--ink-faint);
+  color: var(--cream-dim);
 }
 
 @media (max-width: 680px) {
   .shot { margin: 1.5em -18px; }
-  .shot img { border-radius: 4px; }
 }
 
 code {
   font-family: var(--font-mono);
-  font-size: 0.88em;
-  background: var(--paper-soft);
+  font-size: 0.86em;
+  background: var(--field-deep);
   padding: 1px 6px;
   border-radius: 2px;
-  color: var(--accent-deep);
+  color: var(--gilt);
 }
 pre {
-  background: var(--paper-soft);
-  border-left: 2px solid var(--accent);
+  background: var(--field-deep);
+  border-left: 2px solid var(--gilt);
   padding: 14px 18px;
   overflow-x: auto;
   margin: 1.4em 0;
   font-size: 15px;
-  border-radius: 0;
 }
 pre code {
   background: none;
   padding: 0;
-  color: var(--ink);
+  color: var(--cream);
   font-size: 15px;
 }
 
 footer {
-  margin-top: 96px;
+  margin-top: 88px;
+  text-align: center;
 }
 footer hr {
   border: none;
-  border-top: 1px solid var(--rule);
-  width: 80px;
-  margin: 0 0 24px;
+  border-top: 1px solid var(--gilt-dim);
+  width: 64px;
+  margin: 0 auto 24px;
 }
 footer p {
-  font-size: 15px;
-  color: var(--ink-faint);
+  font-size: 14px;
+  color: var(--cream-dim);
   font-style: italic;
   line-height: 1.55;
 }
-footer a { color: var(--ink-soft); }
+footer a { color: var(--cream-dim); }
 
 ::selection {
-  background: var(--accent);
-  color: var(--paper);
+  background: var(--gilt);
+  color: var(--ink);
 }
 
-/* === Not-list (B4) === */
 .not-list {
   list-style: none;
   margin: 1.4em 0 0.4em;
   padding: 0;
 }
 .not-list li {
-  font-size: 20px;
+  font-size: 19px;
   line-height: 1.55;
-  margin: 0.35em 0;
-  color: var(--ink);
+  margin: 0.4em 0;
+  color: var(--cream);
 }
 .not-list li::before {
   content: "—";
-  color: var(--accent);
+  color: var(--gilt);
   margin-right: 0.6em;
   font-weight: 500;
 }
 .not-coda {
   margin-top: 1.4em !important;
-  color: var(--ink-soft);
+  color: var(--cream-dim);
   font-style: italic;
 }
 
-/* === Footer (B7) === */
 .foot-links {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
   justify-content: center;
   gap: 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-style: normal;
-  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cream-dim);
 }
 .foot-links a {
-  color: var(--ink-soft);
+  color: var(--cream-dim);
   text-decoration: none;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--gilt-dim);
 }
-.foot-links a:hover { color: var(--accent-deep); border-bottom-color: var(--accent); }
-.foot-links .version { margin: 0; }
-.foot-links .dot { color: var(--ink-faint); }
+.foot-links a:hover { color: var(--gilt); border-bottom-color: var(--gilt); }
+.foot-links .version { margin: 0; text-transform: none; letter-spacing: 0.08em; }
+.foot-links .dot { color: var(--gilt-dim); }
 footer .tag {
-  text-align: center;
   margin-top: 14px;
   font-style: italic;
   font-size: 14px;
-  color: var(--ink-faint);
+  color: var(--cream-dim);
 }
 
 @media (max-width: 600px) {
+  body { padding: 0 20px; }
+  body::before { inset: 10px; border-width: 2px; }
   main { padding: 56px 0 48px; }
-  h1 { font-size: 48px; }
-  .lede { font-size: 20px; }
-  .dropcap { font-size: 60px; }
-  body { font-size: 18px; padding: 0 18px; }
-  h2 { font-size: 22px; }
+  h1 { font-size: 38px; letter-spacing: 0.05em; }
+  .lede { font-size: 18px; }
   .not-list li { font-size: 18px; }
 }

@@ -1,16 +1,18 @@
 // Loomings social share card renderer (Open Graph / Twitter Card).
+// "Publisher's cloth": the same red field, gilt life-buoy device and
+// gilt caps wordmark as docs/index.html, reduced to a single fixed card
+// (OG images have no light/dark or system-follow concept).
 // Output: 1200x630 PNG.
 // Compile: swiftc -O -o render-og render-og.swift
-// Usage:   ./render-og output.png icon.png
+// Usage:   ./render-og output.png vX.Y.Z
 
 import Cocoa
-import CoreText
 
 guard CommandLine.arguments.count == 3 else {
-    print("usage: render-og output.png icon.png"); exit(1)
+    print("usage: render-og output.png vX.Y.Z"); exit(1)
 }
-let outPath  = CommandLine.arguments[1]
-let iconPath = CommandLine.arguments[2]
+let outPath = CommandLine.arguments[1]
+let versionArg = CommandLine.arguments[2]
 
 let width:  CGFloat = 1200
 let height: CGFloat = 630
@@ -30,112 +32,83 @@ func color(_ r: Int, _ g: Int, _ b: Int, _ a: CGFloat = 1) -> NSColor {
     NSColor(red: CGFloat(r)/255, green: CGFloat(g)/255, blue: CGFloat(b)/255, alpha: a)
 }
 
-// Background — dark parchment radial bloom.
-let bgGrad = NSGradient(colorsAndLocations:
-    (color(0x14, 0x3F, 0x58), 0.0),
-    (color(0x0B, 0x1F, 0x2D), 0.55),
-    (color(0x04, 0x12, 0x1C), 1.0)
-)!
-bgGrad.draw(in: NSRect(x: 0, y: 0, width: width, height: height),
-            relativeCenterPosition: NSPoint(x: -0.2, y: 0.4))
+let field = color(0x6E, 0x1B, 0x1B)   // original red cloth
+let gilt  = color(0xC9, 0xA2, 0x4E)
+let cream = color(0xF1, 0xE4, 0xCC)
+let creamDim = color(0xB7, 0x9E, 0x7C)
 
-// Subtle amber glow lower-right.
-let glow = NSGradient(colorsAndLocations:
-    (color(0xD4, 0xA8, 0x82, 0.20), 0.0),
-    (color(0xD4, 0xA8, 0x82, 0.0),  1.0)
-)!
-glow.draw(in: NSRect(x: width*0.55, y: -height*0.4, width: width*0.6, height: height*1.2),
-          relativeCenterPosition: NSPoint(x: 0, y: 0))
+// Field.
+field.setFill()
+NSRect(x: 0, y: 0, width: width, height: height).fill()
 
-// Left margin layout.
-let margin: CGFloat = 88
-let iconSize: CGFloat = 200
+// The cover's "thick one-line border," inset from the card edge.
+let margin: CGFloat = 40
+let frame = NSRect(x: margin, y: margin, width: width - margin * 2, height: height - margin * 2)
+let framePath = NSBezierPath(rect: frame)
+framePath.lineWidth = 4
+gilt.setStroke()
+framePath.stroke()
 
-// Icon (drop shadow + image).
-if let icon = NSImage(contentsOfFile: iconPath) {
-    NSGraphicsContext.saveGraphicsState()
-    let shadow = NSShadow()
-    shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
-    shadow.shadowOffset = NSSize(width: 0, height: -10)
-    shadow.shadowBlurRadius = 32
-    shadow.set()
-    let iconRect = NSRect(x: margin,
-                          y: height - margin - iconSize,
-                          width: iconSize, height: iconSize)
-    icon.draw(in: iconRect,
-              from: .zero, operation: .sourceOver, fraction: 1.0)
-    NSGraphicsContext.restoreGraphicsState()
+// Life-buoy device — a gilt ring on the field, quartered by two straps,
+// exactly as docs/index.html's inline SVG (same construction, drawn here
+// with paths instead of markup): outer disc, two field-coloured straps,
+// then a field-coloured hole punched through the middle.
+let buoyCenter = NSPoint(x: margin + 150, y: height / 2)
+let outerR: CGFloat = 92
+let innerR: CGFloat = 56
+let strapW: CGFloat = 32
+
+func circlePath(center: NSPoint, radius: CGFloat) -> NSBezierPath {
+    let p = NSBezierPath()
+    p.appendOval(in: NSRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2))
+    return p
 }
 
-// Title — "Loomings" in italic serif.
-let titleX = margin + iconSize + 48
-let titleY = height - margin - 56
+gilt.setFill()
+circlePath(center: buoyCenter, radius: outerR).fill()
 
-let titleFont =
-    NSFont(name: "SourceSerif4-It", size: 120) ??
-    NSFont(name: "HoeflerText-Italic", size: 120) ??
-    NSFont(name: "Didot-Italic", size: 120) ??
-    NSFontManager.shared.font(withFamily: "Georgia", traits: .italicFontMask, weight: 5, size: 120)!
+field.setFill()
+NSRect(x: buoyCenter.x - outerR - 4, y: buoyCenter.y - strapW / 2, width: (outerR + 4) * 2, height: strapW).fill()
+NSRect(x: buoyCenter.x - strapW / 2, y: buoyCenter.y - outerR - 4, width: strapW, height: (outerR + 4) * 2).fill()
+circlePath(center: buoyCenter, radius: innerR).fill()
 
+gilt.setStroke()
+let outerRing = circlePath(center: buoyCenter, radius: outerR); outerRing.lineWidth = 2; outerRing.stroke()
+let innerRing = circlePath(center: buoyCenter, radius: innerR); innerRing.lineWidth = 2; innerRing.stroke()
+
+// Wordmark — bold gilt caps, the same treatment as the page's <h1>.
+let textX = buoyCenter.x + outerR + 56
+let titleFont = NSFont(name: "Georgia-Bold", size: 96) ?? NSFontManager.shared.font(withFamily: "Georgia", traits: .boldFontMask, weight: 9, size: 96)!
 let titleAttrs: [NSAttributedString.Key: Any] = [
     .font: titleFont,
-    .foregroundColor: color(0xED, 0xE3, 0xCC),
+    .foregroundColor: gilt,
+    .kern: 6.0,
 ]
-let titleStr = NSAttributedString(string: "Loomings", attributes: titleAttrs)
-let titleSize = titleStr.size()
-titleStr.draw(at: NSPoint(x: titleX, y: titleY - titleSize.height))
+let titleStr = NSAttributedString(string: "LOOMINGS", attributes: titleAttrs)
+let titleY = height / 2 + 18
+titleStr.draw(at: NSPoint(x: textX, y: titleY))
 
-// Tagline — "A markdown writing app." in regular serif.
-let tagY = titleY - titleSize.height - 28
-let tagFont =
-    NSFont(name: "SourceSerif4-Regular", size: 38) ??
-    NSFont(name: "HoeflerText-Regular", size: 38) ??
-    NSFont(name: "Georgia", size: 38)!
-
+// Tagline.
+let tagFont = NSFont(name: "Georgia-Italic", size: 30) ?? NSFont(name: "Georgia", size: 30)!
 let tagAttrs: [NSAttributedString.Key: Any] = [
     .font: tagFont,
-    .foregroundColor: color(0xBD, 0xB2, 0x9B),
+    .foregroundColor: creamDim,
 ]
 let tagStr = NSAttributedString(string: "A markdown editor, for writing and teaching.", attributes: tagAttrs)
-let tagSize = tagStr.size()
-tagStr.draw(at: NSPoint(x: titleX, y: tagY - tagSize.height))
+tagStr.draw(at: NSPoint(x: textX, y: titleY - 52))
 
-// Version pill — bottom-left.
-let verFont =
-    NSFont(name: "JetBrainsMono-Regular", size: 22) ??
-    NSFont(name: "SFMono-Regular", size: 22) ??
-    NSFont.monospacedSystemFont(ofSize: 22, weight: .regular)
+// Version — bottom-left, inside the frame.
+let verFont = NSFont.monospacedSystemFont(ofSize: 22, weight: .regular)
+let verAttrs: [NSAttributedString.Key: Any] = [.font: verFont, .foregroundColor: gilt, .kern: 1.5]
+let verStr = NSAttributedString(string: versionArg, attributes: verAttrs)
+verStr.draw(at: NSPoint(x: margin + 32, y: margin + 28))
 
-let verAttrs: [NSAttributedString.Key: Any] = [
-    .font: verFont,
-    .foregroundColor: color(0xD4, 0xA8, 0x82),
-    .kern: 1.5,
-]
-let verStr = NSAttributedString(string: "v2.0.3", attributes: verAttrs)
-verStr.draw(at: NSPoint(x: margin, y: margin))
-
-// Tag URL — bottom-right.
-let urlFont =
-    NSFont(name: "JetBrainsMono-Regular", size: 20) ??
-    NSFont(name: "SFMono-Regular", size: 20) ??
-    NSFont.monospacedSystemFont(ofSize: 20, weight: .regular)
-
-let urlAttrs: [NSAttributedString.Key: Any] = [
-    .font: urlFont,
-    .foregroundColor: color(0x7E, 0x76, 0x60),
-    .kern: 1.2,
-]
+// Domain — bottom-right.
+let urlFont = NSFont.monospacedSystemFont(ofSize: 20, weight: .regular)
+let urlAttrs: [NSAttributedString.Key: Any] = [.font: urlFont, .foregroundColor: creamDim, .kern: 1.2]
 let urlStr = NSAttributedString(string: "loomings.tiagojacinto.eu", attributes: urlAttrs)
 let urlSize = urlStr.size()
-urlStr.draw(at: NSPoint(x: width - margin - urlSize.width, y: margin))
-
-// Thin amber rule above tag URL.
-let rulePath = NSBezierPath()
-rulePath.move(to: NSPoint(x: width - margin - 200, y: margin + urlSize.height + 16))
-rulePath.line(to: NSPoint(x: width - margin,       y: margin + urlSize.height + 16))
-color(0xD4, 0xA8, 0x82, 0.35).setStroke()
-rulePath.lineWidth = 1
-rulePath.stroke()
+urlStr.draw(at: NSPoint(x: width - margin - 32 - urlSize.width, y: margin + 28))
 
 let _ = cgCtx
 
