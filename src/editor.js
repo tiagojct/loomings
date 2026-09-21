@@ -48,7 +48,6 @@ let isDirty          = false;
 let autoSaveTimer    = null;
 let scratchTimer     = null;
 let isFocusMode      = false;
-let isPreviewVisible = false;
 let showStats        = STORE.getBool('showStats', false);
 let smartTypo        = STORE.getBool('smartTypo', true);
 let typewriterOn     = STORE.getBool('typewriter', false);
@@ -57,6 +56,12 @@ let editorFontSize   = STORE.getNum('fontSize', 15);
 let wordGoal         = STORE.getNum('wordGoal', 0);
 
 const WIDTHS   = ['wide', 'normal', 'narrow'];
+const VIEW_MODES = ['editor', 'split', 'preview'];
+let viewMode = STORE.get('viewMode', 'editor');
+if (!VIEW_MODES.includes(viewMode)) viewMode = 'editor';
+// Below this width two panes are unreadable, so split falls back to the
+// editor and the Split button hides (see effectiveViewMode / style.css).
+const narrowMq = window.matchMedia('(max-width: 760px)');
 const FONT_MIN = 11;
 const FONT_MAX = 24;
 
@@ -604,28 +609,33 @@ function renderThemeMenu() {
   ).join('');
 }
 
-function openThemeMenu() {
-  renderThemeMenu();
-  themeMenuEl.classList.remove('hidden');
-  themeMenuBtn.setAttribute('aria-expanded', 'true');
+// A toolbar button that opens a popover menu. One open at a time; any
+// click outside, Escape, or picking an item closes it.
+const openMenus = new Set();
+function attachMenu(btn, menuEl, { onOpen, onPick } = {}) {
+  if (!btn || !menuEl) return { close() {} };
+  const open = () => { closeAllMenus(); onOpen?.(); menuEl.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true'); openMenus.add(close); };
+  const close = () => { menuEl.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); openMenus.delete(close); };
+  btn.addEventListener('click', (e) => { e.stopPropagation(); menuEl.classList.contains('hidden') ? open() : close(); });
+  menuEl.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const item = e.target.closest('.tb-menu-item');
+    if (!item) return;
+    close();
+    onPick?.(item);
+  });
+  return { close };
 }
-function closeThemeMenu() {
-  themeMenuEl.classList.add('hidden');
-  themeMenuBtn.setAttribute('aria-expanded', 'false');
-}
-function toggleThemeMenu() {
-  if (themeMenuEl.classList.contains('hidden')) openThemeMenu(); else closeThemeMenu();
-}
+function closeAllMenus() { for (const close of [...openMenus]) close(); }
+document.addEventListener('click', closeAllMenus);
 
-themeMenuBtn?.addEventListener('click', (e) => { e.stopPropagation(); toggleThemeMenu(); });
-themeMenuEl?.addEventListener('click', (e) => {
-  e.stopPropagation();
-  const item = e.target.closest('[data-family],[data-mode]');
-  if (!item) return;
-  if (item.dataset.family) setThemeFamily(item.dataset.family);
-  if (item.dataset.mode) setThemeMode(item.dataset.mode);
+attachMenu(themeMenuBtn, themeMenuEl, {
+  onOpen: renderThemeMenu,
+  onPick: (item) => {
+    if (item.dataset.family) setThemeFamily(item.dataset.family);
+    if (item.dataset.mode) setThemeMode(item.dataset.mode);
+  },
 });
-document.addEventListener('click', () => { if (themeMenuEl) closeThemeMenu(); });
 
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
   if (themeMode === 'system') applyTheme(resolveTheme('system'));
@@ -684,7 +694,7 @@ function scheduleStats() {
 
 let previewTimer = null;
 function schedulePreview() {
-  if (!isPreviewVisible) return;
+  if (!previewShown()) return;
   clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, 150);
 }
@@ -1149,20 +1159,117 @@ function toggleTypewriter() {
   flashStatus(`Typewriter scrolling: ${typewriterOn ? 'on' : 'off'}`);
 }
 
-function togglePreview() {
-  isPreviewVisible = !isPreviewVisible;
-  if (isPreviewVisible) {
-    preview.classList.remove('hidden');
-    preview.classList.add('visible');
-    editorEl.classList.add('hidden');
-    updatePreview();
-  } else {
-    preview.classList.remove('visible');
-    preview.classList.add('hidden');
-    editorEl.classList.remove('hidden');
-    view.focus();
-  }
+// ==========================
+//  View modes: editor / split / preview
+// ==========================
+
+function effectiveViewMode() {
+  return (viewMode === 'split' && narrowMq.matches) ? 'editor' : viewMode;
 }
+function previewShown() { return effectiveViewMode() !== 'editor'; }
+
+function applyViewMode() {
+  const mode = effectiveViewMode();
+  for (const m of VIEW_MODES) body.classList.toggle('view-' + m, m === mode);
+  editorEl.classList.toggle('hidden', mode === 'preview');
+  preview.classList.toggle('hidden', mode === 'editor');
+  document.querySelectorAll('#web-toolbar [data-view]').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.view === mode));
+  });
+  if (mode !== 'editor') updatePreview();
+  if (mode !== 'preview') view.requestMeasure();
+  if (mode === 'split') syncPreviewToEditor();
+}
+
+function setViewMode(mode) {
+  if (!VIEW_MODES.includes(mode)) return;
+  viewMode = mode;
+  STORE.set('viewMode', mode);
+  applyViewMode();
+  if (effectiveViewMode() !== 'preview') view.focus();
+}
+
+// ⌘⇧P: editor ⇄ preview (from split, goes to preview). ⌘\: editor ⇄ split.
+function togglePreview() { setViewMode(effectiveViewMode() === 'preview' ? 'editor' : 'preview'); }
+function toggleSplit()   { setViewMode(viewMode === 'split' ? 'editor' : 'split'); }
+
+narrowMq.addEventListener('change', applyViewMode);
+
+// ==========================
+//  Scroll sync (split mode)
+// ==========================
+// The preview's block elements carry data-line (source line, 0-based, from
+// markdown-it's token.map). Editor → preview maps the top visible editor
+// line onto the two nearest marked blocks and interpolates; preview →
+// editor picks the first block at or below the preview's scrollTop. A
+// short-lived lock stops the two handlers from feeding each other.
+
+let syncLock = { source: null, until: 0 };
+function lockSync(source) { syncLock = { source, until: performance.now() + 120 }; }
+function syncLockedBy(other) { return syncLock.source === other && performance.now() < syncLock.until; }
+
+function previewBlocks() {
+  return Array.from(preview.querySelectorAll('[data-line]')).map((el) => ({
+    el, line: parseInt(el.dataset.line, 10), top: el.offsetTop,
+  })).filter((b) => !Number.isNaN(b.line));
+}
+
+function syncPreviewToEditor() {
+  if (effectiveViewMode() !== 'split' || syncLockedBy('preview')) return;
+  const scroller = view.scrollDOM;
+  const blocks = previewBlocks();
+  if (!blocks.length) return;
+  const maxScroll = preview.scrollHeight - preview.clientHeight;
+  let target;
+  if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2) {
+    target = maxScroll; // pinned to the bottom stays pinned to the bottom
+  } else {
+    const block = view.lineBlockAtHeight(scroller.scrollTop);
+    const lineNo = view.state.doc.lineAt(block.from).number - 1;
+    // Fraction of the way through the top line, so the mapping is continuous.
+    const within = block.height > 0 ? (scroller.scrollTop - block.top) / block.height : 0;
+    const srcLine = lineNo + Math.max(0, Math.min(1, within));
+    let a = blocks[0], b = null;
+    for (const blk of blocks) {
+      if (blk.line <= srcLine) a = blk; else { b = blk; break; }
+    }
+    if (!b) {
+      target = a.top;
+    } else {
+      const span = b.line - a.line;
+      const frac = span > 0 ? (srcLine - a.line) / span : 0;
+      target = a.top + frac * (b.top - a.top);
+    }
+  }
+  lockSync('editor');
+  preview.scrollTop = Math.max(0, Math.min(maxScroll, target));
+}
+
+function syncEditorToPreview() {
+  if (effectiveViewMode() !== 'split' || syncLockedBy('editor')) return;
+  const blocks = previewBlocks();
+  if (!blocks.length) return;
+  const top = preview.scrollTop;
+  let a = blocks[0], b = null;
+  for (const blk of blocks) {
+    if (blk.top <= top) a = blk; else { b = blk; break; }
+  }
+  let srcLine = a.line;
+  if (b && b.top > a.top) srcLine = a.line + ((top - a.top) / (b.top - a.top)) * (b.line - a.line);
+  const lineNo = Math.max(1, Math.min(view.state.doc.lines, Math.floor(srcLine) + 1));
+  const line = view.state.doc.line(lineNo);
+  lockSync('preview');
+  const block = view.lineBlockAt(line.from);
+  const frac = srcLine - Math.floor(srcLine);
+  view.scrollDOM.scrollTop = block.top + frac * block.height;
+}
+
+view.scrollDOM.addEventListener('scroll', () => {
+  if (effectiveViewMode() === 'split') requestAnimationFrame(syncPreviewToEditor);
+}, { passive: true });
+preview.addEventListener('scroll', () => {
+  if (effectiveViewMode() === 'split') requestAnimationFrame(syncEditorToPreview);
+}, { passive: true });
 
 // ==========================
 //  Markdown preview (with URL sanitization)
@@ -1173,6 +1280,16 @@ const md = new MarkdownIt({
   linkify: true,
   typographer: true,
   breaks: false,
+});
+
+// Stamp every block token that knows its source range with data-line so
+// the scroll sync (and, later, click-to-locate) can map preview ⇄ source.
+md.core.ruler.push('source_lines', (state) => {
+  for (const token of state.tokens) {
+    if (token.map && token.nesting !== -1 && !token.hidden) {
+      token.attrSet('data-line', String(token.map[0]));
+    }
+  }
 });
 
 const SAFE_URL = /^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i;
@@ -1207,7 +1324,20 @@ function renderMarkdown(text) {
 }
 
 function updatePreview() {
-  if (isPreviewVisible) preview.innerHTML = renderMarkdown(getText());
+  if (!previewShown()) return;
+  preview.innerHTML = renderMarkdown(getText());
+  if (effectiveViewMode() === 'split') syncPreviewToEditor();
+}
+
+// Print / PDF: the print stylesheet shows only the rendered preview, so make
+// sure it is current even when the user is in editor-only mode.
+function printPreview() {
+  const wasShown = previewShown();
+  preview.innerHTML = renderMarkdown(getText());
+  if (!wasShown) preview.classList.remove('hidden');
+  const cleanup = () => { if (!wasShown) preview.classList.add('hidden'); window.removeEventListener('afterprint', cleanup); };
+  window.addEventListener('afterprint', cleanup);
+  window.print();
 }
 
 // Links in the rendered preview open in a new tab rather than navigating
@@ -1232,9 +1362,9 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
-    if (themeMenuEl && !themeMenuEl.classList.contains('hidden')) { closeThemeMenu(); return; }
+    if (openMenus.size) { closeAllMenus(); return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
-    if (isPreviewVisible)                        { togglePreview();   return; }
+    if (effectiveViewMode() === 'preview')       { setViewMode('editor'); return; }
     if (isFocusMode)                             { toggleFocusMode(); return; }
     return;
   }
@@ -1246,6 +1376,7 @@ document.addEventListener('keydown', (e) => {
   const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
   if (mod && e.shiftKey && k === 'D') { e.preventDefault(); toggleFocusMode(); return; }
   if (mod && e.shiftKey && k === 'P') { e.preventDefault(); togglePreview();   return; }
+  if (mod && !e.shiftKey && e.key === '\\') { e.preventDefault(); toggleSplit();  return; }
   if (mod && e.shiftKey && k === 'L') { e.preventDefault(); toggleStats();     return; }
   if (mod && e.shiftKey && k === 'W') { e.preventDefault(); cycleWidth();      return; }
   if (mod && e.shiftKey && k === 'T') { e.preventDefault(); cycleTheme();      return; }
@@ -1325,7 +1456,15 @@ tbRecent?.addEventListener('change', async () => {
 document.getElementById('tb-new')?.addEventListener('click', fileNew);
 document.getElementById('tb-open')?.addEventListener('click', openFile);
 document.getElementById('tb-save')?.addEventListener('click', handleSave);
-document.getElementById('tb-export')?.addEventListener('click', exportHtml);
+attachMenu(document.getElementById('tb-export'), document.getElementById('export-menu'), {
+  onPick: (item) => {
+    if (item.dataset.action === 'html')  exportHtml();
+    if (item.dataset.action === 'print') printPreview();
+  },
+});
+document.querySelectorAll('#web-toolbar [data-view]').forEach((b) => {
+  b.addEventListener('click', () => setViewMode(b.dataset.view));
+});
 document.getElementById('tb-about')?.addEventListener('click', openAbout);
 
 // A dirty buffer left open in a closed tab is otherwise silently lost —
@@ -1361,6 +1500,7 @@ async function offerScratchRecovery() {
 (async () => {
   initAbout();
   refreshRecents();
+  applyViewMode();
   await offerScratchRecovery();
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();

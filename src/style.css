@@ -68,11 +68,27 @@ body { display: flex; flex-direction: column; }
 #web-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
   flex-shrink: 0;
   padding: 6px 10px;
   background: var(--bg-deep);
   border-bottom: 1px solid var(--border);
+}
+.tb-spacer { flex: 1; }
+.tb-seg { display: flex; }
+.tb-seg button { border-radius: 0; margin-left: -1px; }
+.tb-seg button:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+.tb-seg button:last-child { border-radius: 0 4px 4px 0; }
+#web-toolbar .tb-seg button[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-deep);
+}
+@media (max-width: 760px) {
+  .tb-seg [data-view="split"] { display: none; }
+  #editor .cm-content { padding: 16px 16px 80px !important; }
+  #preview { padding: 16px 16px 80px; }
 }
 #web-toolbar button, #web-toolbar select {
   padding: 4px 10px;
@@ -188,6 +204,7 @@ body.focus-mode #statusbar:hover {
 
 #content-area {
   position: relative;
+  display: flex;
   flex: 0 1 auto;
   width: 100%;
   overflow: hidden;
@@ -195,14 +212,21 @@ body.focus-mode #statusbar:hover {
 #content-area.width-wide   { max-width: 900px; }
 #content-area.width-normal { max-width: 660px; }
 #content-area.width-narrow { max-width: 500px; }
+/* Split ignores the column width: two panes need the whole window. */
+body.view-split #content-area { max-width: none; }
 
 #editor {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 50%;
+  min-width: 0;
   background: var(--bg);
   overflow: hidden;
 }
 #editor .cm-editor {
+  flex: 1;
+  min-height: 0;
   height: 100%;
 }
 #editor .tok-code {
@@ -213,9 +237,9 @@ body.focus-mode #statusbar:hover {
 }
 
 #preview {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
+  position: relative;
+  flex: 1 1 50%;
+  min-width: 0;
   padding: 24px 40px 80px;
   font-family: var(--font-serif);
   font-size: 17px;
@@ -223,9 +247,13 @@ body.focus-mode #statusbar:hover {
   color: var(--fg);
   background: var(--bg);
   overflow-y: auto;
-  display: none;
 }
-#preview.visible { display: block; }
+body.view-split #preview { border-left: 1px solid var(--border); }
+#preview > :first-child { margin-top: 0; }
+#preview img { max-width: 100%; }
+#preview table { border-collapse: collapse; margin: 1em 0; font-family: var(--font-ui); font-size: 0.9em; }
+#preview th, #preview td { border: 1px solid var(--border); padding: 4px 10px; text-align: left; }
+#preview th { background: var(--bg-deep); }
 
 #preview h1, #preview h2, #preview h3 {
   font-family: var(--font-ui);
@@ -464,4 +492,31 @@ body.focus-mode #statusbar:hover {
   font-size: 11px;
   color: var(--fg-ghost);
   letter-spacing: 0.04em;
+}
+
+/* ========================================
+   Print: only the rendered document, on paper colours
+   ======================================== */
+@media print {
+  html, body { height: auto; overflow: visible; background: #fff; color: #000; }
+  #web-toolbar, #statusbar, #editor, #palette, #about, .tb-menu { display: none !important; }
+  #editor-container { display: block; overflow: visible; background: #fff; }
+  #content-area { display: block; max-width: none; overflow: visible; }
+  #preview {
+    display: block !important;
+    position: static;
+    overflow: visible;
+    padding: 0;
+    border: none;
+    background: #fff;
+    color: #000;
+    font-size: 12pt;
+    line-height: 1.6;
+  }
+  #preview h1, #preview h2, #preview h3, #preview strong, #preview em, #preview code { color: #000; }
+  #preview a { color: #000; text-decoration: underline; }
+  #preview code, #preview pre { background: #f2f2f2; border-color: #ccc; }
+  #preview pre code { color: #000; }
+  #preview blockquote { border-left-color: #999; color: #333; }
+  #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: #555; }
 }

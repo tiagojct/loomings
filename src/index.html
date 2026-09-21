@@ -12,7 +12,20 @@
     <button id="tb-open" title="Open">Open</button>
     <select id="tb-recent" title="Recent files" class="hidden"></select>
     <button id="tb-save" title="Save">Save</button>
-    <button id="tb-export" title="Export HTML">Export</button>
+    <div class="tb-menu-wrap">
+      <button id="tb-export" title="Export" aria-haspopup="menu" aria-expanded="false">Export</button>
+      <div id="export-menu" class="tb-menu hidden" role="menu" aria-label="Export">
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="html"><span class="tb-menu-label">HTML file</span></button>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="print"><span class="tb-menu-label">Print / PDF…</span></button>
+      </div>
+    </div>
+    <span class="tb-spacer"></span>
+    <div class="tb-seg" role="group" aria-label="View">
+      <button type="button" data-view="editor" aria-pressed="true" title="Editor only (Esc)">Write</button>
+      <button type="button" data-view="split" aria-pressed="false" title="Editor and preview (⌘\)">Split</button>
+      <button type="button" data-view="preview" aria-pressed="false" title="Preview only (⌘⇧P)">Preview</button>
+    </div>
+    <span class="tb-spacer"></span>
     <div class="tb-menu-wrap">
       <button id="tb-theme" title="Theme" aria-haspopup="menu" aria-expanded="false">Theme</button>
       <div id="theme-menu" class="tb-menu hidden" role="menu" aria-label="Theme">
