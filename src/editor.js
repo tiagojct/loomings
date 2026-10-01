@@ -9,7 +9,9 @@ import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
-import MarkdownIt from 'markdown-it';
+import { renderMarkdown } from './markdown.js';
+import { countWords } from './stats.js';
+import { attachMenu, closeAllMenus } from './menu.js';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles, cssVars } from './palettes.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
@@ -613,25 +615,7 @@ function renderThemeMenu() {
   ).join('');
 }
 
-// A toolbar button that opens a popover menu. One open at a time; any
-// click outside, Escape, or picking an item closes it.
-const openMenus = new Set();
-function attachMenu(btn, menuEl, { onOpen, onPick } = {}) {
-  if (!btn || !menuEl) return { close() {} };
-  const open = () => { closeAllMenus(); onOpen?.(); menuEl.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true'); openMenus.add(close); };
-  const close = () => { menuEl.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); openMenus.delete(close); };
-  btn.addEventListener('click', (e) => { e.stopPropagation(); menuEl.classList.contains('hidden') ? open() : close(); });
-  menuEl.addEventListener('click', (e) => {
-    e.stopPropagation();
-    const item = e.target.closest('.tb-menu-item');
-    if (!item) return;
-    close();
-    onPick?.(item, e.target);
-  });
-  return { close };
-}
-function closeAllMenus() { for (const close of [...openMenus]) close(); }
-document.addEventListener('click', closeAllMenus);
+
 
 attachMenu(themeMenuBtn, themeMenuEl, {
   onOpen: renderThemeMenu,
@@ -674,13 +658,6 @@ attachMenu(document.getElementById('tb-focus'), focusMenuEl, {
 // ==========================
 //  Stats
 // ==========================
-
-function countWords(text) {
-  // Native regex pass — JS \s already covers Unicode space separators
-  // (em space, ideographic space, etc), unlike a hand-rolled ASCII scan.
-  const words = text.match(/\S+/g);
-  return words ? words.length : 0;
-}
 
 function updateStats() {
   const sel = view.state.selection.main;
@@ -1279,6 +1256,7 @@ function applyViewMode() {
   });
   if (mode !== 'editor') updatePreview();
   if (mode !== 'preview') view.requestMeasure();
+  invalidatePreviewBlocks();
   if (mode === 'split') syncPreviewToEditor();
 }
 
@@ -1309,16 +1287,24 @@ let syncLock = { source: null, until: 0 };
 function lockSync(source) { syncLock = { source, until: performance.now() + 120 }; }
 function syncLockedBy(other) { return syncLock.source === other && performance.now() < syncLock.until; }
 
-function previewBlocks() {
-  return Array.from(preview.querySelectorAll('[data-line]')).map((el) => ({
-    el, line: parseInt(el.dataset.line, 10), top: el.offsetTop,
-  })).filter((b) => !Number.isNaN(b.line));
+let cachedPreviewBlocks = null;
+function getPreviewBlocks() {
+  if (!cachedPreviewBlocks) {
+    cachedPreviewBlocks = Array.from(preview.querySelectorAll('[data-line]')).map((el) => ({
+      el, line: parseInt(el.dataset.line, 10), top: el.offsetTop,
+    })).filter((b) => !Number.isNaN(b.line));
+  }
+  return cachedPreviewBlocks;
 }
+function invalidatePreviewBlocks() {
+  cachedPreviewBlocks = null;
+}
+window.addEventListener('resize', invalidatePreviewBlocks, { passive: true });
 
 function syncPreviewToEditor() {
   if (effectiveViewMode() !== 'split' || syncLockedBy('preview')) return;
   const scroller = view.scrollDOM;
-  const blocks = previewBlocks();
+  const blocks = getPreviewBlocks();
   if (!blocks.length) return;
   const maxScroll = preview.scrollHeight - preview.clientHeight;
   let target;
@@ -1348,7 +1334,7 @@ function syncPreviewToEditor() {
 
 function syncEditorToPreview() {
   if (effectiveViewMode() !== 'split' || syncLockedBy('editor')) return;
-  const blocks = previewBlocks();
+  const blocks = getPreviewBlocks();
   if (!blocks.length) return;
   const top = preview.scrollTop;
   let a = blocks[0], b = null;
@@ -1372,61 +1358,10 @@ preview.addEventListener('scroll', () => {
   if (effectiveViewMode() === 'split') requestAnimationFrame(syncEditorToPreview);
 }, { passive: true });
 
-// ==========================
-//  Markdown preview (with URL sanitization)
-// ==========================
-
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: true,
-  breaks: false,
-});
-
-// Stamp every block token that knows its source range with data-line so
-// the scroll sync (and, later, click-to-locate) can map preview ⇄ source.
-md.core.ruler.push('source_lines', (state) => {
-  for (const token of state.tokens) {
-    if (token.map && token.nesting !== -1 && !token.hidden) {
-      token.attrSet('data-line', String(token.map[0]));
-    }
-  }
-});
-
-const SAFE_URL = /^(https?:|mailto:|#|\/|\.\/|\.\.\/)/i;
-const defaultLinkOpen = md.renderer.rules.link_open || function (tokens, idx, opts, _, self) {
-  return self.renderToken(tokens, idx, opts);
-};
-md.renderer.rules.link_open = function (tokens, idx, opts, env, self) {
-  const token = tokens[idx];
-  const hrefIdx = token.attrIndex('href');
-  if (hrefIdx >= 0) {
-    const href = token.attrs[hrefIdx][1];
-    if (!SAFE_URL.test(href)) token.attrs[hrefIdx][1] = '#';
-  }
-  token.attrSet('rel', 'noopener noreferrer');
-  return defaultLinkOpen(tokens, idx, opts, env, self);
-};
-const defaultImage = md.renderer.rules.image;
-md.renderer.rules.image = function (tokens, idx, opts, env, self) {
-  const token = tokens[idx];
-  const srcIdx = token.attrIndex('src');
-  if (srcIdx >= 0) {
-    const src = token.attrs[srcIdx][1];
-    if (!SAFE_URL.test(src) && !/^data:image\//i.test(src)) {
-      token.attrs[srcIdx][1] = '#';
-    }
-  }
-  return defaultImage(tokens, idx, opts, env, self);
-};
-
-function renderMarkdown(text) {
-  return md.render(text);
-}
-
 function updatePreview() {
   if (!previewShown()) return;
   preview.innerHTML = renderMarkdown(getText());
+  invalidatePreviewBlocks();
   if (effectiveViewMode() === 'split') syncPreviewToEditor();
 }
 

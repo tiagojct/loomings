@@ -4,6 +4,30 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.9] — 2026-10-01
+
+Code quality, reliability, accessibility, and performance overhaul.
+
+### Fixed
+
+- **IndexedDB connection and error handling**: `openDb` now caches and recovers database connections instead of opening an unmanaged connection on every write. Storage write errors are no longer swallowed, preventing silent data loss when saving or auto-saving.
+- **Frontmatter in preview and export**: Markdown preview, Print/PDF, and HTML export now strip YAML frontmatter cleanly instead of rendering it as an `<h2>` heading and horizontal rules. Newline count is preserved to keep `data-line` scroll sync perfectly aligned.
+- **Offline PWA navigation**: The service worker now intercepts `/app` without trailing slash, ensuring the cached app shell is served offline even when the URL lacks a trailing slash.
+- **Content Security Policy for images**: Updated `img-src` in `nginx.conf` to allow HTTPS and blob image sources, fixing external image previews in lessons and documents.
+
+### Added
+
+- **Keyboard-accessible toolbar menus**: Menus now support ARIA keyboard navigation (`ArrowDown`/`ArrowUp` roving navigation, `Home`, `End`, and `Escape` focus restoration).
+- **Accessibility semantics**: Added `role="status"` and `aria-live="polite"` to status messages, an accessible label to the dirty buffer indicator, and `role="dialog"` with `aria-modal="true"` to dialogs.
+- **Comprehensive test suite**: Added unit tests for Markdown sanitization, word statistics, IndexedDB normalization and migration, menu accessibility, and service worker routing (8 test suites, 73 tests).
+- **CI/CD pipeline**: Added automated GitHub Actions workflow to run tests and builds on pull requests.
+
+### Changed
+
+- **Normalized document storage**: Split document metadata from document content in IndexedDB to prevent $O(N)$ memory and I/O churn on every save, with seamless migration for legacy documents.
+- **Scroll-sync performance**: Cached preview block layout measurements, eliminating forced layout recalculations (`el.offsetTop`) during split-view scrolling.
+- **Modular code structure**: Extracted pure markdown rendering, text statistics, and menu controllers into separate modules (`src/markdown.js`, `src/stats.js`, `src/menu.js`).
+
 ## [2.0.8] — 2026-09-21
 
 ### Added
@@ -550,6 +574,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.0.9]: https://github.com/tiagojct/loomings/releases/tag/v2.0.9
 [2.0.8]: https://github.com/tiagojct/loomings/releases/tag/v2.0.8
 [2.0.7]: https://github.com/tiagojct/loomings/releases/tag/v2.0.7
 [2.0.6]: https://github.com/tiagojct/loomings/releases/tag/v2.0.6

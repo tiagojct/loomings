@@ -28,7 +28,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin || !url.pathname.startsWith(BASE)) return;
+  const isApp = url.pathname === '/app' || url.pathname.startsWith(BASE);
+  if (url.origin !== self.location.origin || !isApp) return;
 
   if (req.mode === 'navigate') {
     event.respondWith(

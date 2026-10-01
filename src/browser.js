@@ -9,7 +9,7 @@
 import exampleContent from '../examples/loomings.md?raw';
 import { version as pkgVersion } from '../package.json';
 
-export const hasFileSystemAccess = 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
+export const hasFileSystemAccess = typeof window !== 'undefined' && 'showOpenFilePicker' in window && 'showSaveFilePicker' in window;
 
 const OPEN_TYPES = {
   description: 'Markdown',
@@ -40,50 +40,73 @@ function downloadBlob(content, filename, mime) {
 
 const DB_NAME = 'loomings-web';
 const STORE = 'kv';
+const DOC_CONTENT_PREFIX = 'doc_content:';
+
+let dbPromise = null;
 
 function openDb() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => { req.result.createObjectStore(STORE); };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
+  if (!dbPromise) {
+    dbPromise = new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => { req.result.createObjectStore(STORE); };
+      req.onsuccess = () => {
+        const db = req.result;
+        db.onversionchange = () => {
+          db.close();
+          dbPromise = null;
+        };
+        db.onclose = () => {
+          dbPromise = null;
+        };
+        resolve(db);
+      };
+      req.onerror = () => {
+        dbPromise = null;
+        reject(req.error);
+      };
+    });
+  }
+  return dbPromise;
+}
+
+export function _resetDbForTesting() {
+  if (dbPromise) {
+    dbPromise.then((db) => db.close()).catch(() => {});
+    dbPromise = null;
+  }
 }
 
 export async function idbGet(key) {
-  try {
-    const db = await openDb();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readonly');
-      const req = tx.objectStore(STORE).get(key);
-      req.onsuccess = () => resolve(req.result ?? null);
-      req.onerror = () => reject(req.error);
-    });
-  } catch (_) { return null; }
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).get(key);
+    req.onsuccess = () => resolve(req.result ?? null);
+    req.onerror = () => reject(req.error);
+    tx.onerror = () => reject(tx.error);
+  });
 }
 
 export async function idbSet(key, value) {
-  try {
-    const db = await openDb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).put(value, key);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (_) {}
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).put(value, key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || tx.transaction?.error);
+    tx.onabort = () => reject(new Error('IndexedDB transaction aborted'));
+  });
 }
 
 export async function idbDelete(key) {
-  try {
-    const db = await openDb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, 'readwrite');
-      tx.objectStore(STORE).delete(key);
-      tx.oncomplete = resolve;
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch (_) {}
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    tx.objectStore(STORE).delete(key);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error || tx.transaction?.error);
+    tx.onabort = () => reject(new Error('IndexedDB transaction aborted'));
+  });
 }
 
 // ==========================
@@ -232,27 +255,72 @@ export async function openRecent(entry) {
 //  the others. Newest first.
 // ==========================
 
-export async function listDocuments() { return (await idbGet('documents')) || []; }
+export async function listDocuments() {
+  try {
+    const raw = (await idbGet('documents')) || [];
+    return raw.map((d) => ({
+      id: d.id,
+      title: d.title,
+      created: d.created,
+      updated: d.updated,
+    }));
+  } catch (_) {
+    return [];
+  }
+}
 
 export async function getDocument(id) {
-  return (await listDocuments()).find((d) => d.id === id) || null;
+  const meta = (await listDocuments()).find((d) => d.id === id);
+  if (!meta) return null;
+  let content = null;
+  try {
+    content = await idbGet(DOC_CONTENT_PREFIX + id);
+  } catch (_) {}
+
+  if (content === null) {
+    try {
+      const raw = (await idbGet('documents')) || [];
+      const legacy = raw.find((d) => d.id === id);
+      if (legacy && legacy.content !== undefined) {
+        content = legacy.content;
+        idbSet(DOC_CONTENT_PREFIX + id, content).catch(() => {});
+      }
+    } catch (_) {}
+  }
+  return { ...meta, content: content ?? '' };
 }
 
 export async function putDocument({ id, title, content }) {
-  const docs = await listDocuments();
+  const raw = (await idbGet('documents')) || [];
   const now = Date.now();
-  const existing = id ? docs.find((d) => d.id === id) : null;
-  const doc = {
-    id: existing ? existing.id : (crypto.randomUUID ? crypto.randomUUID() : String(now) + Math.random().toString(16).slice(2)),
-    title, content, created: existing ? existing.created : now, updated: now,
+  const existing = id ? raw.find((d) => d.id === id) : null;
+  const docId = existing ? existing.id : (crypto.randomUUID ? crypto.randomUUID() : String(now) + Math.random().toString(16).slice(2));
+  const docMeta = {
+    id: docId,
+    title,
+    created: existing ? existing.created : now,
+    updated: now,
   };
-  await idbSet('documents', [doc, ...docs.filter((d) => d.id !== doc.id)]);
-  return doc;
+  await idbSet(DOC_CONTENT_PREFIX + docId, content);
+  const next = [
+    docMeta,
+    ...raw.filter((d) => d.id !== docId).map((d) => ({
+      id: d.id,
+      title: d.title,
+      created: d.created,
+      updated: d.updated,
+    })),
+  ];
+  await idbSet('documents', next);
+  return { ...docMeta, content };
 }
 
 export async function deleteDocument(id) {
-  const docs = await listDocuments();
-  await idbSet('documents', docs.filter((d) => d.id !== id));
+  const raw = (await idbGet('documents')) || [];
+  await Promise.allSettled([
+    idbDelete(DOC_CONTENT_PREFIX + id),
+    idbSet('documents', raw.filter((d) => d.id !== id)),
+  ]);
 }
 
 // ==========================
@@ -262,8 +330,12 @@ export async function deleteDocument(id) {
 export async function saveScratch(content, currentFile) {
   await idbSet('scratch', { content, current_file: currentFile });
 }
-export async function readScratch() { return idbGet('scratch'); }
-export async function clearScratch() { return idbDelete('scratch'); }
+export async function readScratch() {
+  try { return await idbGet('scratch'); } catch (_) { return null; }
+}
+export async function clearScratch() {
+  try { await idbDelete('scratch'); } catch (_) {}
+}
 
 // ==========================
 //  Installed app: files opened from the OS, offline shell

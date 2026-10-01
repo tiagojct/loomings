@@ -1,6 +1,6 @@
 {
   "name": "loomings",
-  "version": "2.0.8",
+  "version": "2.0.9",
   "description": "A minimalist Markdown editor for the browser. Write, share with students, teach Markdown side by side.",
   "type": "module",
   "scripts": {
@@ -22,6 +22,8 @@
     "markdown-it": "^14.1.0"
   },
   "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^20.14.5",
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
   }
