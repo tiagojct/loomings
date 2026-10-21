@@ -23,6 +23,7 @@ import {
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
+import { createSession } from './session.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
@@ -60,9 +61,6 @@ const STORE = {
 
 /** @type {string|null} */ let currentFile = null;   // file on disk (handle lives in browser.js)
 /** @type {string|null} */ let currentDocId = null;  // document in this browser's IndexedDB
-let isDirty = false;
-/** @type {ReturnType<typeof setTimeout>|null} */ let autoSaveTimer = null;
-/** @type {ReturnType<typeof setTimeout>|null} */ let scratchTimer = null;
 let isFocusMode      = false;
 let showStats        = STORE.getBool('showStats', false);
 let smartTypo        = STORE.getBool('smartTypo', true);
@@ -872,140 +870,54 @@ function toggleStats() {
 // ==========================
 //  Dirty / Auto-save / Scratch
 // ==========================
+// The discipline — debounces, ordering, generations, error containment —
+// lives in session.js. This module only says where the text is, where it
+// goes, and what the screen does about it.
+
+// Writes the buffer to wherever it currently lives: the file on disk, or the
+// document in this browser. Untitled buffers have no home — Save goes
+// through handleSave, which picks one.
+async function writeToHome(text) {
+  if (currentFile) { await saveFile(currentFile, text); return; }
+  if (currentDocId) { await putDocument({ id: currentDocId, title: docTitle(text), content: text }); return; }
+  throw new Error('This document has no home yet');
+}
+
+const session = createSession({
+  content: getText,
+  target: () => ({ file: currentFile, docId: currentDocId }),
+  write: writeToHome,
+  storage: { saveScratch, clearScratch },
+  onDirty: () => dirtyEl.classList.remove('hidden'),
+  onClean: () => dirtyEl.classList.add('hidden'),
+  onSaved: (text) => {
+    if (currentDocId) setTitle(docTitle(text));
+    refreshStatusBar();
+    flashStatus(currentFile ? 'Saved' : 'Saved in this browser');
+  },
+  onError: (message) => flashStatus(message),
+});
 
 function markDirty() {
-  if (!isDirty) { isDirty = true; dirtyEl.classList.remove('hidden'); }
-  resetAutoSave();
-  resetScratchSave();
+  session.markEdited();
   scheduleStats();
   schedulePreview();
 }
 
-// NOTE: deliberately does NOT touch the scratch buffer — markClean fires on
-// every 2s autosave. doSave clears scratch itself once disk has the content;
-// New / Open / recovery-decline clear it explicitly.
-function markClean() {
-  isDirty = false;
-  dirtyEl.classList.add('hidden');
-}
+function markClean() { session.markClean(); }
 
-function resetAutoSave() {
-  if (autoSaveTimer) clearTimeout(autoSaveTimer);
-  autoSaveTimer = setTimeout(() => {
-    if (isDirty && (currentFile || currentDocId)) doSave(getText());
-  }, 2000);
-}
-
-// Bumped every time the buffer is repointed at a different document (New,
-// Open, external reload, Save As). doSave/writeScratch capture it before an
-// await and check it after — if it moved on, a slow save/scratch-write that
-// finishes late knows its result now describes an abandoned buffer and must
-// not touch lastScratchContent/isDirty on the buffer that replaced it.
-let docGeneration = 0;
-
-/** @type {string|null} */ let lastScratchContent = null;
-// Tracks the most recent in-flight scratch write so quit can wait for it —
-// otherwise a write racing the close sequence could land after clear_scratch
-// and leave an orphan scratch file (see doSave / request-close).
-/** @type {Promise<void>|null} */ let scratchSaveInFlight = null;
-
-function writeScratch(text, forFile) {
-  if (text === lastScratchContent) return;
-  lastScratchContent = text;
-  const gen = docGeneration;
-  // Chain behind any write already in flight so two overlapping scratch
-  // writes can't land out of order (same idea as doSave's saveInFlight).
-  const previous = scratchSaveInFlight;
-  scratchSaveInFlight = (async () => {
-    if (previous) await previous;
-    await saveScratch(text, forFile);
-    // A discard that ran while this write was still in flight can't have
-    // cleared content this write hadn't landed yet — re-clear now so a
-    // stalled write can't resurrect an abandoned buffer's scratch record.
-    if (gen !== docGeneration) await clearScratch();
-  })();
-}
-
-// Drop the scratch buffer for the document we're about to leave behind
-// (New, opening a different file, or reloading from disk) — otherwise it
-// keeps describing an abandoned buffer and a later crash offers to
-// "recover" content the user already discarded. Bumping docGeneration
-// first means even a write that's still in flight past the bounded wait
-// below will re-clear itself via writeScratch's own check once it lands.
-async function discardScratch() {
-  if (scratchTimer) clearTimeout(scratchTimer);
-  docGeneration++;
-  await Promise.race([scratchSaveInFlight, new Promise((r) => setTimeout(r, 2000))]);
-  lastScratchContent = null;
-  await clearScratch();
-}
-
-function resetScratchSave() {
-  if (scratchTimer) clearTimeout(scratchTimer);
-  scratchTimer = setTimeout(() => {
-    if (!isDirty) return;
-    writeScratch(getText(), currentFile);
-  }, 800);
-}
-
-// A tab can be hidden or closed inside that 800 ms window, and the debounce
-// would lose the last keystrokes. Flush on the way out instead of waiting.
-function flushScratch() {
-  if (!isDirty) return;
-  if (scratchTimer) clearTimeout(scratchTimer);
-  writeScratch(getText(), currentFile);
-}
+// A tab can be hidden or closed inside the scratch debounce; flush on the way
+// out rather than lose the last keystrokes.
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') flushScratch();
+  if (document.visibilityState === 'hidden') session.flushScratch();
 });
-window.addEventListener('pagehide', flushScratch);
-
-// Serializes doSave calls — the 2s autosave timer and an explicit Cmd+S can
-// fire close enough together that two writes to the same handle would
-// overlap. Awaiting any save already in flight keeps writes one at a time.
-/** @type {Promise<void>|null} */ let saveInFlight = null;
-
-// Writes the buffer to wherever it currently lives: the file on disk, or
-// the document in this browser. Untitled buffers have no target — Save
-// goes through handleSave, which picks one.
-async function doSave(content) {
-  const gen = docGeneration;
-  if (saveInFlight) await saveInFlight;
-  const save = (async () => {
-    try {
-      if (currentFile)       await saveFile(currentFile, content);
-      else if (currentDocId) await putDocument({ id: currentDocId, title: docTitle(content), content });
-      else return;
-      // The buffer moved on (New/Open/reload/Save As) while this write was
-      // in flight — the write itself is harmless (it landed on the target
-      // it was aimed at), but its result no longer describes the current
-      // buffer, so don't let it stomp fresher state.
-      if (gen !== docGeneration) return;
-      // Storage has this content now — a scratch copy of it would only
-      // produce a bogus "recover draft?" prompt on the next visit.
-      lastScratchContent = content;
-      clearScratchAfterInFlight();
-      markClean();
-      if (currentDocId) { setTitle(docTitle(content)); refreshStatusBar(); }
-      flashStatus(currentFile ? 'Saved' : 'Saved in this browser');
-    }
-    catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
-  })();
-  saveInFlight = save;
-  await save;
-  if (saveInFlight === save) saveInFlight = null;
-}
-
-async function clearScratchAfterInFlight() {
-  await scratchSaveInFlight;
-  await clearScratch();
-}
+window.addEventListener('pagehide', () => session.flushScratch());
 
 /** @type {ReturnType<typeof setTimeout>|null} */ let statusTimer = null;
 
 function flashStatus(msg) {
   statusApp.textContent = msg;
-  if (statusTimer) if (statusTimer) clearTimeout(statusTimer);
+  if (statusTimer) clearTimeout(statusTimer);
   statusTimer = setTimeout(refreshStatusBar, 2000);
 }
 
@@ -1044,7 +956,7 @@ function refreshStatusBar() {
 }
 
 async function handleSave() {
-  if (currentFile || currentDocId) return doSave(getText());
+  if (currentFile || currentDocId) return session.saveNow();
   // Untitled: a real file where the browser can write one, otherwise this
   // browser's own storage (Safari, Firefox, iPad) so Save always means
   // "kept", never "downloaded a copy and still unsaved".
@@ -1055,16 +967,14 @@ async function handleSave() {
 // Save (a copy of) the buffer as a new document in this browser's storage.
 async function saveInBrowser() {
   const text = getText();
-  docGeneration++;
   try {
     const doc = await putDocument({ id: null, title: docTitle(text), content: text });
     currentFile = null;
     forgetFile();
     currentDocId = doc.id;
-    lastScratchContent = text;
-    clearScratchAfterInFlight();
     setTitle(doc.title);
-    markClean(); refreshStatusBar();
+    session.adopt(text);
+    refreshStatusBar();
     flashStatus('Saved in this browser');
   } catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
 }
@@ -1074,14 +984,12 @@ async function handleSaveAs() {
     const text = getText();
     const path = await saveFileAs(text, suggestedFilename());
     if (path) {
-      docGeneration++; // any save still in flight for the old path/target must not stomp this
       currentFile = path;
       currentDocId = null;
-      lastScratchContent = text;
-      clearScratchAfterInFlight();
       await addRecent(path);
       setTitle(displayName(path));
-      markClean(); refreshStatusBar();
+      session.adopt(text); // any save still in flight for the old target must not stomp this
+      refreshStatusBar();
     } else if (!hasFileSystemAccess) {
       // Firefox/Safari: the "save" was a download, so the buffer is still
       // only in this tab — say so instead of pretending it's on disk.
@@ -1133,7 +1041,7 @@ ${rendered}
 }
 
 async function confirmDiscard(prompt) {
-  if (!isDirty) return true;
+  if (!session.isDirty()) return true;
   const message = prompt + '\n\nUnsaved changes will be lost.';
   try {
     return await ask(message);
@@ -1143,12 +1051,11 @@ async function confirmDiscard(prompt) {
 }
 
 async function fileNew() {
-  if (isDirty) {
+  if (session.isDirty()) {
     const proceed = await confirmDiscard('Discard the current document?');
     if (!proceed) return;
   }
-  if (autoSaveTimer) clearTimeout(autoSaveTimer);
-  await discardScratch();
+  await session.discardScratch();
   setText('');
   currentFile = null;
   currentDocId = null;
@@ -1436,11 +1343,11 @@ document.addEventListener('keydown', (e) => {
 // ==========================
 
 async function loadFile(payload) {
-  if (isDirty) {
+  if (session.isDirty()) {
     const proceed = await confirmDiscard('Open new file?');
     if (!proceed) return;
   }
-  await discardScratch(); // the buffer we're replacing is no longer relevant to recover
+  await session.discardScratch(); // the buffer we're replacing is no longer relevant to recover
   setText(payload.content);
   currentDocId = payload.docId || null;
   if (!payload.path) {
@@ -1611,7 +1518,7 @@ attachMenu(el('tb-docs'), el('docs-menu'), {
       if (!doc) return;
       if (!(await ask(`Delete “${doc.title}” from this browser?`))) return;
       await deleteDocument(doc.id);
-      if (currentDocId === doc.id) { currentDocId = null; refreshStatusBar(); if (!isDirty) markDirty(); }
+      if (currentDocId === doc.id) { currentDocId = null; refreshStatusBar(); if (!session.isDirty()) markDirty(); }
       flashStatus('Deleted');
       return;
     }
@@ -1668,7 +1575,7 @@ el('tb-about')?.addEventListener('click', openAbout);
 // blunter than the native flush-and-ask flow (generic browser dialog, no
 // custom copy, can't await the async scratch-flush first) but real insurance.
 window.addEventListener('beforeunload', (e) => {
-  if (!isDirty) return;
+  if (!session.isDirty()) return;
   e.preventDefault();
   e.returnValue = ''; // older Safari ignores preventDefault alone
 });
