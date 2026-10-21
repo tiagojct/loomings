@@ -24,6 +24,7 @@ import {
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
+import { openModal } from './modal.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
@@ -755,31 +756,42 @@ function renderPalette() {
   const list = filteredHeadings();
   if (list.length === 0) {
     paletteList.innerHTML = '';
+    paletteInput.removeAttribute('aria-activedescendant');
     return;
   }
   if (paletteIdx >= list.length) paletteIdx = list.length - 1;
   if (paletteIdx < 0) paletteIdx = 0;
   paletteList.innerHTML = list.map((h, i) =>
-    `<li class="palette-item lvl-${h.level} ${i === paletteIdx ? 'sel' : ''}" data-i="${i}">
+    `<li class="palette-item lvl-${h.level} ${i === paletteIdx ? 'sel' : ''}" data-i="${i}"
+         id="palette-option-${i}" role="option" aria-selected="${i === paletteIdx}">
        <span class="palette-level">H${h.level}</span>
        <span class="palette-text">${escapeHtml(h.text || '(empty)')}</span>
      </li>`
   ).join('');
+  // The input keeps focus and points at the highlighted option, which is what
+  // makes the list readable to a screen reader without moving focus into it.
+  paletteInput.setAttribute('aria-activedescendant', list.length ? `palette-option-${paletteIdx}` : '');
   const sel = paletteList.querySelector('.palette-item.sel');
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
+
+/** @type {{close: () => void}|null} */
+let paletteModal = null;
 
 function openPalette() {
   paletteHeadings = extractHeadings(view.state);
   paletteIdx = 0;
   paletteInput.value = '';
-  paletteEl.classList.remove('hidden');
   renderPalette();
-  paletteInput.focus();
+  paletteModal = openModal(paletteEl, {
+    opener: view.contentDOM,
+    initialFocus: paletteInput,
+  });
 }
 
 function closePalette() {
-  paletteEl.classList.add('hidden');
+  paletteModal?.close();
+  paletteModal = null;
   view.focus();
 }
 
@@ -801,11 +813,19 @@ function initAbout() {
     .catch(() => { aboutVersion.textContent = ''; });
 }
 
+/** @type {{close: () => void}|null} */
+let aboutModal = null;
+
 function openAbout() {
-  aboutEl.classList.remove('hidden');
+  aboutModal = openModal(aboutEl, {
+    opener: el('tb-about'),
+    initialFocus: /** @type {HTMLElement} */ (el('about-inner')),
+  });
 }
+
 function closeAbout() {
-  aboutEl.classList.add('hidden');
+  aboutModal?.close();
+  aboutModal = null;
   view.focus();
 }
 
@@ -837,7 +857,8 @@ function jumpToHeading(idx) {
 
 paletteInput.addEventListener('input', () => { paletteIdx = 0; renderPalette(); });
 paletteInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape')    { e.preventDefault(); closePalette(); return; }
+  // Escape belongs to the modal wrapper (src/modal.js), which also restores
+  // focus; handling it here as well would close twice.
   if (e.key === 'Enter')     { e.preventDefault(); jumpToHeading(paletteIdx); return; }
   if (e.key === 'ArrowDown') {
     e.preventDefault();
@@ -1443,10 +1464,20 @@ window.addEventListener('hashchange', () => {
 // ==========================
 
 const cheatsheetEl = el('cheatsheet');
+/** @type {HTMLElement|null} */ let cheatsheetReturnFocus = null;
+
 function toggleCheatsheet(force) {
   const show = force ?? cheatsheetEl.classList.contains('hidden');
-  cheatsheetEl.classList.toggle('hidden', !show);
-  if (!show) view.focus();
+  if (show) {
+    cheatsheetReturnFocus = /** @type {HTMLElement|null} */ (document.activeElement);
+    cheatsheetEl.classList.remove('hidden');
+    el('cheatsheet-close').focus();
+    return;
+  }
+  cheatsheetEl.classList.add('hidden');
+  const back = cheatsheetReturnFocus;
+  cheatsheetReturnFocus = null;
+  if (back && back !== document.body) back.focus(); else view.focus();
 }
 el('cheatsheet-close')?.addEventListener('click', () => toggleCheatsheet(false));
 
