@@ -181,6 +181,10 @@ function applyThemeAttr(theme) {
   for (const [name, value] of Object.entries(cssVars(themeFamily, theme))) {
     root.style.setProperty(name, value);
   }
+  // The browser paints its own chrome with this; it should match the paper,
+  // not stay Pequod navy on every family and mode.
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', roles(themeFamily, theme).bg);
 }
 
 applyThemeAttr(activeTheme);

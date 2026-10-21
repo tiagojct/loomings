@@ -1,3 +1,5 @@
+@import './fonts.css';
+
 /* ========================================
    Loomings — editor stylesheet
    Colours are CSS custom properties fed from src/palettes.js.
@@ -552,6 +554,15 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   font-size: 11px;
   color: var(--fg-ghost);
   letter-spacing: 0.04em;
+}
+
+/* Motion here is decoration (theme cross-fade, sentence dimming, toolbar
+   fade); honour the system setting rather than insisting on it. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 /* ========================================
