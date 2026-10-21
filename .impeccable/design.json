@@ -7,58 +7,240 @@
       "room": {
         "role": "neutral",
         "displayName": "Room",
-        "canonical": "#0e1112",
-        "tonalRamp": ["#050708", "#0a0d0e", "#0e1112", "#171c1e", "#21282a", "#2c3436", "#3a4446", "#4a5658"]
+        "canonical": "#0b1720",
+        "tonalRamp": [
+          "#04090c",
+          "#071014",
+          "#0b1720",
+          "#122530",
+          "#1a3340",
+          "#244352",
+          "#315566",
+          "#456a7c"
+        ]
       },
       "plate": {
         "role": "neutral",
         "displayName": "Lit Plate",
-        "canonical": "#eaf0e6",
-        "tonalRamp": ["#232b22", "#3d4a3b", "#55654f", "#6f8067", "#8a9a80", "#a4b399", "#c5d1bb", "#eaf0e6"]
+        "canonical": "#eae1d7",
+        "tonalRamp": [
+          "#2a1c14",
+          "#4a352a",
+          "#6b4f40",
+          "#8c6a57",
+          "#ad8a72",
+          "#cbad92",
+          "#e4d2bd",
+          "#eae1d7"
+        ]
       },
       "grease": {
         "role": "primary",
-        "displayName": "Grease Pencil",
-        "canonical": "#c0392b",
-        "tonalRamp": ["#3a0f0b", "#5c1a13", "#7d241a", "#9c2f22", "#b63a2c", "#c94f41", "#dd7468", "#f0a49b"]
+        "displayName": "Ahab (grease pencil)",
+        "canonical": "#931432",
+        "tonalRamp": [
+          "#2b0409",
+          "#480812",
+          "#650c1b",
+          "#821024",
+          "#931432",
+          "#b03250",
+          "#cd6379",
+          "#e8a3b0"
+        ]
       },
       "paper": {
         "role": "secondary",
         "displayName": "Stock",
-        "canonical": "#e9e3d2",
-        "tonalRamp": ["#3b382f", "#555045", "#6f6a5b", "#8a8474", "#a49f8e", "#beb9a8", "#d4cfbe", "#e9e3d2"]
+        "canonical": "#eae1d7",
+        "tonalRamp": [
+          "#3b2f28",
+          "#55453b",
+          "#6f5c4f",
+          "#8a7463",
+          "#a38c79",
+          "#bda692",
+          "#d4c2b0",
+          "#eae1d7"
+        ]
+      },
+      "machine": {
+        "role": "neutral",
+        "displayName": "Machine",
+        "canonical": "#0c222f"
+      },
+      "machine-high": {
+        "role": "neutral",
+        "displayName": "Machine high",
+        "canonical": "#0d2f42"
+      },
+      "edge": {
+        "role": "neutral",
+        "displayName": "Seam",
+        "canonical": "#163f54"
+      },
+      "steel": {
+        "role": "neutral",
+        "displayName": "Steel",
+        "canonical": "#bfbbb6"
+      },
+      "steel-dim": {
+        "role": "neutral",
+        "displayName": "Warm subtle",
+        "canonical": "#a16e50"
+      },
+      "plate-deep": {
+        "role": "neutral",
+        "displayName": "Parchment",
+        "canonical": "#eae1d7"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "#0d2f42"
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Ink soft",
+        "canonical": "#335260"
+      },
+      "grease-glow": {
+        "role": "primary",
+        "displayName": "Ahab on dark",
+        "canonical": "#e3877c"
+      },
+      "paper-deep": {
+        "role": "secondary",
+        "displayName": "Stock deep",
+        "canonical": "#dbc9b6"
+      },
+      "paper-dim": {
+        "role": "secondary",
+        "displayName": "Stock dim",
+        "canonical": "#835a49"
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Paper rule",
+        "canonical": "#cfad8e"
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "Focus",
+        "canonical": "#bd8c68"
       }
     },
     "typographyMeta": {
-      "display": { "displayName": "Rendered Display", "purpose": "The demonstrated document's heading on the plate; the page's largest type." },
-      "heading": { "displayName": "Section Heading", "purpose": "Section statements, with the load-bearing phrase in italic." },
-      "body": { "displayName": "Body", "purpose": "Prose on the room, measure capped at 62ch." },
-      "lede": { "displayName": "Rendered Lede", "purpose": "The rendered paragraph in the plate, the app's own setting." },
-      "mono": { "displayName": "Source", "purpose": "Markdown source and addresses; only the markers take colour." },
-      "label": { "displayName": "Machine Label", "purpose": "Silkscreened caps: pane labels, claims, mode names, stamps." },
-      "hand": { "displayName": "Grease Note", "purpose": "One handwritten annotation per page, maximum." }
+      "display": {
+        "displayName": "Rendered Display",
+        "purpose": "The demonstrated document's heading on the plate; the page's largest type."
+      },
+      "heading": {
+        "displayName": "Section Heading",
+        "purpose": "Section statements, with the load-bearing phrase in italic."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Prose on the room, measure capped at 62ch."
+      },
+      "lede": {
+        "displayName": "Rendered Lede",
+        "purpose": "The rendered paragraph in the plate, the app's own setting."
+      },
+      "mono": {
+        "displayName": "Source",
+        "purpose": "Markdown source and addresses; only the markers take colour."
+      },
+      "label": {
+        "displayName": "Machine Label",
+        "purpose": "Silkscreened caps: pane labels, claims, mode names, stamps."
+      },
+      "hand": {
+        "displayName": "Grease Note",
+        "purpose": "One handwritten annotation per page, maximum."
+      },
+      "note": {
+        "displayName": "Note",
+        "purpose": "Card sentences and the lesson's rendered paragraph."
+      },
+      "small": {
+        "displayName": "Small",
+        "purpose": "Docket notes and ticket body."
+      },
+      "subhead": {
+        "displayName": "Rendered subhead",
+        "purpose": "A `##` in the demonstrated lesson."
+      }
     },
     "shadows": [
-      { "name": "plate-halo", "value": "0 0 80px 18px rgba(224,235,216,.13), 0 26px 60px rgba(0,0,0,.5)", "purpose": "The lit sheet glowing onto the machine." },
-      { "name": "paper-on-floor", "value": "0 18px 40px rgba(0,0,0,.4)", "purpose": "Tickets, tape and dockets lying on the room." },
-      { "name": "sheet-lifted", "value": "0 24px 54px rgba(0,0,0,.45)", "purpose": "The lesson sheet, pinned slightly above the floor." },
-      { "name": "switch-lip", "value": "0 2px 0 #090c0d, 0 14px 30px rgba(0,0,0,.45)", "purpose": "The lamp switch reads as a physical key." },
-      { "name": "switch-lit", "value": "0 16px 40px rgba(0,0,0,.55), 0 0 34px rgba(192,57,43,.28)", "purpose": "Hover/focus: the lamp warms the panel around it." }
+      {
+        "name": "plate-halo",
+        "value": "0 0 80px 18px rgba(247,243,238,.12), 0 26px 60px rgba(0,0,0,.5)",
+        "purpose": "The lit sheet glowing onto the machine."
+      },
+      {
+        "name": "paper-on-floor",
+        "value": "0 18px 40px rgba(0,0,0,.4)",
+        "purpose": "Tickets, tape and dockets lying on the room."
+      },
+      {
+        "name": "sheet-lifted",
+        "value": "0 24px 54px rgba(0,0,0,.45)",
+        "purpose": "The lesson sheet, pinned above the floor."
+      },
+      {
+        "name": "switch-lip",
+        "value": "0 2px 0 rgba(0,0,0,.55), 0 14px 30px rgba(0,0,0,.45)",
+        "purpose": "The lamp switch reads as a physical key."
+      },
+      {
+        "name": "switch-lit",
+        "value": "0 16px 40px rgba(0,0,0,.55), 0 0 34px rgba(147,20,50,.3)",
+        "purpose": "Hover/focus: the lamp warms the panel around it."
+      }
     ],
     "motion": [
-      { "name": "pair", "value": "background-color .12s ease, box-shadow .12s ease", "purpose": "The paired line lighting on the source side." },
-      { "name": "switch", "value": "box-shadow .18s ease, border-color .18s ease", "purpose": "The lamp warming on hover/focus." },
-      { "name": "binding", "value": "transform .22s ease, box-shadow .22s ease", "purpose": "A palette sheet lifting off the row." },
-      { "name": "reduced-motion", "value": "transition-duration .01ms !important", "purpose": "All of the above is decoration; the page honours the system setting." }
+      {
+        "name": "pair",
+        "value": "background-color .12s ease, box-shadow .12s ease",
+        "purpose": "The paired line lighting on the source side."
+      },
+      {
+        "name": "switch",
+        "value": "box-shadow .18s ease, border-color .18s ease",
+        "purpose": "The lamp warming on hover/focus."
+      },
+      {
+        "name": "binding",
+        "value": "transform .22s ease, box-shadow .22s ease",
+        "purpose": "A palette sheet lifting off the row."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition-duration .01ms !important",
+        "purpose": "All of the above is decoration; the page honours the system setting."
+      }
     ],
     "breakpoints": [
-      { "name": "bindings", "value": "1100px" },
-      { "name": "plate-stack", "value": "1024px" },
-      { "name": "mobile", "value": "760px" },
-      { "name": "small", "value": "420px" }
+      {
+        "name": "bindings",
+        "value": "1100px"
+      },
+      {
+        "name": "plate-stack",
+        "value": "1024px"
+      },
+      {
+        "name": "mobile",
+        "value": "760px"
+      },
+      {
+        "name": "small",
+        "value": "420px"
+      }
     ],
     "focus": {
-      "ring": "2px solid #c0392b",
+      "ring": "2px solid #bd8c68",
       "offset": "3px",
       "purpose": "One visible ring everywhere, in the same grease as every other state."
     }
@@ -70,30 +252,30 @@
       "refersTo": "lamp-switch",
       "description": "The page's only action: a machined block with a red rocker lamp, linking to the editor.",
       "html": "<a class=\"ds-switch\" href=\"/app/\"><span class=\"ds-switch-lamp\"></span><span class=\"ds-switch-label\">Open Loomings</span></a>",
-      "css": ".ds-switch{display:inline-flex;align-items:center;gap:18px;padding:17px 34px 17px 22px;background:linear-gradient(#33393c,#23282b);border:1px solid #4a5356;border-radius:6px;box-shadow:0 2px 0 #090c0d,0 14px 30px rgba(0,0,0,.45);text-decoration:none;transition:box-shadow .18s ease,border-color .18s ease}.ds-switch-lamp{position:relative;display:block;width:26px;height:46px;border-radius:4px;background:#0a0d0e;border:1px solid #2d3538}.ds-switch-lamp::after{content:\"\";position:absolute;inset:3px 3px auto 3px;height:20px;border-radius:2px;background:linear-gradient(#cf4233,#8e2a20);transition:box-shadow .2s ease}.ds-switch-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;letter-spacing:.18em;text-transform:uppercase;color:#f2f5f1}.ds-switch:hover{border-color:#6a7477;box-shadow:0 2px 0 #090c0d,0 16px 40px rgba(0,0,0,.55),0 0 34px rgba(192,57,43,.28)}.ds-switch:hover .ds-switch-lamp::after{box-shadow:0 0 22px rgba(207,66,51,.85)}.ds-switch:focus-visible{outline:2px solid #c0392b;outline-offset:3px}"
+      "css": ".ds-switch{display:inline-flex;align-items:center;gap:18px;padding:17px 34px 17px 22px;background:linear-gradient(#0d2f42,#0c222f);border:1px solid #163f54;border-radius:6px;box-shadow:0 2px 0 rgba(0,0,0,.55),0 14px 30px rgba(0,0,0,.45);text-decoration:none;transition:box-shadow .18s ease,border-color .18s ease}.ds-switch-lamp{position:relative;display:block;width:26px;height:46px;border-radius:4px;background:#0a0d0e;border:1px solid #2d3538}.ds-switch-lamp::after{content:\"\";position:absolute;inset:3px 3px auto 3px;height:20px;border-radius:2px;background:linear-gradient(#931432,#8f1330);transition:box-shadow .2s ease}.ds-switch-label{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px;letter-spacing:.18em;text-transform:uppercase;color:#eae1d7}.ds-switch:hover{border-color:#835a49;box-shadow:0 2px 0 rgba(0,0,0,.55),0 16px 40px rgba(0,0,0,.55),0 0 34px rgba(147,20,50,.3)}.ds-switch:hover .ds-switch-lamp::after{box-shadow:0 0 22px rgba(227,135,124,.85)}.ds-switch:focus-visible{outline:2px solid #bd8c68;outline-offset:3px}"
     },
     {
       "name": "Provenance ticket",
       "kind": "card",
       "refersTo": "ticket",
       "description": "A clipped paper slip naming what the demonstration is; the page's honesty device.",
-      "html": "<aside class=\"ds-ticket\"><span class=\"ds-ticket-clip\"></span><span class=\"ds-ticket-k\">Provenance</span><p>Chapter 1, <i>Moby-Dick</i> — the opening lines, abridged. The bundled example.</p></aside>",
-      "css": ".ds-ticket{position:relative;display:block;width:270px;padding:13px 16px 15px;background:#e9e3d2;color:#1b1a16;box-shadow:0 10px 24px rgba(0,0,0,.4);transform:rotate(1.2deg);font-family:'Source Serif 4',Georgia,serif}.ds-ticket-clip{position:absolute;top:-9px;left:22px;width:30px;height:16px;border:1px solid #8c8878;border-bottom:0;border-radius:8px 8px 0 0;background:linear-gradient(#cfc9b4,#e2dcc8)}.ds-ticket-k{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:#6a5f45}.ds-ticket p{margin-top:3px;font-size:14px;line-height:1.5}"
+      "html": "<aside class=\"ds-ticket\"><span class=\"ds-ticket-clip\"></span><span class=\"ds-ticket-k\">Provenance</span><p>Chapter 1, <i>Moby-Dick</i> \u2014 the opening lines, abridged. The bundled example.</p></aside>",
+      "css": ".ds-ticket{position:relative;display:block;width:270px;padding:13px 16px 15px;background:#eae1d7;color:#1b1a16;box-shadow:0 10px 24px rgba(0,0,0,.4);transform:rotate(1.2deg);font-family:'Source Serif 4',Georgia,serif}.ds-ticket-clip{position:absolute;top:-9px;left:22px;width:30px;height:16px;border:1px solid #cfad8e;border-bottom:0;border-radius:8px 8px 0 0;background:linear-gradient(#dbc9b6,#dbc9b6)}.ds-ticket-k{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:#835a49}.ds-ticket p{margin-top:3px;font-size:14px;line-height:1.5}"
     },
     {
       "name": "Share tape",
       "kind": "custom",
       "refersTo": "tape",
       "description": "The share link as a strip of perforated stock with a stamped refusal.",
-      "html": "<div class=\"ds-tape\"><span class=\"ds-tape-k\">Export → Copy share link</span><code class=\"ds-tape-url\">https://loomings.tiagojacinto.eu/app/#d=z.3VhCk0XQ7r2mN8pLwYt…</code><span class=\"ds-tape-stamp\">No upload</span></div>",
-      "css": ".ds-tape{position:relative;padding:22px 26px 24px;background:#e9e3d2;color:#1b1a16;transform:rotate(-.7deg);box-shadow:0 18px 40px rgba(0,0,0,.4);font-family:'Source Serif 4',Georgia,serif}.ds-tape-k{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:#6a6455}.ds-tape-url{display:block;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.75;overflow-wrap:anywhere}.ds-tape-stamp{position:absolute;right:18px;bottom:-14px;padding:3px 10px 4px;border:2px solid #a83224;color:#a83224;background:rgba(233,227,210,.85);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.22em;text-transform:uppercase;transform:rotate(3deg)}"
+      "html": "<div class=\"ds-tape\"><span class=\"ds-tape-k\">Export \u2192 Copy share link</span><code class=\"ds-tape-url\">https://loomings.tiagojacinto.eu/app/#d=z.3VhCk0XQ7r2mN8pLwYt\u2026</code><span class=\"ds-tape-stamp\">No upload</span></div>",
+      "css": ".ds-tape{position:relative;padding:22px 26px 24px;background:#eae1d7;color:#1b1a16;transform:rotate(-.7deg);box-shadow:0 18px 40px rgba(0,0,0,.4);font-family:'Source Serif 4',Georgia,serif}.ds-tape-k{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:.26em;text-transform:uppercase;color:#835a49}.ds-tape-url{display:block;margin-top:10px;font-family:'JetBrains Mono',monospace;font-size:14px;line-height:1.75;overflow-wrap:anywhere}.ds-tape-stamp{position:absolute;right:18px;bottom:-14px;padding:3px 10px 4px;border:2px solid #931432;color:#931432;background:rgba(234,225,215,.85);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:13px;letter-spacing:.22em;text-transform:uppercase;transform:rotate(3deg)}"
     },
     {
       "name": "Binding",
       "kind": "card",
       "refersTo": "binding",
       "description": "A palette sample split between its dark and light side; one sentence set in the accent.",
-      "html": "<article class=\"ds-binding\" style=\"background:linear-gradient(105deg,#061826 0 50%,#f1e7d2 50%)\"><div class=\"ds-binding-top\" style=\"color:#f7f3ee\"><span class=\"ds-binding-name\">Pequod</span><span class=\"ds-binding-line\" style=\"color:#d4a882\">Call me Ishmael.</span></div><span class=\"ds-binding-modes\" style=\"color:#3f5566\">Below deck<br>Parchment</span></article>",
+      "html": "<article class=\"ds-binding\" style=\"background:linear-gradient(105deg,#0b1720 0 50%,#eae1d7 50%)\"><div class=\"ds-binding-top\" style=\"color:#eae1d7\"><span class=\"ds-binding-name\">Pequod</span><span class=\"ds-binding-line\" style=\"color:#bd8c68\">Call me Ishmael.</span></div><span class=\"ds-binding-modes\" style=\"color:#0d2f42\">Below deck<br>Parchment</span></article>",
       "css": ".ds-binding{position:relative;display:block;width:230px;aspect-ratio:3/4;border-radius:2px;box-shadow:0 18px 36px rgba(0,0,0,.45);transition:transform .22s ease,box-shadow .22s ease}.ds-binding-top{position:absolute;top:15px;left:15px;right:15px}.ds-binding-name{display:block;font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:15px;letter-spacing:.2em;text-transform:uppercase}.ds-binding-line{display:block;margin-top:9px;max-width:7ch;font-family:'Source Serif 4',Georgia,serif;font-style:italic;font-size:17px;line-height:1.3}.ds-binding-modes{position:absolute;right:13px;bottom:11px;max-width:48%;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:600;font-size:11px;letter-spacing:.1em;line-height:1.7;text-transform:uppercase}.ds-binding:hover{transform:translateY(-8px) rotate(0deg);box-shadow:0 26px 50px rgba(0,0,0,.55)}"
     },
     {
@@ -102,12 +284,12 @@
       "refersTo": "docket",
       "description": "One storage truth per paper slip, with its technical note in mono.",
       "html": "<article class=\"ds-docket\"><p class=\"ds-docket-k\">In a link</p><p>The document itself, small enough to paste. Nothing to host, nothing to expire.</p><p class=\"ds-docket-note\">URL fragment</p></article>",
-      "css": ".ds-docket{padding:20px 20px 22px;background:#e9e3d2;color:#1b1a16;box-shadow:0 14px 32px rgba(0,0,0,.38);clip-path:polygon(0 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%);font-family:'Source Serif 4',Georgia,serif}.ds-docket-k{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:#a83224}.ds-docket p{margin-top:8px;font-size:15.5px;line-height:1.6;color:#37342c}.ds-docket-note{font-family:'JetBrains Mono',monospace;font-size:11px;color:#5c5546}"
+      "css": ".ds-docket{padding:20px 20px 22px;background:#eae1d7;color:#1b1a16;box-shadow:0 14px 32px rgba(0,0,0,.38);clip-path:polygon(0 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%);font-family:'Source Serif 4',Georgia,serif}.ds-docket-k{font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:#931432}.ds-docket p{margin-top:8px;font-size:15.5px;line-height:1.6;color:#0d2f42}.ds-docket-note{font-family:'JetBrains Mono',monospace;font-size:11px;color:#835a49}"
     }
   ],
   "narrative": {
     "northStar": "The Transparency on the Glass",
-    "overview": "The landing page is the classroom overhead projector the product belongs to: a charcoal machine holding a lit acetate sheet. That sheet carries the page's content, and it carries the product's one claim in the same gesture — Markdown on the left, what it becomes on the right, one red grease pencil, one switch. The room around it is dark because that is what makes the sheet read as light rather than as a white card.\\n\\nThe world is not a costume: there is no drawn projector arm, no stock illustration, no browser mockup. The machine is three surfaces (head, plate, base), the paper is paper, and the only ornament is the fresnel ring pressed faintly into the plate.",
+    "overview": "The landing page is the classroom overhead projector the product belongs to: a charcoal machine holding a lit acetate sheet. The sheet carries the page's content and the product's one claim in the same gesture \u2014 Markdown on the left, what it becomes on the right, one grease pencil, one switch. The room is dark because that is what makes the sheet read as light.\\n\\nColour comes from Ensigns, family Pequod: its dark roles build the room and the machine, its light roles the plate and the stock, and ahab is the only accent. The world is not a costume: no drawn projector arm, no stock illustration, no browser mockup.",
     "keyCharacteristics": [
       "One lit field carries the page; everything else recedes into the room.",
       "The product demonstrates itself: source and result are the same sheet, paired line by line.",
@@ -116,17 +298,36 @@
       "Type does the talking: the app's own serif, mono and condensed labels, plus a single hand."
     ],
     "rules": [
-      { "name": "The One Sheet Rule", "body": "Only one surface in a viewport is lit. A second pale field is paper and must read as stock on a desk, not as another screen.", "section": "colors" },
-      { "name": "The One Mark Rule", "body": "Red is state and action, never decoration. If a red element does not mean 'press this' or 'this line is paired', it is wrong.", "section": "colors" },
-      { "name": "The Source Is Set As Source Rule", "body": "Markdown stays monospace and keeps its markers; the markers are the only coloured glyphs.", "section": "typography" }
+      {
+        "name": "The One Sheet Rule",
+        "body": "Only one surface in a viewport is lit. A second pale field is paper and must read as stock on a desk, not as another screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Mark Rule",
+        "body": "Red is state and action, never decoration. If a red element does not mean 'press this' or 'this line is paired', it is wrong.",
+        "section": "colors"
+      },
+      {
+        "name": "The Source Is Set As Source Rule",
+        "body": "Markdown stays monospace and keeps its markers; the markers are the only coloured glyphs.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ensigns Rule",
+        "body": "A colour that is not a role of Ensigns Pequod does not appear on this page; the ten family cards are the exception, since each demonstrates its own family.",
+        "section": "colors"
+      }
     ],
     "dos": [
+      "Do take every colour from Ensigns Pequod, as a role rather than a hex of your own.",
       "Do keep the pairing interaction as the page's only authored motion.",
       "Do let the product's own text be the hero.",
       "Do keep red for action and state only.",
       "Do keep every demonstrated detail true to the product."
     ],
     "donts": [
+      "Don't introduce a colour Ensigns does not define.",
       "Don't draw the projector as an illustration, add a browser mockup, or reach for nautical props.",
       "Don't use cream-plus-serif as the ground, gradient text, glass panels, generated grain, or an eyebrow above a heading.",
       "Don't let paper become a second screen.",

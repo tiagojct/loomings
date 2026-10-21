@@ -2,22 +2,25 @@
 name: Loomings
 description: A markdown editor for writing and teaching, landing page as one transparency on a classroom overhead projector.
 colors:
-  room: "#0e1112"
-  room-deep: "#080a0b"
-  machine: "#1c2124"
-  machine-high: "#262c30"
-  edge: "#394145"
-  steel: "#97a1a3"
-  steel-dim: "#6d777a"
-  plate: "#eaf0e6"
-  plate-deep: "#d5dfcf"
-  ink: "#14181a"
-  ink-soft: "#3c453f"
-  grease: "#c0392b"
-  grease-ink: "#a83224"
-  paper: "#e9e3d2"
-  paper-ink: "#1b1a16"
-  paper-dim: "#6a6455"
+  # Ensigns, family Pequod (ensigns.tiagojacinto.eu). Dark roles for the room
+  # and the machine, light roles for the plate and the stock, ahab as accent.
+  room: "#0b1720"
+  machine: "#0c222f"
+  machine-high: "#0d2f42"
+  edge: "#163f54"
+  steel: "#bfbbb6"
+  steel-dim: "#a16e50"
+  plate: "#f7f3ee"
+  plate-deep: "#eae1d7"
+  ink: "#0d2f42"
+  ink-soft: "#335260"
+  grease: "#931432"
+  grease-glow: "#e3877c"
+  paper: "#eae1d7"
+  paper-deep: "#dbc9b6"
+  paper-dim: "#835a49"
+  rule: "#cfad8e"
+  focus: "#bd8c68"
 typography:
   display:
     fontFamily: "Source Serif 4, Iowan Old Style, Georgia, serif"
@@ -57,10 +60,27 @@ typography:
     fontSize: "27px"
     fontWeight: 400
     lineHeight: 1.1
+  note:
+    fontFamily: "Source Serif 4, Iowan Old Style, Georgia, serif"
+    fontSize: "16.5px"
+    fontWeight: 400
+    lineHeight: 1.55
+  small:
+    fontFamily: "Source Serif 4, Iowan Old Style, Georgia, serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.5
+  subhead:
+    fontFamily: "Source Serif 4, Iowan Old Style, Georgia, serif"
+    fontSize: "22px"
+    fontWeight: 600
+    lineHeight: 1.3
 rounded:
   sheet: "2px"
   plate: "3px"
+  lamp: "4px"
   switch: "6px"
+  clip: "8px"
 spacing:
   xs: "8px"
   sm: "14px"
@@ -120,24 +140,27 @@ The world is not a costume: there is no drawn projector arm, no stock illustrati
 
 ## Colors
 
-A committed strategy: the lit plate occupies roughly half of the first viewport and sets the page's temperature; the room is its negative.
+Every colour on the page is a role from **Ensigns**, family **Pequod** (ensigns.tiagojacinto.eu): the dark roles build the room and the machine, the light roles the lit plate and the stock, and `ahab` is the one accent. No hex is invented here; when the system changes, the page follows.
 
 ### Primary
 
-- **Lit Plate** (`#eaf0e6`, deepening to `#d5dfcf`): the acetate field. Every word of the product's demonstration sits here, in ink, never in white.
-- **Grease Pencil** (`#c0392b`): the switch lamp, the paired-line rule, the hand annotation. On paper use **Paper Grease** (`#a83224`), which clears 4.5:1 on stock; the bright grease is for marks on the dark room and for the lamp itself.
+- **Ahab** (`#931432`, light; `#e3877c` on dark): the grease pencil. The switch lamp, the paired-line rule, the hand note, the one state mark. On parchment it clears 8:1.
 
 ### Neutral
 
-- **Room** (`#0e1112` → `#080a0b`): the dark the sheet is lit against.
-- **Machine** (`#1c2124`, high `#262c30`): the head, base and switch bodies. **Edge** (`#394145`) is the single steel seam; **Steel** (`#97a1a3`) is the only body text allowed on the room.
-- **Paper** (`#e9e3d2`) with **Paper Ink** (`#1b1a16`): tickets, tape, the lesson sheet, dockets. Paper is a material, not a background.
+- **Room** (`#0b1720`): the dark the sheet is lit against; the page background, and the close band.
+- **Machine** (`#0c222f`, high `#0d2f42`, seam `#163f54`): the head, base and switch bodies; the machine is a raised navy surface on the room.
+- **Steel** (`#bfbbb6`) and **Steel Dim** (`#a16e50`): body text and quiet labels on the room; the warm subtle, never a second accent.
+- **Plate** (`#f7f3ee`, deep `#eae1d7`): the lit sheet, in the family's brightest parchment. **Ink** (`#0d2f42`) and **Ink Soft** (`#335260`) are everything written on it.
+- **Stock** (`#eae1d7`, deep `#dbc9b6`, dim `#835a49`, rule `#cfad8e`): tickets, tape, the lesson sheet and the dockets — the same parchment as the plate's deep end, deliberately a step quieter.
 
 ### Named Rules
 
-**The One Sheet Rule.** Only one surface in any viewport is lit. A second pale field is paper (tickets, the lesson, dockets) and must read as stock on a desk, not as another screen.
+**The One Sheet Rule.** Only one surface in any viewport is lit. A second pale field is stock and must read as paper on a desk, not as another screen.
 
-**The One Mark Rule.** Red is state and action, never decoration. If a red element does not mean "press this" or "this line is paired", it is wrong.
+**The One Mark Rule.** Ahab is state and action, never decoration. If a red element does not mean "press this" or "this line is paired", it is wrong.
+
+**The Ensigns Rule.** A colour that is not a role of Ensigns Pequod does not appear on this page. The ten family cards are the one exception: each carries its own family's own tokens, because that is what they demonstrate.
 
 ## Typography
 

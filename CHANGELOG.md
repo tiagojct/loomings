@@ -11,6 +11,11 @@ The app is unchanged; this release is the site.
 
 ### Changed
 
+- **Colour now comes from Ensigns** (`ensigns.tiagojacinto.eu`), family Pequod:
+  the room and machine take its dark roles, the lit plate and the paper its
+  light roles, and `ahab` is the only accent. The four-card palette row becomes
+  **ten ensigns** — the whole Ensigns set, each sheet split between its light
+  and dark side, with the source linked. No colour on the page is invented.
 - **A new visual world at `/`.** The publisher's-cloth page is replaced by a lit
   acetate plate on a charcoal machine: the Markdown source of chapter 1 in the
   left half, what it becomes in the right, a grease-pencil annotation, and the
