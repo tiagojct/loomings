@@ -197,8 +197,11 @@ export async function openFile() {
       throw err;
     }
     const file = await handle.getFile();
+    const content = await file.text();
+    // Adopt only after a successful read: a handle whose file vanished between
+    // picking and reading must not become the target of the next Save.
     currentFileHandle = handle;
-    return { path: file.name, content: await file.text() };
+    return { path: file.name, content };
   }
   return new Promise((resolve) => {
     const input = document.createElement('input');
@@ -219,8 +222,9 @@ export async function openFile() {
 export async function openHandle(handle) {
   if (!handle || handle.kind !== 'file' || !OPENABLE.test(handle.name)) return null;
   const file = await handle.getFile();
+  const content = await file.text();
   currentFileHandle = handle;
-  return { path: file.name, content: await file.text() };
+  return { path: file.name, content };
 }
 
 // Detaches the buffer from any file handle — used when loading content
@@ -261,7 +265,13 @@ export async function addRecent(filePath) {
   }
 }
 
-export async function getRecents() { return (await idbGet('recents')) || []; }
+export async function getRecents() {
+  try {
+    return (await idbGet('recents')) || [];
+  } catch (_) {
+    return [];
+  }
+}
 
 // Reconnects a stored recent — requestPermission needs the click that
 // triggered this call, so callers must invoke it directly from a click
@@ -282,8 +292,11 @@ export async function openRecent(entry) {
       return null;
     }
     const file = await entry.handle.getFile();
+    const content = await file.text();
+    // Only now is this handle the file the buffer belongs to; assigning it
+    // before the read could aim the next Save at a file it never opened.
     currentFileHandle = entry.handle;
-    return { path: file.name, content: await file.text() };
+    return { path: file.name, content };
   } catch (_) {
     // Revoked permission, a moved file, or a handle the browser no longer
     // accepts — all of them mean this row is finished.
@@ -387,13 +400,17 @@ export async function clearScratch() {
 
 // When the PWA is registered as a handler for .md files (manifest
 // file_handlers), the OS hands them over through launchQueue.
-export function initLaunchQueue(onFile) {
+export function initLaunchQueue(onFile, onFail) {
   const queue = window.launchQueue;
   if (!queue) return;
   queue.setConsumer(async (params) => {
     for (const handle of params.files || []) {
-      const payload = await openHandle(handle);
-      if (payload) onFile(payload);
+      try {
+        const payload = await openHandle(handle);
+        if (payload) onFile(payload);
+      } catch (err) {
+        if (onFail) onFail(err);
+      }
     }
   });
 }

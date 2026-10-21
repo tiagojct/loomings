@@ -828,9 +828,9 @@ function openAbout() {
 }
 
 function closeAbout() {
+  // The modal returns focus to #tb-about; taking it back here would undo that.
   aboutModal?.close();
   aboutModal = null;
-  view.focus();
 }
 
 aboutEl.addEventListener('click', (e) => {
@@ -1601,7 +1601,8 @@ attachMenu(el('tb-learn'), learnMenuEl, {
     if (item.dataset.action === 'example') openExample().then((p) => { if (p) loadFile({ ...p, title: 'Moby-Dick' }); });
   },
 });
-/** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]')).forEach((b) => {
+const viewButtons = /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]'));
+viewButtons.forEach((b) => {
   b.addEventListener('click', () => setViewMode(b.dataset.view || 'editor'));
 });
 el('tb-about')?.addEventListener('click', openAbout);
@@ -1644,7 +1645,7 @@ async function offerScratchRecovery() {
   applyViewMode();
   // Files handed over by the OS (installed app) arrive asynchronously and
   // go through loadFile's own dirty check.
-  initLaunchQueue(loadFile);
+  initLaunchQueue(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
   if (!(await loadFromLocation())) await offerScratchRecovery();
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();

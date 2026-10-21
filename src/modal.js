@@ -14,6 +14,9 @@ function focusables(root) {
   );
 }
 
+/** @type {WeakMap<HTMLElement, {close: () => void}>} */
+const openModals = new WeakMap();
+
 /**
  * Opens a dialog element (its visibility is the app's `.hidden` class).
  *
@@ -22,7 +25,11 @@ function focusables(root) {
  * @returns {{close: () => void}}
  */
 export function openModal(dialog, { opener = null, initialFocus = null } = {}) {
-  if (!dialog.classList.contains('hidden')) return { close() {} };
+  // Opening an already-open dialog (a habitual Cmd+P) must hand back the
+  // controller that can actually close it, not a no-op that leaves the page
+  // inert and the dialog on screen.
+  const existing = openModals.get(dialog);
+  if (existing) return existing;
 
   /** @type {HTMLElement[]} */
   const inerted = [];
@@ -54,7 +61,10 @@ export function openModal(dialog, { opener = null, initialFocus = null } = {}) {
     const first = items[0];
     const last = items[items.length - 1];
     const active = /** @type {HTMLElement} */ (document.activeElement);
-    if (event.shiftKey && (active === first || active === dialog)) {
+    // Shift+Tab from the first item — or from the dialog container, which is
+    // focusable via tabindex="-1" but is not itself in the list — must wrap
+    // to the end instead of walking out into browser chrome.
+    if (event.shiftKey && items.indexOf(active) <= 0) {
       event.preventDefault();
       last.focus();
     } else if (!event.shiftKey && active === last) {
@@ -69,11 +79,14 @@ export function openModal(dialog, { opener = null, initialFocus = null } = {}) {
   target.focus();
 
   function close() {
+    openModals.delete(dialog);
     dialog.classList.add('hidden');
     dialog.removeEventListener('keydown', onKeydown);
     for (const node of inerted) node.removeAttribute('inert');
     if (opener && typeof opener.focus === 'function') opener.focus();
   }
 
-  return { close };
+  const controller = { close };
+  openModals.set(dialog, controller);
+  return controller;
 }

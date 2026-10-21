@@ -62,8 +62,8 @@ browser pane.
   floors per mode.
 - **The document's home is one of three:** a file handle (`currentFile`,
   handle kept in `browser.js`), a browser document (`currentDocId`,
-  IndexedDB), or nothing (untitled). `session.writeToHome` dispatches on
-  that; `handleSave` picks a home for untitled buffers (file picker where
+  IndexedDB), or nothing (untitled). `writeToHome` (`editor.js`) dispatches
+  on that; `handleSave` picks a home for untitled buffers (file picker where
   the File System Access API exists, otherwise the browser). `loadFile`
   resets both and calls `forgetFile()` for content with no file behind it.
 - **Don't hand-roll save or scratch timing in `editor.js`.** It calls
@@ -109,8 +109,9 @@ browser pane.
 - **Version** lives in `package.json` only. The service worker's cache
   name and the About dialog read it from there.
 - **Fonts are self-hosted** (`public/fonts/`, latin woff2) because the CSP
-  is self-only. The service worker precaches the whole public directory, so
-  a new font, icon or manifest is picked up automatically; nginx serves
+  is self-only. The service worker precaches every public file with an
+  asset extension (woff2/png/svg/webmanifest/ico), so a new font, icon or
+  manifest is picked up automatically; nginx serves
   `/app/fonts/` with a one-day cache (not the year-long immutable rule,
   which only covers hashed `/app/assets/`). A changed face should get a new
   filename rather than rely on cache headers.

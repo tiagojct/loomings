@@ -75,6 +75,28 @@ describe('modal dialog', () => {
     expect(document.activeElement).toBe(opener);
   });
 
+  it('can be opened twice and still closes once', () => {
+    const first = openModal(dialog);
+    const second = openModal(dialog); // Cmd+P pressed again while it is open
+    expect(second).toBe(first);
+
+    second.close();
+    expect(dialog.classList.contains('hidden')).toBe(true);
+    expect(background.hasAttribute('inert')).toBe(false);
+  });
+
+  it('wraps to the last item when Shift+Tab starts from a non-focusable container', () => {
+    const container = dialog.querySelector('#about-inner');
+    openModal(dialog, { initialFocus: container });
+    expect(document.activeElement).toBe(container);
+
+    const evt = new window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    container.dispatchEvent(evt);
+
+    expect(evt.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(last);
+  });
+
   it('restores the page when closed programmatically', () => {
     const modal = openModal(dialog, { opener });
     modal.close();

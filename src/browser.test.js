@@ -4,6 +4,7 @@ import {
   idbSet, idbGet, idbDelete, _resetDbForTesting,
   putDocument, getDocument, listDocuments, deleteDocument,
   saveScratch, readScratch, clearScratch,
+  openHandle, saveFile, forgetFile,
 } from './browser.js';
 
 describe('browser storage adapter (IndexedDB)', () => {
@@ -102,5 +103,27 @@ describe('browser storage adapter (IndexedDB)', () => {
 
     await clearScratch();
     expect(await readScratch()).toBeNull();
+  });
+
+  it('does not adopt a handle whose file could not be read', async () => {
+    // A file can vanish between the picker and the read. If the handle is
+    // adopted first, the next Save writes the previous document's text into
+    // whatever file the handle now points at.
+    let writes = 0;
+    const halfOpen = {
+      kind: 'file',
+      name: 'notes.md',
+      getFile: async () => ({ name: 'notes.md', text: async () => { throw new Error('unreadable'); } }),
+      queryPermission: async () => 'granted',
+      createWritable: async () => { writes++; return { write() {}, close() {} }; },
+    };
+
+    forgetFile();
+    await expect(openHandle(halfOpen)).rejects.toThrow('unreadable');
+
+    // No handle adopted, so there is nothing to write in place: saveFile falls
+    // through to a download, which this node environment cannot do.
+    await expect(saveFile('notes.md', 'text')).rejects.toThrow();
+    expect(writes).toBe(0);
   });
 });

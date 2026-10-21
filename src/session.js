@@ -152,6 +152,10 @@ export function createSession(ports) {
         return false;
       }
       if (gen !== generation) return true; // the buffer moved on; nothing to report
+      // An edit landed while the write was in flight, so what is on disk is
+      // not what is in the buffer: stay dirty and leave the timers that edit
+      // armed alone, or the newest text is neither saved nor drafted.
+      if (content() !== text) return true;
       noteSaved(text);
       onSaved(text);
       return true;

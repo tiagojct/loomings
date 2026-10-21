@@ -134,6 +134,27 @@ describe('document session', () => {
     await second;
   });
 
+  it('stays dirty when the buffer changed while the save was in flight', async () => {
+    let finish;
+    const { session, calls, setText } = makeSession({
+      write: () => new Promise((resolve) => { finish = resolve; }),
+    });
+
+    session.markEdited();
+    const saving = session.saveNow();
+
+    // The write is in flight (a slow disk, a permission re-prompt) and the
+    // user keeps typing: that text is not in what is being written.
+    setText('edited during the save');
+    session.markEdited();
+    finish();
+    await saving;
+
+    expect(session.isDirty()).toBe(true);
+    expect(calls.clean).toBe(0);
+    expect(calls.cleared).toBe(0);
+  });
+
   it('does not touch the new buffer when a save lands after a repoint', async () => {
     let finish;
     const { session, calls } = makeSession({
