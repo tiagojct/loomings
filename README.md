@@ -73,7 +73,8 @@ Every palette is checked for WCAG contrast floors by the test suite.
 ```sh
 npm install
 npm run dev        # Vite on http://127.0.0.1:1420/app/
-npm test           # Vitest: palettes, share links, lessons
+npm test           # Vitest: session, palettes, share, markdown, menus, worker
+npm run typecheck  # tsc over the source (checkJs, strictNullChecks)
 npm run build      # static site in dist/ (app at /app/, plus sw.js)
 npm run preview    # serve dist/ on http://127.0.0.1:4173/app/
 ```

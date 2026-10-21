@@ -4,6 +4,57 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.10] — 2026-10-21
+
+Correctness and accessibility pass: the save pipeline is now a tested module,
+storage failures cannot break a boot, and the app ships the faces it asks for.
+
+### Fixed
+
+- **Escape did nothing.** The key handler checked a module-private set
+  (`openMenus`) that `editor.js` never imported, so it threw before closing a
+  menu, the cheatsheet or the preview. Found by the new type check.
+- **A title containing quotes broke the Documents menu.** The escaper handled
+  `&`, `<` and `>` only and was used inside `aria-label="…"`; quotes are now
+  escaped everywhere (`src/html.js`).
+- **A failing IndexedDB write could break New and Open.** The scratch write
+  chain rejected into `discardScratch`, which both await. Draft failures are
+  reported and retried, and a failed save leaves the buffer dirty.
+- **Recents could wedge.** A revoked or moved file handle threw inside a
+  click handler and left a row that could never open; the dead entry is now
+  dropped with a message.
+- **A failed picker looked like a cancel.** Only `AbortError` is silent.
+- **Word count counted Markdown.** `## Title` was two words, a list marker
+  was one, and a link's destination was three.
+- **Menu arrow keys stalled** on items inside a collapsed section.
+- **The last keystrokes before a tab is hidden** are flushed on
+  `visibilitychange`/`pagehide` instead of waiting for the scratch debounce;
+  `beforeunload` sets `returnValue` for older Safari.
+
+### Changed
+
+- **The save/scratch machinery is a module** (`src/session.js`), with 11
+  tests: debounce coalescing, write ordering, discard during an in-flight
+  write, stale generations, overlapping saves, and failure reporting.
+- **Dialogs trap focus** (`src/modal.js`): the page behind is inert, Tab
+  wraps at both ends, Escape closes and returns focus to the trigger. The
+  outline is a listbox with `aria-activedescendant`; the cheatsheet focuses
+  its close button and returns focus on close. Document rows split "open" and
+  "delete" into sibling buttons so delete is reachable by keyboard.
+- **Self-hosted fonts.** Atkinson Hyperlegible, JetBrains Mono and Source
+  Serif 4 were named in the stylesheet but never shipped (the CSP forbids the
+  CDN), so everyone saw fallbacks. The latin subsets now ship under
+  `/app/fonts/` (151 kB) with their OFL texts, and are precached for offline.
+- **Vendor chunks.** CodeMirror and markdown-it are split out; the app chunk
+  drops from 698 kB to 66 kB, so an app fix no longer invalidates the vendor
+  payload in every cache.
+- **`theme-color` follows the active palette** instead of staying Pequod
+  navy; `prefers-reduced-motion` is honoured.
+- **`npm run typecheck`** (`tsc`, `checkJs`, `strictNullChecks`, unused
+  locals) runs in CI. It is what found the Escape bug.
+- **Removed** two toggles that had no trigger since 2.0.0 (smart typography,
+  line numbers) and dead helpers (`refreshRecents`, `lastSavedContent`).
+
 ## [2.0.9] — 2026-10-01
 
 Code quality, reliability, accessibility, and performance overhaul.

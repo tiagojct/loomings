@@ -16,10 +16,18 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   modes and scroll sync, preview, menus, share links, lessons, documents,
   keyboard shortcuts, boot sequence. Imports browser APIs only through
   `browser.js`.
+- `src/session.js` — the document session: dirty flag, scratch debounce,
+  draft write ordering, document generation, save serialisation, and the
+  containment of every storage failure. Headless; `editor.js` injects the
+  text, the home and the writes. 11 tests in `session.test.js`.
 - `src/browser.js` — everything that touches the browser: File System
   Access API with picker/download fallback, IndexedDB (scratch, recents,
   documents), `document.title`, `window.confirm`, launch queue, service
   worker registration.
+- `src/modal.js` — the dialog contract (inert background, Tab wrap, Escape,
+  focus restore). `src/html.js` — `escapeHtml`, safe in attribute context.
+- `src/fonts.css` — the self-hosted `@font-face` rules; files and licences
+  live in `public/fonts/`.
 - `src/palettes.js` — the four colour families. The only place a colour
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
@@ -33,8 +41,9 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 ```sh
 npm install
 npm run dev        # Vite dev server, http://127.0.0.1:1420/app/ (no service worker in dev)
-npm test           # Vitest (src/**/*.test.js): palettes, share, lessons
-npm run build      # dist/ — app at /app/, sw.js, manifest, icons
+npm test           # Vitest (src/**/*.test.js)
+npm run typecheck  # tsc over src/, checkJs + strictNullChecks + unused locals
+npm run build      # dist/ — app at /app/, sw.js, manifest, icons, fonts
 npm run preview    # serves dist/ at http://127.0.0.1:4173/app/ (service worker active)
 ```
 
@@ -53,10 +62,18 @@ browser pane.
   floors per mode.
 - **The document's home is one of three:** a file handle (`currentFile`,
   handle kept in `browser.js`), a browser document (`currentDocId`,
-  IndexedDB), or nothing (untitled). `doSave` dispatches on that;
-  `handleSave` picks a home for untitled buffers (file picker where the
-  File System Access API exists, otherwise the browser). `loadFile`
+  IndexedDB), or nothing (untitled). `session.writeToHome` dispatches on
+  that; `handleSave` picks a home for untitled buffers (file picker where
+  the File System Access API exists, otherwise the browser). `loadFile`
   resets both and calls `forgetFile()` for content with no file behind it.
+- **Don't hand-roll save or scratch timing in `editor.js`.** It calls
+  `session.markEdited()` / `saveNow()` / `discardScratch()` / `adopt()` /
+  `repoint()` and the module owns the timers, the ordering and the error
+  containment. Every storage call it makes is caught: nothing may surface as
+  an unhandled rejection, because `fileNew`/`loadFile` await the same chain.
+- **Dialogs go through `openModal`** (`src/modal.js`), which makes the page
+  behind inert, wraps Tab, closes on Escape and restores focus to the
+  opener. `.hidden` is still what hides them.
 - **Boot order** (bottom of `editor.js`): launch queue consumer, then a
   document named in the URL (`#d=` share payload or `?lesson=`), which
   wins over scratch recovery and is stripped from the URL, then scratch
@@ -91,5 +108,17 @@ browser pane.
   whenever the file changes, not just the version number.
 - **Version** lives in `package.json` only. The service worker's cache
   name and the About dialog read it from there.
+- **Fonts are self-hosted** (`public/fonts/`, latin woff2) because the CSP
+  is self-only. The service worker precaches the whole public directory, so
+  a new font, icon or manifest is picked up automatically; nginx serves
+  `/app/fonts/` with a one-day cache (not the year-long immutable rule,
+  which only covers hashed `/app/assets/`). A changed face should get a new
+  filename rather than rely on cache headers.
+- **`theme-color` is set from the palette at runtime** (`applyThemeAttr`);
+  the `<meta>` in `index.html` and the manifest's `theme_color` stay Pequod
+  as the pre-script default and cannot follow the family.
+- **`npm run typecheck` is a gate**, not decoration: `checkJs` with
+  `strictNullChecks` already caught a live `ReferenceError` (Escape) and the
+  `tx.transaction?.error` typo. Keep it green.
 - Lessons are plain Markdown without raw HTML (the preview has
   `html: false`); the lessons test enforces it.
