@@ -4,6 +4,31 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-10-21
+
+The landing page rebuilt: one transparency on a classroom overhead projector.
+The app is unchanged; this release is the site.
+
+### Changed
+
+- **A new visual world at `/`.** The publisher's-cloth page is replaced by a lit
+  acetate plate on a charcoal machine: the Markdown source of chapter 1 in the
+  left half, what it becomes in the right, a grease-pencil annotation, and the
+  lamp switch as the only action. Paper tickets, a perforated share-link strip,
+  a lesson sheet, four palette bindings and three storage dockets follow it.
+- **The page demonstrates rather than describes.** Pointing at a source line
+  (or tapping it, on touch) lights its rendered counterpart and the reverse.
+  The demonstration is the bundled Moby-Dick example; the lesson is lesson 1.
+- **Barlow Condensed and Caveat join the self-hosted set** for the machine
+  labels and the one hand-written note; the page now loads its faces from
+  `/app/fonts/`, so the landing page finally renders the typography it names.
+- **A new `docs/landing.js`** carries the pairing interaction (CSP-safe,
+  external, progressive: the page is complete without it).
+- **The social card is recaptured** from the new first viewport at 1200x630,
+  with its provenance embedded.
+- `PRODUCT.md` and `DESIGN.md` now record the product truth and the design
+  system, with `.impeccable/design.json` as the token sidecar.
+
 ## [2.0.10] — 2026-10-21
 
 Correctness and accessibility pass: the save pipeline is now a tested module,
@@ -625,6 +650,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.1.0]: https://github.com/tiagojct/loomings/releases/tag/v2.1.0
 [2.0.10]: https://github.com/tiagojct/loomings/releases/tag/v2.0.10
 [2.0.9]: https://github.com/tiagojct/loomings/releases/tag/v2.0.9
 [2.0.8]: https://github.com/tiagojct/loomings/releases/tag/v2.0.8

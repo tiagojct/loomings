@@ -108,6 +108,10 @@ browser pane.
   whenever the file changes, not just the version number.
 - **Version** lives in `package.json` only. The service worker's cache
   name and the About dialog read it from there.
+- **The landing page (`docs/`)** is a separate surface from the app: its own
+  stylesheet, its own `landing.js` (the source/result pairing), and its faces
+  loaded from `/app/fonts/`. Its unhashed files are cache-busted by `?v=` in
+  `docs/index.html`; bump them when the file changes, not only on a release.
 - **Fonts are self-hosted** (`public/fonts/`, latin woff2) because the CSP
   is self-only. The service worker precaches every public file with an
   asset extension (woff2/png/svg/webmanifest/ico), so a new font, icon or

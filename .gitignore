@@ -5,3 +5,8 @@ dist/
 scripts/pad-icon
 scripts/render-og
 social/instagram/images/
+
+# impeccable working artifacts (captures, sketches, build state)
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/build/

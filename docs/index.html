@@ -4,111 +4,231 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Loomings — a markdown editor for writing and teaching</title>
-  <meta name="description" content="A markdown editor, for writing and teaching. Runs in the browser. No account, nothing sent to a server.">
+  <meta name="description" content="A markdown editor, for writing and teaching. The source on the left, what it becomes on the right. Nothing leaves the machine unless you make it a link.">
   <meta property="og:title" content="Loomings">
-  <meta property="og:description" content="A markdown editor, for writing and teaching. Runs in the browser. No account, nothing sent to a server.">
+  <meta property="og:description" content="A markdown editor, for writing and teaching. The source on the left, what it becomes on the right. Nothing leaves the machine unless you make it a link.">
   <meta property="og:url" content="https://loomings.tiagojacinto.eu/">
-  <meta property="og:image" content="https://loomings.tiagojacinto.eu/assets/og.png?v=2.0.7">
+  <meta property="og:image" content="https://loomings.tiagojacinto.eu/assets/og.png?v=2.1.0">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Loomings">
   <meta property="og:locale" content="en_GB">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:image" content="https://loomings.tiagojacinto.eu/assets/og.png?v=2.0.7">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#551713">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)"  content="#131A2B">
+  <meta name="twitter:image" content="https://loomings.tiagojacinto.eu/assets/og.png?v=2.1.0">
+  <meta name="theme-color" content="#0e1112">
   <link rel="icon" type="image/png" href="assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=2.0.7">
+  <link rel="stylesheet" href="style.css?v=2.1.0">
   <script defer src="https://umami.tiagojct.eu/script.js" data-website-id="b93699dc-76ec-4db9-afd0-0bcd23da0316"></script>
 </head>
 <body>
-  <main id="top">
-    <header>
-      <svg class="buoy" width="88" height="88" viewBox="0 0 200 200" role="img" aria-label="A life buoy — the device on the spine of chapter 123, The Life-Buoy, in Moby-Dick.">
-        <circle cx="100" cy="100" r="86" fill="var(--gilt)"/>
-        <rect x="4" y="85" width="192" height="30" fill="var(--field)"/>
-        <rect x="85" y="4" width="30" height="192" fill="var(--field)"/>
-        <circle cx="100" cy="100" r="52" fill="var(--field)"/>
-      </svg>
-      <h1>Loomings</h1>
-      <p class="sub">A markdown editor, for writing and teaching.</p>
-      <p class="version">v2.0.10</p>
-    </header>
+  <a class="skip" href="#main">Skip to the page</a>
+  <h1 class="sr-only">Loomings — a markdown editor for writing and teaching</h1>
 
-    <article>
-      <p class="lede">
-        Call me Ishmael. Some years ago — never mind how long precisely — having little or no money in my purse, and nothing particular to interest me on shore, I thought I would sail about a little and see the watery part of the world.
+  <header class="machine-head">
+    <a class="wordmark" href="#top">Loomings</a>
+    <nav aria-label="Sections">
+      <a href="#write">Write</a>
+      <a href="#teach">Teach</a>
+      <a href="#keep">Keep</a>
+      <a href="https://github.com/tiagojct/loomings">Source</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <!-- The console: one transparency on the glass, switched on by the lamp. -->
+    <section class="console" id="top" aria-label="Loomings, demonstrated">
+      <div class="plate">
+        <p class="plate-rail">
+          <span>A markdown editor in the browser<span class="rail-long"> — the source on the left, what it becomes on the right</span></span>
+          <span class="hint"><span class="hint-pointer">Point at a line</span><span class="hint-touch">Tap a line</span></span>
+        </p>
+
+        <div class="pane source">
+          <p class="pane-label">What you type</p>
+          <pre aria-label="Markdown source of the example"><span class="src" data-pair="title"><span class="mark">#</span> Loomings</span><span class="src" data-pair="para">Call me <span class="mark">**</span>Ishmael<span class="mark">**</span>. Some years ago — never
+mind how long precisely — having little or no
+money in my purse, I thought I would sail
+about a little and see the watery part of the
+world.</span></pre>
+          <p class="hand" aria-hidden="true">the marks are the page
+            <svg width="92" height="44" viewBox="0 0 92 44"><path d="M3 41 C20 20, 46 9, 84 7" fill="none" stroke="#a8331f" stroke-width="1.6" stroke-linecap="round"/><path d="M73 3 L85 7 L78 17" fill="none" stroke="#a8331f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </p>
+        </div>
+
+        <div class="divider" aria-hidden="true"></div>
+
+        <div class="pane result">
+          <p class="pane-label">What it becomes</p>
+          <div class="rendered">
+            <h2 data-pair="title">Loomings</h2>
+            <p data-pair="para">Call me <strong>Ishmael</strong>. Some years ago — never mind how long precisely — having little or no money in my purse, I thought I would sail about a little and see the watery part of the world.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="base">
+        <div class="offer">
+          <p class="offer-lead">A markdown editor in the browser.<br><em>Nothing leaves the machine.</em></p>
+          <p class="claims"><span>No account</span><span>No server</span><span>Six lessons</span></p>
+        </div>
+
+        <a class="switch" href="/app/" aria-label="Open Loomings, the editor">
+          <span class="body">
+            <span class="lamp" aria-hidden="true"></span>
+            <span class="label">Open Loomings</span>
+          </span>
+        </a>
+
+        <aside class="ticket">
+          <dl>
+            <dt>Provenance</dt>
+            <dd>Chapter 1, <i>Moby-Dick</i> — the opening lines, abridged. The bundled example.</dd>
+          </dl>
+        </aside>
+      </div>
+    </section>
+
+    <!-- Write: the source, and the link the document becomes. -->
+    <section class="section" id="write">
+      <div class="write-grid">
+        <div>
+          <h2>The source and the result are <em>the same sheet</em>.</h2>
+          <p class="prose">Bold reads bold, headings read as headings. Lists continue themselves on Return, <strong>⌘P</strong> jumps you anywhere in the outline, and the preview keeps pace as you scroll either pane. There is no tab to switch to — the Markdown is the document.</p>
+        </div>
+
+        <div>
+          <div class="tape">
+            <span class="k">Export → Copy share link</span>
+            <code class="url">https://loomings.tiagojacinto.eu/app/#d=z.3VhCk0XQ7r2mN8pLwYt…<span class="dim">The rest of the chapter is in the address, compressed.</span></code>
+            <span class="stamp">No upload</span>
+          </div>
+          <p class="prose">The document is compressed into the address, and a fragment never reaches the server — there is no server to reach. Send it to a student: it opens in their own editor, with the text already there.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Teach: one lesson, taped to the desk. -->
+    <section class="section" id="teach">
+      <h2>Six lessons that <em>demonstrate themselves</em>.</h2>
+      <p class="prose">Open one and it lands in split view: the syntax on the left, what it becomes on the right, an exercise at the end. Hand work back as a link, or as a PDF.</p>
+
+      <div class="lesson">
+        <div>
+          <p class="k">What you type</p>
+<pre>## Emphasis
+
+Wrap a word in single asterisks
+for *emphasis* and in double for
+**strong emphasis**. You can
+combine them for ***both***.
+
+> **Exercise 1.** Add a second-level
+> heading called "About me" at the
+> bottom of this file, and under it a
+> paragraph of two or three sentences.</pre>
+        </div>
+        <div>
+          <p class="k">What it becomes</p>
+          <div class="out">
+            <h3>Emphasis</h3>
+            <p>Wrap a word in single asterisks for <em>emphasis</em> and in double for <strong>strong emphasis</strong>. You can combine them for <strong><em>both</em></strong>.</p>
+            <p class="ex"><b>Exercise 1.</b> Add a second-level heading called “About me” at the bottom of this file, and under it a paragraph of two or three sentences.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bindings: the same page in four cloths. -->
+    <section class="section" id="bindings">
+      <div class="bindings-wrap">
+        <div>
+          <h2>The same page in <em>four cloths</em>.</h2>
+          <p class="prose">Four families from the author’s own design systems, each with a dark and a light side. Follow the system, or pick a side in the Theme menu. Every one is checked for contrast before it ships, and your choice is remembered.</p>
+        </div>
+
+        <div class="bindings" aria-label="The four palettes, each split between its dark and light side">
+          <div class="binding" style="background: linear-gradient(105deg, #061826 0 50%, #f1e7d2 50%); border-color: rgba(189,140,104,.5)">
+            <div class="top" style="color:#f7f3ee">
+              <div class="name">Pequod</div>
+              <div class="line" style="color:#d4a882">Call me Ishmael.</div>
+            </div>
+            <div class="modes" style="color:#3f5566; text-align:right">Below deck<br>Parchment</div>
+          </div>
+          <div class="binding" style="background: linear-gradient(105deg, #10161c 0 50%, #f0f4f6 50%); border-color: rgba(61,151,255,.45)">
+            <div class="top" style="color:#e8eef2">
+              <div class="name">Glauca</div>
+              <div class="line" style="color:#6cb2ff">Call me Ishmael.</div>
+            </div>
+            <div class="modes" style="color:#55646d; text-align:right">Profundum<br>Pruina</div>
+          </div>
+          <div class="binding" style="background: linear-gradient(105deg, #12161b 0 50%, #dee7e4 50%); border-color: rgba(201,101,29,.45)">
+            <div class="top" style="color:#f1efe9">
+              <div class="name">Try-Works</div>
+              <div class="line" style="color:#e0832a">Call me Ishmael.</div>
+            </div>
+            <div class="modes" style="color:#52646a; text-align:right">Try-Fire<br>True Lamp</div>
+          </div>
+          <div class="binding" style="background: linear-gradient(105deg, #0c1117 0 50%, #f3f5f7 50%); border-color: rgba(91,182,177,.45)">
+            <div class="top" style="color:#eaedef">
+              <div class="name">Ambergris</div>
+              <div class="line" style="color:#86cdc8">Call me Ishmael.</div>
+            </div>
+            <div class="modes" style="color:#5c6168; text-align:right">Dark<br>Light</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Keep: where a document lives. -->
+    <section class="section" id="keep">
+      <h2>Files, or this browser, <em>or a link</em>.</h2>
+      <p class="prose">Where a document lives is your choice, and the status bar always says which one it is.</p>
+
+      <div class="dockets">
+        <article class="docket">
+          <p class="k">On disk</p>
+          <p>Chrome and Edge write real files where you put them, and remember the recent ones.</p>
+          <p class="note">File System Access API</p>
+        </article>
+        <article class="docket">
+          <p class="k">In this browser</p>
+          <p>Safari, Firefox, an iPad: Save keeps the document here, listed under Documents.</p>
+          <p class="note">IndexedDB</p>
+        </article>
+        <article class="docket">
+          <p class="k">In a link</p>
+          <p>The document itself, small enough to paste. Nothing to host, nothing to expire.</p>
+          <p class="note">URL fragment</p>
+        </article>
+      </div>
+
+      <div class="stamps">
+        <span>Installable</span>
+        <span>Works offline</span>
+        <span>Opens .md files</span>
+        <span>Print / PDF</span>
+      </div>
+
+      <p class="prose">Install it from the browser’s own menu and it opens <code>.md</code> files from your desktop and works without a network. The draft is kept as you type, and offered back if the tab closes early.</p>
+    </section>
+
+    <!-- Close: the switch again. -->
+    <section class="close">
+      <h2>It opens on a blank page.</h2>
+      <a class="switch" href="/app/" aria-label="Open Loomings, the editor">
+        <span class="body">
+          <span class="lamp" aria-hidden="true"></span>
+          <span class="label">Open Loomings</span>
+        </span>
+      </a>
+      <p class="colophon">
+        MIT licensed · CodeMirror 6 and markdown-it · nothing uploaded<br>
+        <a href="https://github.com/tiagojct/loomings">github.com/tiagojct/loomings</a> · v2.1.0 · © 2026 Tiago Jacinto
       </p>
-
-      <p>
-        Loomings is a markdown editor that runs in the browser. It opens to a blank page, and stays out of the way while you write on it, hand it to a student, or teach from it with the source next to the result. Nothing you type leaves your machine unless you turn it into a link yourself. The first chapter of <em>Moby-Dick</em> is called <em>Loomings</em>, and that is where the name came from.
-      </p>
-
-      <figure class="shot">
-        <img src="assets/screenshot.png?v=2.0.7" alt="Loomings in split view, chapter 1 of Moby-Dick in the source pane on the left and the rendered result on the right." loading="lazy" width="2800" height="1800">
-        <figcaption>Split view — the bundled example, chapter 1 of <em>Moby-Dick</em>.</figcaption>
-      </figure>
-
-      <p class="actions">
-        <a class="btn" href="/app/">Open Loomings</a>
-        <a class="link" href="https://github.com/tiagojct/loomings">Source on GitHub</a>
-      </p>
-
-      <h2>Write</h2>
-      <p>
-        Real markdown in the editor — bold reads bold, headings read heading, code reads code. Lists continue themselves on <em>return</em>, and stop when you press it twice. An outline you can jump through with <em>⌘P</em>, a focus mode that dims everything outside the sentence under the cursor, typewriter scrolling that keeps the line you're on centred, a full screen mode that leaves the browser's own chrome behind too, a word goal if you want one. <em>Split</em> shows the source beside the result and keeps the two in step as you scroll either one. Every shortcut is listed in the app itself, one keystroke away (<em>⌘?</em>).
-      </p>
-
-      <h2>Teach</h2>
-      <p>
-        Six short lessons live under the <em>Learn</em> menu, written to demonstrate themselves: the syntax on the left, what it becomes on the right, an exercise at the end. Any document can be turned into a link — <em>Export → Copy share link</em> folds the whole text into the address, so a student opens it in their own editor with nothing uploaded anywhere. Hand in with <em>Print / PDF</em>, or send the link back.
-      </p>
-
-      <h2>Four colours, two moods</h2>
-      <p>
-        Pequod — navy below deck, parchment above it — is the default. Glauca is frost and one sky blue. Try-Works is cold sea and try-pot fire. Ambergris is near-monochrome grey with a teal that only marks what you can click. Each has a dark side and a light side, and follows the system if you let it.
-      </p>
-
-      <h2>Keep</h2>
-      <p>
-        In Chrome and Edge, real files on disk, with recent ones remembered. Elsewhere — Safari, Firefox, an iPad — <em>Save</em> keeps the draft in the browser itself, listed under <em>Documents</em>. Either way the buffer is scratched as you type and offered back if the tab closes early. Install it from the browser's own menu and it becomes an app that works offline and opens <code>.md</code> files.
-      </p>
-
-      <h2>What is not</h2>
-      <ul class="not-list">
-        <li>No account, no cloud sync.</li>
-        <li>No tracking.</li>
-        <li>No themes marketplace.</li>
-        <li>No AI assistant pestering the margin.</li>
-        <li>No server that sees your text.</li>
-      </ul>
-      <p class="not-coda">
-        The files are your files; they live wherever you put them.
-      </p>
-
-      <h2>Built with</h2>
-      <p>
-        CodeMirror 6 and markdown-it, served as static files. The source is MIT-licensed. The device above is a life-buoy, blind-stamped on the cover of the 1851 first edition — chapter 123 is called <em>The Life-Buoy</em>, and it is what Ishmael survives on.
-      </p>
-
-    </article>
-
-    <footer>
-      <hr>
-      <p class="foot-links">
-        <a href="#top">Loomings</a>
-        <span class="dot">·</span>
-        <span class="version">v2.0.10</span>
-        <span class="dot">·</span>
-        by <a href="https://tiagojacinto.eu">Tiago Jacinto</a>
-        <span class="dot">·</span>
-        <a href="https://github.com/tiagojct/loomings">GitHub</a>
-        <span class="dot">·</span>
-        <a href="https://github.com/tiagojct/loomings/releases">Desktop builds (archived)</a>
-      </p>
-      <p class="tag">The shapes loom before they take form.</p>
-    </footer>
+    </section>
   </main>
+
+  <script src="landing.js?v=2.1.0" defer></script>
 </body>
 </html>
