@@ -40,10 +40,17 @@ describe('palettes', () => {
           expect(dark).toBe(mode === 'dark');
         });
 
+        it(`${mode}: text on the accent is readable and the selection is visible`, () => {
+          const p = PALETTES[family][mode];
+          expect(contrast(p.onAccent, p.accent), 'onAccent/accent').toBeGreaterThanOrEqual(4.5);
+          expect(p.selection).not.toBe(p.bg);
+        });
+
         it(`${mode}: cssVars covers the properties style.css reads`, () => {
           const vars = cssVars(family, mode);
           for (const name of ['--bg', '--bg-elev', '--bg-deep', '--fg', '--fg-dim', '--fg-ghost',
                               '--accent', '--accent-light', '--accent-dim', '--border',
+                              '--selection', '--on-accent',
                               '--heading', '--emphasis', '--code', '--marker']) {
             expect(vars[name], name).toMatch(HEX);
           }

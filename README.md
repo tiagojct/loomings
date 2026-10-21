@@ -35,16 +35,22 @@ unless you put it in a link.
 - **Installable**: a web manifest and service worker make it an app that works offline and, on Chromium, opens `.md` files from the OS.
 
 ### Themes
-Four families from the author's design systems, each with dark and light modes and a system-follow setting (Theme menu, or ⌘⇧T to cycle modes):
+Ten colour families from [Ensigns](https://ensigns.tiagojacinto.eu), each named for a ship in *Moby-Dick*, each with a dark and a light mode and a system-follow setting (Theme menu, or ⌘⇧T to cycle modes):
 
-| Family | Dark | Light | Source |
-|---|---|---|---|
-| **Pequod** (default) | Below deck | Parchment | [pequod](https://github.com/tiagojct/pequod) |
-| **Glauca** | Profundum | Pruina | [glauca](https://github.com/tiagojct/glauca) |
-| **Try-Works** | Try-Fire | True Lamp | [try-works](https://github.com/tiagojct/try-works) |
-| **Ambergris** | Dark | Light | [ambergris](https://github.com/tiagojct/ambergris) |
+| Family | Dark | Light |
+|---|---|---|
+| **Pequod** (default) | Below deck | Parchment |
+| **Goney** | Profundum | Pruina |
+| **Townho** | Golden Inn night | Golden Inn daylight |
+| **Jeroboam** | Dark | Light |
+| **Jungfrau** | Try-Fire | Lamp-feeder |
+| **Rosebud** | Dark | Light |
+| **Enderby** | Pilot-cloth | Ivory |
+| **Bachelor** | Brazen lamp | Holiday apparel |
+| **Rachel** | Beacon | Daylight |
+| **Delight** | Sad burial | White ribs |
 
-Every palette is checked for WCAG contrast floors by the test suite.
+Every palette is checked for WCAG contrast floors by the test suite; the values are Ensigns roles, not local hexes.
 
 ## Keyboard shortcuts
 

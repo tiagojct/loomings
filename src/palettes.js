@@ -1,166 +1,370 @@
 // ========================================
 // Loomings — colour palettes
-// Four families, each with a dark and a light mode. Every value here is
-// copied from the design system's own token source; the comments name it.
-// editor.js turns these into CodeMirror themes and CSS custom properties,
-// so this file is the only place a colour lives.
+// Ten families from Ensigns (ensigns.tiagojacinto.eu), the author's colour
+// system: each named for a ship in Moby-Dick, each with a light and a dark
+// mode, each tested for one place of use. Every value here is an Ensigns
+// role, mapped once:
+//
+//   bg          <- roles.bg                bgElev     <- roles.surface-raised
+//   bgDeep      <- roles.surface           fg         <- roles.text
+//   fgDim       <- roles.text-muted        fgGhost    <- roles.text-subtle
+//   accent      <- roles.accent            accentLight<- roles.link
+//   accentDim   <- roles.text-subtle       border     <- roles.border
+//   selection   <- roles.selection         onAccent   <- roles.on-accent
+//
+// Headings, emphasis and code take ink (an Ensigns family marks interaction
+// with colour, not structure); list markers take the accent. When Ensigns
+// omits a role for a family (three light modes have no
+// surface-raised, one has no on-accent, Delight is monochrome and publishes
+// no semantic roles at all) the nearest published role is used, or ink is
+// chosen by contrast against the accent. One published pair, Enderby's
+// light on-accent (4.09:1 on brass), sits below AA for the app's 12px
+// labels, so black is used there for the same reason.
 // ========================================
 
 // Keys every mode must define. `heading`, `emphasis`, `code` and `marker`
-// are the ink roles for in-place Markdown rendering; they default to
-// accentLight (marker: accent) unless a family's rules say otherwise.
+// are the ink roles for in-place Markdown rendering. They default to ink,
+// not to the accent: in Ensigns, colour marks interaction, and a heading is
+// structure. A family may override them if its own rules say otherwise.
 export const PALETTE_KEYS = [
   'bg', 'bgElev', 'bgDeep', 'fg', 'fgDim', 'fgGhost',
   'accent', 'accentLight', 'accentDim', 'border',
+  'selection', 'onAccent',
 ];
 
 export const PALETTES = {
-  // Pequod — github.com/tiagojct/pequod. Warm paper, deep ink, amber.
-  // The original Loomings palette and the default.
   pequod: {
     label: 'Pequod',
     modes: { dark: 'Below deck', light: 'Parchment' },
     dark: {
-      bg:          '#061826',
-      bgElev:      '#0E2D44',
-      bgDeep:      '#02101B',
-      fg:          '#F7F3EE',
-      fgDim:       '#C4BCAE',
-      fgGhost:     '#8B8578',
-      accent:      '#BD8C68',
-      accentLight: '#D4A882',
-      accentDim:   '#8B6348',
-      border:      '#0E2D44',
+      bg:           '#0b1720',
+      bgElev:       '#0c222f',
+      bgDeep:       '#0d2f42',
+      fg:           '#eae1d7',
+      fgDim:        '#bfbbb6',
+      fgGhost:      '#a16e50',
+      accent:       '#bd8c68',
+      accentLight:  '#9dc2c5',
+      accentDim:    '#a16e50',
+      border:       '#163f54',
+      selection:    '#0d2f42',
+      onAccent:     '#0b1720',
     },
     light: {
-      bg:          '#F1E7D2',
-      bgElev:      '#F8F0DD',
-      bgDeep:      '#E2D5B7',
-      fg:          '#1A2D3C',
-      fgDim:       '#3F5566',
-      fgGhost:     '#7A8B9A',
-      accent:      '#8B6348',
-      accentLight: '#BD8C68',
-      accentDim:   '#4F3825',
-      border:      '#D7C9A8',
-      // The lighter amber reads at 2.4:1 on parchment — headings, emphasis
-      // and code take the deeper accent in light mode.
-      heading:     '#8B6348',
-      emphasis:    '#8B6348',
-      code:        '#8B6348',
+      bg:           '#eae1d7',
+      bgElev:       '#f7f3ee',
+      bgDeep:       '#dbc9b6',
+      fg:           '#0d2f42',
+      fgDim:        '#335260',
+      fgGhost:      '#835a49',
+      accent:       '#163f54',
+      accentLight:  '#163f54',
+      accentDim:    '#835a49',
+      border:       '#cfad8e',
+      selection:    '#dbc9b6',
+      onAccent:     '#eae1d7',
     },
   },
 
-  // Glauca — github.com/tiagojct/glauca (src/glauca.json). A pale frost
-  // field with one vivid sky-blue. Light-first: Pruina is the default
-  // there, Profundum the sibling.
-  glauca: {
-    label: 'Glauca',
+  goney: {
+    label: 'Goney',
     modes: { dark: 'Profundum', light: 'Pruina' },
     dark: {
-      bg:          '#10161c',
-      bgElev:      '#1f2932',
-      bgDeep:      '#0b1218',
-      fg:          '#e8eef2',
-      fgDim:       '#93b7c9',
-      fgGhost:     '#4d7391',
-      accent:      '#3d97ff',
-      accentLight: '#6cb2ff',
-      accentDim:   '#007aff',
-      border:      '#2a3540',
+      bg:           '#10161c',
+      bgElev:       '#1f2932',
+      bgDeep:       '#171f26',
+      fg:           '#e8eef2',
+      fgDim:        '#8c8c8c',
+      fgGhost:      '#8c8c8c',
+      accent:       '#3d97ff',
+      accentLight:  '#3d97ff',
+      accentDim:    '#8c8c8c',
+      border:       '#2a3540',
+      selection:    '#2b4356',
+      onAccent:     '#0b1218',
     },
     light: {
-      bg:          '#f0f4f6',
-      bgElev:      '#ffffff',
-      bgDeep:      '#e8eef2',
-      fg:          '#16222a',
-      fgDim:       '#55646d',
-      fgGhost:     '#8c8c8c',
-      accent:      '#0b62cf',
-      accentLight: '#007aff',
-      accentDim:   '#084b96',
-      border:      '#cdd7dc',
+      bg:           '#f0f4f6',
+      bgElev:       '#f7fafb',
+      bgDeep:       '#f7fafb',
+      fg:           '#16222a',
+      fgDim:        '#55646d',
+      fgGhost:      '#55646d',
+      accent:       '#0b62cf',
+      accentLight:  '#0b62cf',
+      accentDim:    '#55646d',
+      border:       '#cdd7dc',
+      selection:    '#b7cdd6',
+      onAccent:     '#f2f7fb',
     },
   },
 
-  // Try-Works — github.com/tiagojct/try-works (src/try-works.json). A cold
-  // sea is the field, the try-pot fire the one rare mark. Moby-Dick ch. 96.
-  tryworks: {
-    label: 'Try-Works',
-    modes: { dark: 'Try-Fire', light: 'True Lamp' },
+  townho: {
+    label: 'Townho',
+    modes: { dark: 'Golden Inn night', light: 'Golden Inn daylight' },
     dark: {
-      bg:          '#12161b',
-      bgElev:      '#232b32',
-      bgDeep:      '#11151a',
-      fg:          '#f1efe9',
-      fgDim:       '#8fb6bd',
-      fgGhost:     '#4d7680',
-      accent:      '#c9651d',
-      accentLight: '#e0832a',
-      accentDim:   '#9a4a16',
-      border:      '#2c3640',
+      bg:           '#161310',
+      bgElev:       '#2b241f',
+      bgDeep:       '#201b17',
+      fg:           '#f2ece2',
+      fgDim:        '#c0b6a8',
+      fgGhost:      '#8c8174',
+      accent:       '#8fbeff',
+      accentLight:  '#8fbeff',
+      accentDim:    '#8c8174',
+      border:       '#3e352c',
+      selection:    '#4f4200',
+      onAccent:     '#161310',
     },
     light: {
-      bg:          '#dee7e4',
-      bgElev:      '#f2f7f4',
-      bgDeep:      '#b4ccc9',
-      fg:          '#18272b',
-      fgDim:       '#52646a',
-      fgGhost:     '#97a0a4',
-      accent:      '#9e5017',
-      accentLight: '#b85f1c',
-      accentDim:   '#7a3a10',
-      border:      '#c4d2cd',
+      bg:           '#f6f2e9',
+      bgElev:       '#e2dacb',
+      bgDeep:       '#ede7da',
+      fg:           '#151210',
+      fgDim:        '#4e473d',
+      fgGhost:      '#70685c',
+      accent:       '#003a95',
+      accentLight:  '#003a95',
+      accentDim:    '#70685c',
+      border:       '#d8cfbe',
+      selection:    '#f8f337',
+      onAccent:     '#f6f2e9',
     },
   },
 
-  // Ambergris — github.com/tiagojct/ambergris (tokens.json v0.3.0). A
-  // near-monochrome cool grey ramp with one teal accent that marks
-  // interaction only. Mapped from its semantic layer: bg=ground,
-  // bgElev=surface-raised, bgDeep=surface (dark) / surface-sunken (light),
-  // fg=text-primary, fgDim=text-secondary, fgGhost=text-tertiary,
-  // accent=link, accentLight=accent-on-surface, accentDim=accent-line,
-  // border=rule. Its first rule — accent never decorates — is why headings,
-  // emphasis and code are set in ink here rather than in the accent.
-  ambergris: {
-    label: 'Ambergris',
+  jeroboam: {
+    label: 'Jeroboam',
     modes: { dark: 'Dark', light: 'Light' },
     dark: {
-      bg:          '#0C1117',
-      bgElev:      '#2B3037',
-      bgDeep:      '#1A1F26',
-      fg:          '#EAEDEF',
-      fgDim:       '#AEB2B7',
-      fgGhost:     '#8D9298',
-      accent:      '#5BB6B1',
-      accentLight: '#86CDC8',
-      accentDim:   '#2F9F99',
-      border:      '#42484E',
-      heading:     '#EAEDEF',
-      emphasis:    '#EAEDEF',
-      code:        '#AEB2B7',
-      marker:      '#8D9298',
+      bg:           '#1a1713',
+      bgElev:       '#292521',
+      bgDeep:       '#211d19',
+      fg:           '#f1edea',
+      fgDim:        '#c5c1bb',
+      fgGhost:      '#b2aea8',
+      accent:       '#b3aebf',
+      accentLight:  '#d4d0e1',
+      accentDim:    '#b2aea8',
+      border:       '#383430',
+      selection:    '#3c3934',
+      onAccent:     '#1a1713',
     },
     light: {
-      bg:          '#F3F5F7',
-      bgElev:      '#FAFBFD',
-      bgDeep:      '#EAEDEF',
-      fg:          '#1A1F26',
-      fgDim:       '#5C6168',
-      fgGhost:     '#72777D',
-      accent:      '#1E807B',
-      accentLight: '#1B6864',
-      accentDim:   '#2F9F99',
-      border:      '#C8CBD0',
-      heading:     '#1A1F26',
-      emphasis:    '#1A1F26',
-      code:        '#5C6168',
-      marker:      '#72777D',
+      bg:           '#f6f3f0',
+      bgElev:       '#fcf9f5',
+      bgDeep:       '#fcf9f5',
+      fg:           '#1e1b17',
+      fgDim:        '#4c4844',
+      fgGhost:      '#534f4b',
+      accent:       '#2e2a38',
+      accentLight:  '#423e4c',
+      accentDim:    '#534f4b',
+      border:       '#d5d1cb',
+      selection:    '#e5e2de',
+      onAccent:     '#fcf9f5',
+    },
+  },
+
+  jungfrau: {
+    label: 'Jungfrau',
+    modes: { dark: 'Try-Fire', light: 'Lamp-feeder' },
+    dark: {
+      bg:           '#171b21',
+      bgElev:       '#242b32',
+      bgDeep:       '#1d242a',
+      fg:           '#afaca2',
+      fgDim:        '#878f93',
+      fgGhost:      '#878f93',
+      accent:       '#d56f2b',
+      accentLight:  '#d56f2b',
+      accentDim:    '#878f93',
+      border:       '#2e3741',
+      selection:    '#2c4953',
+      onAccent:     '#171b21',
+    },
+    light: {
+      bg:           '#b5a892',
+      bgElev:       '#bcb09c',
+      bgDeep:       '#baad97',
+      fg:           '#16100a',
+      fgDim:        '#3c342a',
+      fgGhost:      '#3c342a',
+      accent:       '#602500',
+      accentLight:  '#602500',
+      accentDim:    '#3c342a',
+      border:       '#a59986',
+      selection:    '#678b8a',
+      onAccent:     '#b2a895',
+    },
+  },
+
+  rosebud: {
+    label: 'Rosebud',
+    modes: { dark: 'Dark', light: 'Light' },
+    dark: {
+      bg:           '#1a1f26',
+      bgElev:       '#2b3037',
+      bgDeep:       '#0c1117',
+      fg:           '#eaedef',
+      fgDim:        '#aeb2b7',
+      fgGhost:      '#8d9298',
+      accent:       '#2f9f99',
+      accentLight:  '#5bb6b1',
+      accentDim:    '#8d9298',
+      border:       '#42484e',
+      selection:    '#0e3937',
+      onAccent:     '#1a1f26',
+    },
+    light: {
+      bg:           '#fafbfd',
+      bgElev:       '#fafbfd',
+      bgDeep:       '#eaedef',
+      fg:           '#1a1f26',
+      fgDim:        '#5c6168',
+      fgGhost:      '#72777d',
+      accent:       '#2f9f99',
+      accentLight:  '#1e807b',
+      accentDim:    '#72777d',
+      border:       '#c8cbd0',
+      selection:    '#e7f8f6',
+      onAccent:     '#1a1f26',
+    },
+  },
+
+  enderby: {
+    label: 'Enderby',
+    modes: { dark: 'Pilot-cloth', light: 'Ivory' },
+    dark: {
+      bg:           '#0e1824',
+      bgElev:       '#202b39',
+      bgDeep:       '#17212f',
+      fg:           '#ece8d9',
+      fgDim:        '#b8b4a6',
+      fgGhost:      '#ada99c',
+      accent:       '#d8b456',
+      accentLight:  '#7fbef4',
+      accentDim:    '#ada99c',
+      border:       '#333e4d',
+      selection:    '#233f5b',
+      onAccent:     '#0e1824',
+    },
+    light: {
+      bg:           '#faf7ee',
+      bgElev:       '#fefcf8',
+      bgDeep:       '#f3f0e7',
+      fg:           '#1e2736',
+      fgDim:        '#3f4857',
+      fgGhost:      '#47505e',
+      accent:       '#a38122',
+      accentLight:  '#0c4694',
+      accentDim:    '#47505e',
+      border:       '#d7d4ca',
+      selection:    '#cae3fd',
+      onAccent:     '#000000',
+    },
+  },
+
+  bachelor: {
+    label: 'Bachelor',
+    modes: { dark: 'Brazen lamp', light: 'Holiday apparel' },
+    dark: {
+      bg:           '#080e1c',
+      bgElev:       '#1f2636',
+      bgDeep:       '#151b2a',
+      fg:           '#f7f4ec',
+      fgDim:        '#cdc8be',
+      fgGhost:      '#a5a29a',
+      accent:       '#fff000',
+      accentLight:  '#fff000',
+      accentDim:    '#a5a29a',
+      border:       '#677081',
+      selection:    '#0000c9',
+      onAccent:     '#100d01',
+    },
+    light: {
+      bg:           '#f3f0e9',
+      bgElev:       '#ebe7de',
+      bgDeep:       '#ebe7de',
+      fg:           '#0b111f',
+      fgDim:        '#3f4450',
+      fgGhost:      '#6b7079',
+      accent:       '#0000c9',
+      accentLight:  '#0000c9',
+      accentDim:    '#6b7079',
+      border:       '#84817a',
+      selection:    '#fff000',
+      onAccent:     '#ffffff',
+    },
+  },
+
+  rachel: {
+    label: 'Rachel',
+    modes: { dark: 'Beacon', light: 'Daylight' },
+    dark: {
+      bg:           '#1f1813',
+      bgElev:       '#2e2620',
+      bgDeep:       '#261f19',
+      fg:           '#f1e7d2',
+      fgDim:        '#d7cbb7',
+      fgGhost:      '#d7cbb7',
+      accent:       '#9dd1ff',
+      accentLight:  '#9dd1ff',
+      accentDim:    '#d7cbb7',
+      border:       '#897965',
+      selection:    '#1f405e',
+      onAccent:     '#1f1813',
+    },
+    light: {
+      bg:           '#f7efe0',
+      bgElev:       '#fdfaf1',
+      bgDeep:       '#f3e8d5',
+      fg:           '#20160e',
+      fgDim:        '#4c3b30',
+      fgGhost:      '#4c3b30',
+      accent:       '#034574',
+      accentLight:  '#034574',
+      accentDim:    '#4c3b30',
+      border:       '#887865',
+      selection:    '#daecfd',
+      onAccent:     '#f7efe0',
+    },
+  },
+
+  delight: {
+    label: 'Delight',
+    modes: { dark: 'Sad burial', light: 'White ribs' },
+    dark: {
+      bg:           '#111111',
+      bgElev:       '#1a1a1a',
+      bgDeep:       '#222222',
+      fg:           '#eeeeee',
+      fgDim:        '#bbbbbb',
+      fgGhost:      '#888888',
+      accent:       '#ffffff',
+      accentLight:  '#ffffff',
+      accentDim:    '#888888',
+      border:       '#555555',
+      selection:    '#333333',
+      onAccent:     '#111111',
+    },
+    light: {
+      bg:           '#ffffff',
+      bgElev:       '#ffffff',
+      bgDeep:       '#eeeeee',
+      fg:           '#000000',
+      fgDim:        '#333333',
+      fgGhost:      '#555555',
+      accent:       '#000000',
+      accentLight:  '#000000',
+      accentDim:    '#555555',
+      border:       '#bbbbbb',
+      selection:    '#dddddd',
+      onAccent:     '#ffffff',
     },
   },
 };
 
-export const FAMILY_ORDER = ['pequod', 'glauca', 'tryworks', 'ambergris'];
+export const FAMILY_ORDER = ['pequod', 'goney', 'townho', 'jeroboam', 'jungfrau', 'rosebud', 'enderby', 'bachelor', 'rachel', 'delight'];
 export const DEFAULT_FAMILY = 'pequod';
 
 // A mode's colours plus the resolved ink roles.
@@ -168,9 +372,9 @@ export function roles(family, mode) {
   const p = PALETTES[family][mode];
   return {
     ...p,
-    heading:  p.heading  || p.accentLight,
-    emphasis: p.emphasis || p.accentLight,
-    code:     p.code     || p.accentLight,
+    heading:  p.heading  || p.fg,
+    emphasis: p.emphasis || p.fg,
+    code:     p.code     || p.fgDim,
     marker:   p.marker   || p.accent,
   };
 }
@@ -182,7 +386,7 @@ export function cssVars(family, mode) {
     '--bg': r.bg, '--bg-elev': r.bgElev, '--bg-deep': r.bgDeep,
     '--fg': r.fg, '--fg-dim': r.fgDim, '--fg-ghost': r.fgGhost,
     '--accent': r.accent, '--accent-light': r.accentLight, '--accent-dim': r.accentDim,
-    '--border': r.border,
+    '--border': r.border, '--selection': r.selection, '--on-accent': r.onAccent,
     '--heading': r.heading, '--emphasis': r.emphasis, '--code': r.code, '--marker': r.marker,
   };
 }

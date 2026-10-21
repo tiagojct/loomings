@@ -28,7 +28,7 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   focus restore). `src/html.js` — `escapeHtml`, safe in attribute context.
 - `src/fonts.css` — the self-hosted `@font-face` rules; files and licences
   live in `public/fonts/`.
-- `src/palettes.js` — the four colour families. The only place a colour
+- `src/palettes.js` — the ten Ensigns colour families. The only place a colour
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
 - `src/share.js` — document ⇄ URL fragment. Pure, tested.
@@ -55,11 +55,15 @@ browser pane.
 - **`base` is `/app/`** in `vite.config.js`, and must match `nginx.conf`'s
   `/app` mount, the manifest's `scope`/`start_url`, and the service
   worker's `BASE`. Change them together.
-- **Colours only in `palettes.js`.** Add a family there (dark + light, the
-  ten `PALETTE_KEYS`, optional ink roles `heading`/`emphasis`/`code`/
-  `marker`) and to `FAMILY_ORDER`; the theme menu, CodeMirror themes,
-  CSS variables and HTML export all follow. `npm test` enforces WCAG
-  floors per mode.
+- **Colours only in `palettes.js`, and only from Ensigns.** The ten families
+  are Ensigns roles (ensigns.tiagojacinto.eu) mapped once: bg, bgElev,
+  bgDeep, fg, fgDim, fgGhost, accent, accentLight (the link role),
+  accentDim, border, selection, onAccent. Add a family there (dark + light,
+  the twelve `PALETTE_KEYS`, optional ink roles `heading`/`emphasis`/`code`/
+  `marker`) and to `FAMILY_ORDER`; the theme menu, CodeMirror themes, CSS
+  variables and HTML export all follow. `npm test` enforces WCAG floors per
+  mode, plus text-on-accent and a visible selection. Do not introduce a hex
+  that is not an Ensigns role.
 - **The document's home is one of three:** a file handle (`currentFile`,
   handle kept in `browser.js`), a browser document (`currentDocId`,
   IndexedDB), or nothing (untitled). `writeToHome` (`editor.js`) dispatches

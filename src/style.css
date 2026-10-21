@@ -18,16 +18,19 @@
    values just keep the first paint from flashing white. */
 :root,
 [data-theme="dark"] {
-  --bg:           #061826;
-  --bg-elev:      #0E2D44;
-  --bg-deep:      #02101B;
-  --fg:           #F7F3EE;
-  --fg-dim:       #C4BCAE;
-  --fg-ghost:     #8B8578;
-  --accent:       #BD8C68;
-  --accent-light: #D4A882;
-  --accent-dim:   #8B6348;
-  --border:       #0E2D44;
+  /* Pequod, below deck — Ensigns roles. */
+  --bg:           #0b1720;
+  --bg-elev:      #0c222f;
+  --bg-deep:      #0d2f42;
+  --fg:           #eae1d7;
+  --fg-dim:       #bfbbb6;
+  --fg-ghost:     #a16e50;
+  --accent:       #bd8c68;
+  --accent-light: #9dc2c5;
+  --accent-dim:   #a16e50;
+  --border:       #163f54;
+  --selection:    #0d2f42;
+  --on-accent:    #0b1720;
   --heading:      var(--accent-light);
   --emphasis:     var(--accent-light);
   --code:         var(--accent-light);
@@ -35,19 +38,22 @@
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg:           #F1E7D2;
-    --bg-elev:      #F8F0DD;
-    --bg-deep:      #E2D5B7;
-    --fg:           #1A2D3C;
-    --fg-dim:       #3F5566;
-    --fg-ghost:     #7A8B9A;
-    --accent:       #8B6348;
-    --accent-light: #BD8C68;
-    --accent-dim:   #4F3825;
-    --border:       #D7C9A8;
-    --heading:      var(--accent);
-    --emphasis:     var(--accent);
-    --code:         var(--accent);
+    /* Pequod, parchment — Ensigns roles. */
+    --bg:           #eae1d7;
+    --bg-elev:      #f7f3ee;
+    --bg-deep:      #dbc9b6;
+    --fg:           #0d2f42;
+    --fg-dim:       #335260;
+    --fg-ghost:     #835a49;
+    --accent:       #163f54;
+    --accent-light: #163f54;
+    --accent-dim:   #835a49;
+    --border:       #cfad8e;
+    --selection:    #dbc9b6;
+    --on-accent:    #eae1d7;
+    --heading:      var(--accent-light);
+    --emphasis:     var(--accent-light);
+    --code:         var(--accent-light);
     --marker:       var(--accent);
   }
 }
@@ -85,7 +91,7 @@ body { display: flex; flex-direction: column; }
 #web-toolbar .tb-seg button[aria-pressed="true"] {
   background: var(--accent);
   border-color: var(--accent);
-  color: var(--bg-deep);
+  color: var(--on-accent);
 }
 @media (max-width: 760px) {
   .tb-seg [data-view="split"] { display: none; }
@@ -115,6 +121,9 @@ body { display: flex; flex-direction: column; }
   z-index: 80;
   min-width: 220px;
   max-width: min(340px, calc(100vw - 20px));
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -393,9 +402,11 @@ body.view-split #preview { border-left: 1px solid var(--border); }
 
 .hidden { display: none !important; }
 
+/* The UA picks the highlight text colour from the OS appearance, which turns
+   white on a light page in dark mode; pin both halves of the selection. */
 ::selection {
-  background: var(--accent);
-  color: var(--bg-deep);
+  background: var(--selection);
+  color: var(--fg);
 }
 
 #palette {

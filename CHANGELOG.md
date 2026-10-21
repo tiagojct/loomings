@@ -4,6 +4,34 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] — 2026-10-21
+
+The editor's colours now come from Ensigns — the same system the site wears.
+
+### Added
+
+- **Ten Ensigns families** replace the four: Pequod, Goney, Townho,
+  Jeroboam, Jungfrau, Rosebud, Enderby, Bachelor, Rachel, Delight, each with
+  its named dark and light mode. Ensigns renames the old three (Glauca →
+  Goney, Try-Works → Jungfrau, Ambergris → Rosebud) and adds six more.
+- **Selection and on-accent are roles now.** The editor's selection no longer
+  reuses the accent colour, and text on an accent (the pressed view switch,
+  the search button) uses the family's `on-accent`, so both are legible in
+  every family.
+
+### Changed
+
+- **Pequod re-valued to Ensigns Pequod**: parchment, navy and crimson.
+  Headings, emphasis and code now take the family's ink rather than its
+  link colour, so a heading is structure, not a second accent — and it stays
+  legible inside any selection.
+- **The Theme menu scrolls** when the ten families do not fit the viewport.
+- `palettes.js` carries the mapping from Ensigns roles (bg, surface,
+  surface-raised, text, text-muted, text-subtle, border, link, accent,
+  on-accent, selection) to the editor's keys, with the fallbacks documented
+  where Ensigns omits a role. The palette tests now also require readable
+  text on the accent and a selection distinct from the page.
+
 ## [2.1.0] — 2026-10-21
 
 The landing page rebuilt: one transparency on a classroom overhead projector.
@@ -655,6 +683,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.2.0]: https://github.com/tiagojct/loomings/releases/tag/v2.2.0
 [2.1.0]: https://github.com/tiagojct/loomings/releases/tag/v2.1.0
 [2.0.10]: https://github.com/tiagojct/loomings/releases/tag/v2.0.10
 [2.0.9]: https://github.com/tiagojct/loomings/releases/tag/v2.0.9
