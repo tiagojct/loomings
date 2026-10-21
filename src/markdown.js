@@ -27,7 +27,7 @@ export function stripFrontmatter(text) {
  * Creates and configures a markdown-it instance.
  *
  * @param {object} [options]
- * @returns {MarkdownIt}
+ * @returns {InstanceType<typeof MarkdownIt>}
  */
 export function createMarkdownRenderer(options = {}) {
   const md = new MarkdownIt({
@@ -54,7 +54,7 @@ export function createMarkdownRenderer(options = {}) {
   md.renderer.rules.link_open = function (tokens, idx, opts, env, self) {
     const token = tokens[idx];
     const hrefIdx = token.attrIndex('href');
-    if (hrefIdx >= 0) {
+    if (hrefIdx >= 0 && token.attrs) {
       const href = token.attrs[hrefIdx][1];
       if (!SAFE_URL.test(href)) token.attrs[hrefIdx][1] = '#';
     }
@@ -67,12 +67,15 @@ export function createMarkdownRenderer(options = {}) {
   md.renderer.rules.image = function (tokens, idx, opts, env, self) {
     const token = tokens[idx];
     const srcIdx = token.attrIndex('src');
-    if (srcIdx >= 0) {
+    if (srcIdx >= 0 && token.attrs) {
       const src = token.attrs[srcIdx][1];
       if (!SAFE_URL.test(src) && !/^data:image\//i.test(src)) {
         token.attrs[srcIdx][1] = '#';
       }
     }
+    // markdown-it always installs an image rule; the fallback keeps this
+    // override safe if that ever stops being true.
+    if (!defaultImage) return self.renderToken(tokens, idx, opts);
     return defaultImage(tokens, idx, opts, env, self);
   };
 

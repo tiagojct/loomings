@@ -12,7 +12,27 @@ describe('stats calculation', () => {
   it('counts standard words accurately', () => {
     expect(countWords('Call me Ishmael.')).toBe(3);
     expect(countWords('One  two   three    four')).toBe(4);
-    expect(countWords('# Heading One\n\nParagraph text goes here.')).toBe(7);
+    expect(countWords('# Heading One\n\nParagraph text goes here.')).toBe(6);
+  });
+
+  it('does not count Markdown syntax as words', () => {
+    // Headings, bullets and numbered markers are structure, not prose — the
+    // word goal would otherwise be inflated just for formatting a draft.
+    expect(countWords('# Title')).toBe(1);
+    expect(countWords('## Two Words')).toBe(2);
+    expect(countWords('- item')).toBe(1);
+    expect(countWords('* item\n+ another\n1. first\n2. second')).toBe(4);
+    expect(countWords('---')).toBe(0);
+    expect(countWords('> quoted words')).toBe(2);
+    expect(countWords('**bold** and *italic*')).toBe(3);
+    expect(countWords('`code` and [a link](https://example.com)')).toBe(4);
+    expect(countWords('see https://example.com now')).toBe(3);
+  });
+
+  it('keeps contractions, hyphenates and numbers as one word each', () => {
+    expect(countWords("don't stop")).toBe(2);
+    expect(countWords('well-known author')).toBe(2);
+    expect(countWords('in 1851 he sailed')).toBe(4);
   });
 
   it('handles unicode whitespace correctly', () => {

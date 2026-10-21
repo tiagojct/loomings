@@ -20,6 +20,7 @@ const OPENABLE = /\.(md|markdown|mdown|mkd|qmd|rmd|txt)$/i;
 // The handle behind the currently open file (Chromium only) — paired with
 // editor.js's own `currentFile` display-string. Only this module reads or
 // mutates it; editor.js never sees a FileSystemFileHandle directly.
+/** @type {FileSystemFileHandle|null} */
 let currentFileHandle = null;
 
 function downloadBlob(content, filename, mime) {
@@ -42,6 +43,7 @@ const DB_NAME = 'loomings-web';
 const STORE = 'kv';
 const DOC_CONTENT_PREFIX = 'doc_content:';
 
+/** @type {Promise<IDBDatabase>|null} */
 let dbPromise = null;
 
 function openDb() {
@@ -76,6 +78,10 @@ export function _resetDbForTesting() {
   }
 }
 
+/**
+ * @param {string} key
+ * @returns {Promise<any>}
+ */
 export async function idbGet(key) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
@@ -87,25 +93,36 @@ export async function idbGet(key) {
   });
 }
 
+/**
+ * @param {string} key
+ * @param {unknown} value
+ * @returns {Promise<void>}
+ */
 export async function idbSet(key, value) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).put(value, key);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || tx.transaction?.error);
-    tx.onabort = () => reject(new Error('IndexedDB transaction aborted'));
+    // `tx.error` is null for an aborted-but-clean transaction, so give the
+    // caller a real Error instead of rejecting with undefined.
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
   });
 }
 
+/**
+ * @param {string} key
+ * @returns {Promise<void>}
+ */
 export async function idbDelete(key) {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE, 'readwrite');
     tx.objectStore(STORE).delete(key);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error || tx.transaction?.error);
-    tx.onabort = () => reject(new Error('IndexedDB transaction aborted'));
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB delete failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
   });
 }
 
@@ -151,7 +168,12 @@ export async function saveFileAs(content, suggestedName = 'untitled.md') {
     let handle;
     try {
       handle = await window.showSaveFilePicker({ types: [OPEN_TYPES], suggestedName });
-    } catch (_) { return null; } // user cancelled
+    } catch (err) {
+      // Only a user cancel is silent; a blocked or failed picker must reach
+      // the caller so it can be reported instead of looking like a cancel.
+      if (err?.name === 'AbortError') return null;
+      throw err;
+    }
     const writable = await handle.createWritable();
     await writable.write(content);
     await writable.close();
@@ -170,7 +192,10 @@ export async function openFile() {
     let handle;
     try {
       [handle] = await window.showOpenFilePicker({ types: [OPEN_TYPES] });
-    } catch (_) { return null; } // user cancelled
+    } catch (err) {
+      if (err?.name === 'AbortError') return null;
+      throw err;
+    }
     const file = await handle.getFile();
     currentFileHandle = handle;
     return { path: file.name, content: await file.text() };
@@ -223,29 +248,48 @@ export async function downloadMarkdown(content, suggestedName) {
 
 export async function addRecent(filePath) {
   if (!currentFileHandle) return;
-  const recents = (await idbGet('recents')) || [];
-  const next = [
-    { name: filePath, handle: currentFileHandle, lastOpened: Date.now() },
-    ...recents.filter((r) => r.name !== filePath),
-  ].slice(0, 10);
-  await idbSet('recents', next);
+  try {
+    const recents = (await idbGet('recents')) || [];
+    const next = [
+      { name: filePath, handle: currentFileHandle, lastOpened: Date.now() },
+      ...recents.filter((r) => r.name !== filePath),
+    ].slice(0, 10);
+    await idbSet('recents', next);
+  } catch (_) {
+    // Recents are a convenience: losing one must never fail the open/save
+    // that triggered it, nor surface as an unhandled rejection.
+  }
 }
 
 export async function getRecents() { return (await idbGet('recents')) || []; }
 
 // Reconnects a stored recent — requestPermission needs the click that
 // triggered this call, so callers must invoke it directly from a click
-// handler, not after an intervening await.
+// handler, not after an intervening await. Returns null when the file is
+// gone or permission was declined, and drops the dead entry so the menu
+// stops offering a row that can never open.
 export async function openRecent(entry) {
-  const granted = await entry.handle.requestPermission({ mode: 'readwrite' });
-  if (granted !== 'granted') {
-    const recents = (await idbGet('recents')) || [];
-    await idbSet('recents', recents.filter((r) => r.name !== entry.name));
+  const forget = async () => {
+    try {
+      const recents = (await idbGet('recents')) || [];
+      await idbSet('recents', recents.filter((r) => r.name !== entry.name));
+    } catch (_) {}
+  };
+  try {
+    const granted = await entry.handle.requestPermission({ mode: 'readwrite' });
+    if (granted !== 'granted') {
+      await forget();
+      return null;
+    }
+    const file = await entry.handle.getFile();
+    currentFileHandle = entry.handle;
+    return { path: file.name, content: await file.text() };
+  } catch (_) {
+    // Revoked permission, a moved file, or a handle the browser no longer
+    // accepts — all of them mean this row is finished.
+    await forget();
     return null;
   }
-  const file = await entry.handle.getFile();
-  currentFileHandle = entry.handle;
-  return { path: file.name, content: await file.text() };
 }
 
 // ==========================
@@ -344,8 +388,9 @@ export async function clearScratch() {
 // When the PWA is registered as a handler for .md files (manifest
 // file_handlers), the OS hands them over through launchQueue.
 export function initLaunchQueue(onFile) {
-  if (!('launchQueue' in window)) return;
-  window.launchQueue.setConsumer(async (params) => {
+  const queue = window.launchQueue;
+  if (!queue) return;
+  queue.setConsumer(async (params) => {
     for (const handle of params.files || []) {
       const payload = await openHandle(handle);
       if (payload) onFile(payload);

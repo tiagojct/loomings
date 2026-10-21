@@ -10,8 +10,9 @@ import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syn
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { renderMarkdown } from './markdown.js';
-import { countWords } from './stats.js';
-import { attachMenu, closeAllMenus } from './menu.js';
+import { countWords, readingTime } from './stats.js';
+import { escapeHtml } from './html.js';
+import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles, cssVars } from './palettes.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
@@ -26,18 +27,27 @@ import { LESSONS, lessonBySlug } from './lessons.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
 
-const editorEl    = document.getElementById('editor');
-const preview     = document.getElementById('preview');
-const contentArea = document.getElementById('content-area');
-const dirtyEl     = document.getElementById('dirty');
-const statsEl     = document.getElementById('stats');
-const statWords   = document.getElementById('stat-words');
-const statChars   = document.getElementById('stat-chars');
-const statLines   = document.getElementById('stat-lines');
-const statRead    = document.getElementById('stat-read');
-const statusApp   = document.getElementById('status-app');
-const statusFile  = document.getElementById('status-file');
-const cursorPosEl = document.getElementById('cursor-pos');
+// index.html is the only page this script runs on, so a missing node is a
+// build error rather than a runtime condition worth tolerating.
+/** @param {string} id @returns {HTMLElement} */
+function el(id) {
+  const node = document.getElementById(id);
+  if (!node) throw new Error('Loomings: missing #' + id);
+  return node;
+}
+
+const editorEl    = el('editor');
+const preview     = el('preview');
+const contentArea = el('content-area');
+const dirtyEl     = el('dirty');
+const statsEl     = el('stats');
+const statWords   = el('stat-words');
+const statChars   = el('stat-chars');
+const statLines   = el('stat-lines');
+const statRead    = el('stat-read');
+const statusApp   = el('status-app');
+const statusFile  = el('status-file');
+const cursorPosEl = el('cursor-pos');
 const body        = document.body;
 
 const STORE = {
@@ -48,11 +58,11 @@ const STORE = {
   getNum(k, fb)   { const v = parseFloat(this.get(k, String(fb))); return isNaN(v) ? fb : v; }
 };
 
-let currentFile      = null; // name of the file on disk (handle lives in browser.js)
-let currentDocId     = null; // id of the document in this browser's IndexedDB
-let isDirty          = false;
-let autoSaveTimer    = null;
-let scratchTimer     = null;
+/** @type {string|null} */ let currentFile = null;   // file on disk (handle lives in browser.js)
+/** @type {string|null} */ let currentDocId = null;  // document in this browser's IndexedDB
+let isDirty = false;
+/** @type {ReturnType<typeof setTimeout>|null} */ let autoSaveTimer = null;
+/** @type {ReturnType<typeof setTimeout>|null} */ let scratchTimer = null;
 let isFocusMode      = false;
 let showStats        = STORE.getBool('showStats', false);
 let smartTypo        = STORE.getBool('smartTypo', true);
@@ -242,7 +252,7 @@ const frontmatterPlugin = ViewPlugin.fromClass(class {
     for (let i = 2; i <= state.doc.lines; i++) {
       const line = state.doc.line(i);
       if (line.text === '---') {
-        const builder = new RangeSetBuilder();
+        const builder = /** @type {RangeSetBuilder<Decoration>} */ (new RangeSetBuilder());
         builder.add(firstLine.from, line.to, frontmatterMark);
         return builder.finish();
       }
@@ -254,7 +264,7 @@ const frontmatterPlugin = ViewPlugin.fromClass(class {
 
 // Signals a focus-mode on/off flip to the plugin below — the only update
 // that isn't covered by docChanged/selectionSet.
-const focusModeEffect = StateEffect.define();
+const focusModeEffect = /** @type {import('@codemirror/state').StateEffectType<boolean>} */ (/** @type {unknown} */ (StateEffect.define()));
 
 const sentenceFocusPlugin = ViewPlugin.fromClass(class {
   constructor(view) { this.decorations = this.build(view); }
@@ -303,7 +313,7 @@ const sentenceFocusPlugin = ViewPlugin.fromClass(class {
       activeTo   = pTo;
     }
 
-    const builder = new RangeSetBuilder();
+    const builder = /** @type {RangeSetBuilder<Decoration>} */ (new RangeSetBuilder());
     if (activeFrom > 0) builder.add(0, activeFrom, dimMark);
     if (activeTo < docLen) builder.add(activeTo, docLen, dimMark);
     return builder.finish();
@@ -334,21 +344,6 @@ const smartTypographyHandler = EditorView.inputHandler.of((view, from, to, text)
   }
   return false;
 });
-
-function toggleSmartTypo() {
-  smartTypo = !smartTypo;
-  STORE.setBool('smartTypo', smartTypo);
-  flashStatus(`Smart typography: ${smartTypo ? 'on' : 'off'}`);
-}
-
-function toggleLineNumbers() {
-  lineNumbersOn = !lineNumbersOn;
-  STORE.setBool('lineNumbers', lineNumbersOn);
-  view.dispatch({
-    effects: lineNumbersCompartment.reconfigure(lineNumbersOn ? lineNumbers() : []),
-  });
-  flashStatus(`Line numbers: ${lineNumbersOn ? 'on' : 'off'}`);
-}
 
 function insertLink(view) {
   const sel = view.state.selection.main;
@@ -590,10 +585,10 @@ function setThemeFamily(family) {
 //  Theme menu (toolbar)
 // ==========================
 
-const themeMenuEl     = document.getElementById('theme-menu');
-const themeMenuBtn    = document.getElementById('tb-theme');
-const themeFamiliesEl = document.getElementById('theme-families');
-const themeModesEl    = document.getElementById('theme-modes');
+const themeMenuEl     = el('theme-menu');
+const themeMenuBtn    = el('tb-theme');
+const themeFamiliesEl = el('theme-families');
+const themeModesEl    = el('theme-modes');
 
 function renderThemeMenu() {
   if (!themeMenuEl) return;
@@ -603,8 +598,8 @@ function renderThemeMenu() {
     return `<button type="button" class="tb-menu-item ${f === themeFamily ? 'on' : ''}" role="menuitemradio"
               aria-checked="${f === themeFamily}" data-family="${f}">
       <span class="swatch" style="background:${sw.bg};border-color:${sw.border}"><i style="background:${sw.accent}"></i></span>
-      <span class="tb-menu-label">${escHtml(fam.label)}</span>
-      <span class="tb-menu-hint">${escHtml(fam.modes[activeTheme])}</span>
+      <span class="tb-menu-label">${escapeHtml(fam.label)}</span>
+      <span class="tb-menu-hint">${escapeHtml(fam.modes[activeTheme])}</span>
     </button>`;
   }).join('');
   themeModesEl.innerHTML = MODE_ORDER.map((m) =>
@@ -633,11 +628,11 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () 
 //  Focus menu (toolbar)
 // ==========================
 
-const focusMenuEl = document.getElementById('focus-menu');
+const focusMenuEl = el('focus-menu');
 
 function renderFocusMenu() {
   if (!focusMenuEl) return;
-  focusMenuEl.querySelectorAll('[data-toggle]').forEach((btn) => {
+  /** @type {NodeListOf<HTMLElement>} */ (focusMenuEl.querySelectorAll('[data-toggle]')).forEach((btn) => {
     const on = btn.dataset.toggle === 'sentence' ? isFocusMode
       : btn.dataset.toggle === 'typewriter' ? typewriterOn
       : isFullscreen();
@@ -646,7 +641,7 @@ function renderFocusMenu() {
   });
 }
 
-attachMenu(document.getElementById('tb-focus'), focusMenuEl, {
+attachMenu(el('tb-focus'), focusMenuEl, {
   onOpen: renderFocusMenu,
   onPick: (item) => {
     if (item.dataset.toggle === 'sentence') toggleFocusMode();
@@ -687,22 +682,22 @@ function updateStats() {
     : `${words} w`;
   statChars.textContent = `${text.length} c`;
   statLines.textContent = `${view.state.doc.lines} ln`;
-  statRead.textContent = words > 0 ? `~${Math.max(1, Math.ceil(words / 200))} min` : '';
+  statRead.textContent = readingTime(words);
 }
 
 // Stats are O(doc) — never compute them per keystroke, and never when the
 // stats bar is hidden.
-let statsTimer = null;
+/** @type {ReturnType<typeof setTimeout>|null} */ let statsTimer = null;
 function scheduleStats() {
   if (!showStats) return;
-  clearTimeout(statsTimer);
+  if (statsTimer) clearTimeout(statsTimer);
   statsTimer = setTimeout(updateStats, 250);
 }
 
-let previewTimer = null;
+/** @type {ReturnType<typeof setTimeout>|null} */ let previewTimer = null;
 function schedulePreview() {
   if (!previewShown()) return;
-  clearTimeout(previewTimer);
+  if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, 150);
 }
 
@@ -726,9 +721,9 @@ function updateCursorPos() {
 //  Outline palette (Cmd+P jump to heading)
 // ==========================
 
-const paletteEl    = document.getElementById('palette');
-const paletteInput = document.getElementById('palette-input');
-const paletteList  = document.getElementById('palette-list');
+const paletteEl    = el('palette');
+const paletteInput = /** @type {HTMLInputElement} */ (el('palette-input'));
+const paletteList  = el('palette-list');
 let paletteHeadings = [];
 let paletteIdx      = 0;
 
@@ -758,10 +753,6 @@ function filteredHeadings() {
   return paletteHeadings.filter(h => h.text.toLowerCase().includes(q));
 }
 
-function escHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 function renderPalette() {
   const list = filteredHeadings();
   if (list.length === 0) {
@@ -773,7 +764,7 @@ function renderPalette() {
   paletteList.innerHTML = list.map((h, i) =>
     `<li class="palette-item lvl-${h.level} ${i === paletteIdx ? 'sel' : ''}" data-i="${i}">
        <span class="palette-level">H${h.level}</span>
-       <span class="palette-text">${escHtml(h.text || '(empty)')}</span>
+       <span class="palette-text">${escapeHtml(h.text || '(empty)')}</span>
      </li>`
   ).join('');
   const sel = paletteList.querySelector('.palette-item.sel');
@@ -798,10 +789,10 @@ function closePalette() {
 //  About modal
 // ==========================
 
-const aboutEl       = document.getElementById('about');
-const aboutIcon     = document.getElementById('about-icon');
-const aboutVersion  = document.getElementById('about-version');
-const aboutExample  = document.getElementById('about-example');
+const aboutEl       = el('about');
+const aboutIcon     = /** @type {HTMLImageElement} */ (el('about-icon'));
+const aboutVersion  = el('about-version');
+const aboutExample  = el('about-example');
 
 function initAbout() {
   aboutIcon.src = new URL('./icon.png', import.meta.url).href;
@@ -823,7 +814,7 @@ function closeAbout() {
 aboutEl.addEventListener('click', (e) => {
   if (e.target === aboutEl) closeAbout();
 });
-aboutEl.querySelectorAll('a[data-url]').forEach(a => {
+  /** @type {NodeListOf<HTMLElement>} */ (aboutEl.querySelectorAll('a[data-url]')).forEach(a => {
   a.addEventListener('click', (e) => {
     e.preventDefault();
     openUrl(a.dataset.url).catch(() => {});
@@ -864,8 +855,8 @@ paletteInput.addEventListener('keydown', (e) => {
   }
 });
 paletteList.addEventListener('click', (e) => {
-  const li = e.target.closest('.palette-item');
-  if (li) jumpToHeading(parseInt(li.dataset.i, 10));
+  const li = /** @type {HTMLElement} */ (e.target).closest('.palette-item');
+  if (li instanceof HTMLElement) jumpToHeading(parseInt(li.dataset.i || '0', 10));
 });
 paletteEl.addEventListener('click', (e) => {
   if (e.target === paletteEl) closePalette();
@@ -899,7 +890,7 @@ function markClean() {
 }
 
 function resetAutoSave() {
-  clearTimeout(autoSaveTimer);
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
   autoSaveTimer = setTimeout(() => {
     if (isDirty && (currentFile || currentDocId)) doSave(getText());
   }, 2000);
@@ -909,15 +900,14 @@ function resetAutoSave() {
 // Open, external reload, Save As). doSave/writeScratch capture it before an
 // await and check it after — if it moved on, a slow save/scratch-write that
 // finishes late knows its result now describes an abandoned buffer and must
-// not touch lastSavedContent/lastScratchContent/isDirty on the buffer that
-// replaced it.
+// not touch lastScratchContent/isDirty on the buffer that replaced it.
 let docGeneration = 0;
 
-let lastScratchContent = null;
+/** @type {string|null} */ let lastScratchContent = null;
 // Tracks the most recent in-flight scratch write so quit can wait for it —
 // otherwise a write racing the close sequence could land after clear_scratch
 // and leave an orphan scratch file (see doSave / request-close).
-let scratchSaveInFlight = null;
+/** @type {Promise<void>|null} */ let scratchSaveInFlight = null;
 
 function writeScratch(text, forFile) {
   if (text === lastScratchContent) return;
@@ -943,7 +933,7 @@ function writeScratch(text, forFile) {
 // first means even a write that's still in flight past the bounded wait
 // below will re-clear itself via writeScratch's own check once it lands.
 async function discardScratch() {
-  clearTimeout(scratchTimer);
+  if (scratchTimer) clearTimeout(scratchTimer);
   docGeneration++;
   await Promise.race([scratchSaveInFlight, new Promise((r) => setTimeout(r, 2000))]);
   lastScratchContent = null;
@@ -951,20 +941,29 @@ async function discardScratch() {
 }
 
 function resetScratchSave() {
-  clearTimeout(scratchTimer);
+  if (scratchTimer) clearTimeout(scratchTimer);
   scratchTimer = setTimeout(() => {
     if (!isDirty) return;
     writeScratch(getText(), currentFile);
   }, 800);
 }
 
-// Last content we wrote to disk ourselves.
-let lastSavedContent = null;
+// A tab can be hidden or closed inside that 800 ms window, and the debounce
+// would lose the last keystrokes. Flush on the way out instead of waiting.
+function flushScratch() {
+  if (!isDirty) return;
+  if (scratchTimer) clearTimeout(scratchTimer);
+  writeScratch(getText(), currentFile);
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushScratch();
+});
+window.addEventListener('pagehide', flushScratch);
 
 // Serializes doSave calls — the 2s autosave timer and an explicit Cmd+S can
 // fire close enough together that two writes to the same handle would
 // overlap. Awaiting any save already in flight keeps writes one at a time.
-let saveInFlight = null;
+/** @type {Promise<void>|null} */ let saveInFlight = null;
 
 // Writes the buffer to wherever it currently lives: the file on disk, or
 // the document in this browser. Untitled buffers have no target — Save
@@ -982,7 +981,6 @@ async function doSave(content) {
       // it was aimed at), but its result no longer describes the current
       // buffer, so don't let it stomp fresher state.
       if (gen !== docGeneration) return;
-      lastSavedContent = content;
       // Storage has this content now — a scratch copy of it would only
       // produce a bogus "recover draft?" prompt on the next visit.
       lastScratchContent = content;
@@ -1003,10 +1001,12 @@ async function clearScratchAfterInFlight() {
   await clearScratch();
 }
 
+/** @type {ReturnType<typeof setTimeout>|null} */ let statusTimer = null;
+
 function flashStatus(msg) {
   statusApp.textContent = msg;
-  clearTimeout(statusApp._timeout);
-  statusApp._timeout = setTimeout(refreshStatusBar, 2000);
+  if (statusTimer) if (statusTimer) clearTimeout(statusTimer);
+  statusTimer = setTimeout(refreshStatusBar, 2000);
 }
 
 function basename(p) {
@@ -1061,7 +1061,6 @@ async function saveInBrowser() {
     currentFile = null;
     forgetFile();
     currentDocId = doc.id;
-    lastSavedContent = text;
     lastScratchContent = text;
     clearScratchAfterInFlight();
     setTitle(doc.title);
@@ -1078,11 +1077,9 @@ async function handleSaveAs() {
       docGeneration++; // any save still in flight for the old path/target must not stomp this
       currentFile = path;
       currentDocId = null;
-      lastSavedContent = text;
       lastScratchContent = text;
       clearScratchAfterInFlight();
       await addRecent(path);
-      refreshRecents();
       setTitle(displayName(path));
       markClean(); refreshStatusBar();
     } else if (!hasFileSystemAccess) {
@@ -1102,7 +1099,7 @@ async function exportHtml() {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escHtml(title)}</title>
+<title>${escapeHtml(title)}</title>
 <style>
   body { max-width: 680px; margin: 0 auto; padding: 48px 24px;
          font-family: Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 1.8;
@@ -1139,7 +1136,7 @@ async function confirmDiscard(prompt) {
   if (!isDirty) return true;
   const message = prompt + '\n\nUnsaved changes will be lost.';
   try {
-    return await ask(message, { title: 'Loomings', kind: 'warning' });
+    return await ask(message);
   } catch (_) {
     return false;
   }
@@ -1150,13 +1147,12 @@ async function fileNew() {
     const proceed = await confirmDiscard('Discard the current document?');
     if (!proceed) return;
   }
-  clearTimeout(autoSaveTimer);
+  if (autoSaveTimer) clearTimeout(autoSaveTimer);
   await discardScratch();
   setText('');
   currentFile = null;
   currentDocId = null;
   forgetFile();
-  lastSavedContent = null;
   setTitle(null);
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
   view.focus();
@@ -1178,7 +1174,7 @@ function toggleFocusMode() {
 // keystroke — dispatching inside an update cycle isn't allowed, so this
 // still has to defer, but only once per frame no matter how many updates
 // land in it.
-let typewriterFrame = null;
+/** @type {number|null} */ let typewriterFrame = null;
 function scheduleTypewriterScroll(head) {
   if (typewriterFrame !== null) cancelAnimationFrame(typewriterFrame);
   typewriterFrame = requestAnimationFrame(() => {
@@ -1251,7 +1247,7 @@ function applyViewMode() {
   for (const m of VIEW_MODES) body.classList.toggle('view-' + m, m === mode);
   editorEl.classList.toggle('hidden', mode === 'preview');
   preview.classList.toggle('hidden', mode === 'editor');
-  document.querySelectorAll('#web-toolbar [data-view]').forEach((b) => {
+  /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]')).forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.view === mode));
   });
   if (mode !== 'editor') updatePreview();
@@ -1283,16 +1279,19 @@ narrowMq.addEventListener('change', applyViewMode);
 // editor picks the first block at or below the preview's scrollTop. A
 // short-lived lock stops the two handlers from feeding each other.
 
+/** @type {{source: string|null, until: number}} */
 let syncLock = { source: null, until: 0 };
 function lockSync(source) { syncLock = { source, until: performance.now() + 120 }; }
 function syncLockedBy(other) { return syncLock.source === other && performance.now() < syncLock.until; }
 
+/** @type {{el: HTMLElement, line: number, top: number}[]|null} */
 let cachedPreviewBlocks = null;
 function getPreviewBlocks() {
   if (!cachedPreviewBlocks) {
-    cachedPreviewBlocks = Array.from(preview.querySelectorAll('[data-line]')).map((el) => ({
-      el, line: parseInt(el.dataset.line, 10), top: el.offsetTop,
+    const measured = /** @type {HTMLElement[]} */ (Array.from(preview.querySelectorAll('[data-line]'))).map((node) => ({
+      el: node, line: parseInt(node.dataset.line || '', 10), top: node.offsetTop,
     })).filter((b) => !Number.isNaN(b.line));
+    cachedPreviewBlocks = measured;
   }
   return cachedPreviewBlocks;
 }
@@ -1316,7 +1315,9 @@ function syncPreviewToEditor() {
     // Fraction of the way through the top line, so the mapping is continuous.
     const within = block.height > 0 ? (scroller.scrollTop - block.top) / block.height : 0;
     const srcLine = lineNo + Math.max(0, Math.min(1, within));
-    let a = blocks[0], b = null;
+    let a = blocks[0];
+    /** @type {typeof blocks[number]|null} */
+    let b = null;
     for (const blk of blocks) {
       if (blk.line <= srcLine) a = blk; else { b = blk; break; }
     }
@@ -1337,7 +1338,9 @@ function syncEditorToPreview() {
   const blocks = getPreviewBlocks();
   if (!blocks.length) return;
   const top = preview.scrollTop;
-  let a = blocks[0], b = null;
+  let a = blocks[0];
+  /** @type {typeof blocks[number]|null} */
+  let b = null;
   for (const blk of blocks) {
     if (blk.top <= top) a = blk; else { b = blk; break; }
   }
@@ -1379,12 +1382,12 @@ function printPreview() {
 // Links in the rendered preview open in a new tab rather than navigating
 // the editor away from an unsaved buffer.
 preview.addEventListener('click', (e) => {
-  const a = e.target.closest('a[href]');
+  const a = /** @type {HTMLElement} */ (e.target).closest('a[href]');
   if (!a) return;
   const href = a.getAttribute('href');
   // Only http(s)/mailto need routing; in-page anchors (#heading) keep
   // default navigation so they still work.
-  if (/^(https?:|mailto:)/i.test(href)) {
+  if (href && /^(https?:|mailto:)/i.test(href)) {
     e.preventDefault();
     openUrl(href).catch(() => {});
   }
@@ -1398,7 +1401,7 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
-    if (openMenus.size) { closeAllMenus(); return; }
+    if (hasOpenMenus()) { closeAllMenus(); return; }
     if (!cheatsheetEl.classList.contains('hidden')) { toggleCheatsheet(false); return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
     if (effectiveViewMode() === 'preview')       { setViewMode('editor'); return; }
@@ -1439,7 +1442,6 @@ async function loadFile(payload) {
   }
   await discardScratch(); // the buffer we're replacing is no longer relevant to recover
   setText(payload.content);
-  lastSavedContent = null;
   currentDocId = payload.docId || null;
   if (!payload.path) {
     // Untitled buffer with content (example, lesson, share link) — no
@@ -1452,7 +1454,6 @@ async function loadFile(payload) {
     currentFile = payload.path;
     setTitle(displayName(payload.path));
     addRecent(payload.path);
-    refreshRecents();
   }
   markClean(); updateStats(); updatePreview(); refreshStatusBar();
   view.focus();
@@ -1534,31 +1535,36 @@ window.addEventListener('hashchange', () => {
 //  Cheatsheet drawer
 // ==========================
 
-const cheatsheetEl = document.getElementById('cheatsheet');
+const cheatsheetEl = el('cheatsheet');
 function toggleCheatsheet(force) {
   const show = force ?? cheatsheetEl.classList.contains('hidden');
   cheatsheetEl.classList.toggle('hidden', !show);
   if (!show) view.focus();
 }
-document.getElementById('cheatsheet-close')?.addEventListener('click', () => toggleCheatsheet(false));
+el('cheatsheet-close')?.addEventListener('click', () => toggleCheatsheet(false));
 
 // ==========================
 //  Toolbar
 // ==========================
 
 async function openFile() {
-  // loadFile itself runs the dirty-check on the result.
-  const payload = await pickFile();
-  if (payload) await loadFile(payload);
+  // loadFile itself runs the dirty-check on the result. Only a user cancel
+  // comes back null; a picker that failed must say so.
+  try {
+    const payload = await pickFile();
+    if (payload) await loadFile(payload);
+  } catch (err) {
+    flashStatus('Open failed: ' + (err?.message || err));
+  }
 }
 
 // ==========================
 //  Documents menu: this browser's storage + recent files (Chromium)
 // ==========================
 
-const docsListEl       = document.getElementById('docs-list');
-const docsRecentsEl    = document.getElementById('docs-recents');
-const docsRecentsSecEl = document.getElementById('docs-recents-section');
+const docsListEl       = el('docs-list');
+const docsRecentsEl    = el('docs-recents');
+const docsRecentsSecEl = el('docs-recents-section');
 let recentEntries = []; // handles kept from the last render so a pick uses the click's activation
 
 function relTime(ts) {
@@ -1573,28 +1579,34 @@ function relTime(ts) {
 async function renderDocsMenu() {
   const [docs, recents] = await Promise.all([listDocuments(), getRecents()]);
   docsListEl.innerHTML = docs.length
-    ? docs.map((d) =>
-        `<button type="button" class="tb-menu-item ${d.id === currentDocId ? 'on' : ''}" role="menuitem" data-doc="${escHtml(d.id)}">
-           <span class="tb-menu-label">${escHtml(d.title)}</span>
-           <span class="tb-menu-hint">${relTime(d.updated)}</span>
-           <span class="tb-menu-x" data-delete="${escHtml(d.id)}" role="button" title="Delete" aria-label="Delete ${escHtml(d.title)}">×</span>
-         </button>`).join('')
+    ? docs.map((d) => {
+      const active = d.id === currentDocId ? 'on' : '';
+      // Open and delete are siblings, not nested: a button inside a
+      // role="menuitem" button is invalid ARIA and hides the delete action
+      // from keyboard users.
+      return `<div class="tb-menu-row">
+           <button type="button" class="tb-menu-item ${active}" role="menuitem" data-doc="${escapeHtml(d.id)}">
+             <span class="tb-menu-label">${escapeHtml(d.title)}</span>
+             <span class="tb-menu-hint">${relTime(d.updated)}</span>
+           </button>
+           <button type="button" class="tb-menu-item tb-menu-delete" role="menuitem"
+                   data-delete="${escapeHtml(d.id)}" title="Delete"
+                   aria-label="Delete ${escapeHtml(d.title)}">×</button>
+         </div>`;
+    }).join('')
     : '<div class="tb-menu-empty">Nothing saved in this browser yet</div>';
   recentEntries = recents;
   docsRecentsSecEl.classList.toggle('hidden', !recents.length);
   docsRecentsEl.innerHTML = recents.map((r, i) =>
-    `<button type="button" class="tb-menu-item" role="menuitem" data-recent="${i}"><span class="tb-menu-label">${escHtml(r.name)}</span></button>`
+    `<button type="button" class="tb-menu-item" role="menuitem" data-recent="${i}"><span class="tb-menu-label">${escapeHtml(r.name)}</span></button>`
   ).join('');
 }
 
-// Kept as a hook for callers that used to refresh the recents <select>.
-function refreshRecents() {}
-
-attachMenu(document.getElementById('tb-docs'), document.getElementById('docs-menu'), {
+attachMenu(el('tb-docs'), el('docs-menu'), {
   onOpen: renderDocsMenu,
   onPick: async (item, target) => {
-    const del = target.closest('[data-delete]');
-    if (del) {
+    const del = /** @type {HTMLElement|null} */ (target.closest('[data-delete]'));
+    if (del?.dataset.delete) {
       const doc = await getDocument(del.dataset.delete);
       if (!doc) return;
       if (!(await ask(`Delete “${doc.title}” from this browser?`))) return;
@@ -1614,15 +1626,15 @@ attachMenu(document.getElementById('tb-docs'), document.getElementById('docs-men
       if (!entry) return;
       const payload = await openRecent(entry);
       if (payload) await loadFile(payload);
-      else flashStatus('Could not reopen — permission declined');
+      else flashStatus('Could not reopen — permission declined or the file has moved');
     }
   },
 });
 
-document.getElementById('tb-new')?.addEventListener('click', fileNew);
-document.getElementById('tb-open')?.addEventListener('click', openFile);
-document.getElementById('tb-save')?.addEventListener('click', handleSave);
-attachMenu(document.getElementById('tb-export'), document.getElementById('export-menu'), {
+el('tb-new')?.addEventListener('click', fileNew);
+el('tb-open')?.addEventListener('click', openFile);
+el('tb-save')?.addEventListener('click', handleSave);
+attachMenu(el('tb-export'), el('export-menu'), {
   onPick: (item) => {
     if (item.dataset.action === 'html')  exportHtml();
     if (item.dataset.action === 'print') printPreview();
@@ -1631,13 +1643,13 @@ attachMenu(document.getElementById('tb-export'), document.getElementById('export
   },
 });
 
-const learnMenuEl = document.getElementById('learn-menu');
-const learnLessonsEl = document.getElementById('learn-lessons');
-attachMenu(document.getElementById('tb-learn'), learnMenuEl, {
+const learnMenuEl = el('learn-menu');
+const learnLessonsEl = el('learn-lessons');
+attachMenu(el('tb-learn'), learnMenuEl, {
   onOpen: () => {
     learnLessonsEl.innerHTML = LESSONS.map((l, i) =>
-      `<button type="button" class="tb-menu-item" role="menuitem" data-lesson="${escHtml(l.slug)}">
-         <span class="tb-menu-num">${i + 1}</span><span class="tb-menu-label">${escHtml(l.title)}</span>
+      `<button type="button" class="tb-menu-item" role="menuitem" data-lesson="${escapeHtml(l.slug)}">
+         <span class="tb-menu-num">${i + 1}</span><span class="tb-menu-label">${escapeHtml(l.title)}</span>
        </button>`
     ).join('');
   },
@@ -1647,16 +1659,18 @@ attachMenu(document.getElementById('tb-learn'), learnMenuEl, {
     if (item.dataset.action === 'example') openExample().then((p) => { if (p) loadFile({ ...p, title: 'Moby-Dick' }); });
   },
 });
-document.querySelectorAll('#web-toolbar [data-view]').forEach((b) => {
-  b.addEventListener('click', () => setViewMode(b.dataset.view));
+/** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]')).forEach((b) => {
+  b.addEventListener('click', () => setViewMode(b.dataset.view || 'editor'));
 });
-document.getElementById('tb-about')?.addEventListener('click', openAbout);
+el('tb-about')?.addEventListener('click', openAbout);
 
 // A dirty buffer left open in a closed tab is otherwise silently lost —
 // blunter than the native flush-and-ask flow (generic browser dialog, no
 // custom copy, can't await the async scratch-flush first) but real insurance.
 window.addEventListener('beforeunload', (e) => {
-  if (isDirty) e.preventDefault();
+  if (!isDirty) return;
+  e.preventDefault();
+  e.returnValue = ''; // older Safari ignores preventDefault alone
 });
 
 // ==========================

@@ -5,6 +5,9 @@
 
 const openMenus = new Set();
 
+/** @returns {boolean} */
+export function hasOpenMenus() { return openMenus.size > 0; }
+
 export function closeAllMenus() {
   for (const close of [...openMenus]) close();
 }
@@ -26,7 +29,13 @@ if (typeof document !== 'undefined') {
 export function attachMenu(btn, menuEl, { onOpen, onPick } = {}) {
   if (!btn || !menuEl) return { close() {} };
 
-  const getMenuItems = () => Array.from(menuEl.querySelectorAll('.tb-menu-item:not([disabled])'));
+  // A menu can hold collapsed sections (the documents menu's "Recent files");
+  // an item inside one is not focusable, so roving arrow navigation must skip
+  // it or the focus ring appears to stall.
+  const isVisible = (item) => !item.hidden && !item.closest('.hidden') && !item.closest('[hidden]');
+  /** @returns {HTMLElement[]} */
+  const getMenuItems = () =>
+    /** @type {HTMLElement[]} */ (Array.from(menuEl.querySelectorAll('.tb-menu-item:not([disabled])'))).filter(isVisible);
 
   const open = (focusFirst = false) => {
     closeAllMenus();
@@ -65,16 +74,17 @@ export function attachMenu(btn, menuEl, { onOpen, onPick } = {}) {
 
   menuEl.addEventListener('click', (e) => {
     e.stopPropagation();
-    const item = e.target.closest('.tb-menu-item');
+    const target = /** @type {HTMLElement} */ (e.target);
+    const item = target.closest('.tb-menu-item');
     if (!item) return;
     close(true);
-    onPick?.(item, e.target);
+    onPick?.(/** @type {HTMLElement} */ (item), target);
   });
 
   menuEl.addEventListener('keydown', (e) => {
     const items = getMenuItems();
     if (!items.length) return;
-    const currentIdx = items.indexOf(document.activeElement);
+    const currentIdx = items.indexOf(/** @type {HTMLElement} */ (document.activeElement));
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();

@@ -8,7 +8,7 @@ const files = import.meta.glob('../lessons/*.md', { query: '?raw', import: 'defa
 
 export const LESSONS = Object.entries(files)
   .map(([path, content]) => {
-    const file = path.split('/').pop();
+    const file = path.split('/').pop() || path;
     const m = file.match(/^(\d+)-(.+)\.md$/);
     const heading = content.match(/^#\s+(.+)$/m);
     return {

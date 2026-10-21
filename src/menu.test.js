@@ -71,4 +71,23 @@ describe('accessible toolbar menu', () => {
     closeAllMenus();
     expect(menuEl.classList.contains('hidden')).toBe(true);
   });
+
+  it('skips items inside a collapsed section when roving with the arrow keys', () => {
+    menuEl.innerHTML = `
+      <button class="tb-menu-item" data-action="one">Item 1</button>
+      <div class="tb-menu-section hidden">
+        <button class="tb-menu-item" data-action="hidden">Recent file</button>
+      </div>
+      <button class="tb-menu-item" data-action="three">Item 3</button>
+    `;
+    attachMenu(btn, menuEl);
+    btn.click();
+
+    const down = () => menuEl.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+    down(); // from no focus → first item
+    expect(document.activeElement.dataset.action).toBe('one');
+
+    down(); // the hidden item must not take focus
+    expect(document.activeElement.dataset.action).toBe('three');
+  });
 });
