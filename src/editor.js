@@ -25,6 +25,7 @@ import {
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
+import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
 const isMac = /Mac/i.test(navigator.platform) || /Mac/i.test(navigator.userAgent);
@@ -160,10 +161,22 @@ const themeCompartment       = new Compartment();
 const highlightCompartment   = new Compartment();
 const lineNumbersCompartment = new Compartment();
 
-let themeMode  = STORE.get('themeMode', 'system');
-let themeFamily = STORE.get('themeFamily', DEFAULT_FAMILY);
+// A deep link from the landing page's colour cards (?theme=goney&mode=dark)
+// wins over the stored choice, becomes it, and is stripped so the address bar
+// goes back to being the app's. A lesson in the same URL is left alone.
+const THEME_MODES = ['system', 'light', 'dark'];
+const themeLink = readThemeParams(location.search, {
+  families: Object.keys(PALETTES),
+  modes: THEME_MODES,
+});
+if (themeLink.present) window.history.replaceState(null, '', withoutThemeParams(location.href));
+
+let themeMode  = themeLink.mode || STORE.get('themeMode', 'system');
+let themeFamily = themeLink.family || STORE.get('themeFamily', DEFAULT_FAMILY);
 if (!PALETTES[themeFamily]) themeFamily = DEFAULT_FAMILY;
-if (!['system', 'light', 'dark'].includes(themeMode)) themeMode = 'system';
+if (!THEME_MODES.includes(themeMode)) themeMode = 'system';
+if (themeLink.family) STORE.set('themeFamily', themeFamily);
+if (themeLink.mode) STORE.set('themeMode', themeMode);
 let activeTheme = resolveTheme(themeMode);
 let lineNumbersOn = STORE.getBool('lineNumbers', false);
 

@@ -11,7 +11,7 @@ unless you put it in a link.
 **Site:** [loomings.tiagojacinto.eu](https://loomings.tiagojacinto.eu)
 **Changelog:** [CHANGELOG.md](CHANGELOG.md)
 
-![Loomings editor showing chapter 1 of Moby-Dick](docs/assets/screenshot.png)
+![Loomings in split view, chapter 1 of Moby-Dick in the source pane and its rendered result](assets/screenshot.png)
 
 ## What it does
 
@@ -109,7 +109,7 @@ loomings/
     index.html          # app shell: toolbar, panes, menus, cheatsheet, dialogs
     editor.js           # the editor: CodeMirror setup, views, sync, menus, boot
     browser.js          # file I/O, IndexedDB documents/scratch/recents, PWA hooks
-    palettes.js         # the four colour families (single source of colour)
+    palettes.js         # the ten Ensigns families (single source of colour)
     share.js            # document ⇄ URL fragment (deflate + base64url)
     lessons.js          # index of lessons/*.md
     sw-template.js      # service worker, filled in at build time
@@ -135,4 +135,7 @@ gives back an app icon and offline use.
 
 ## License
 
-MIT, see [LICENSE](LICENSE). Chapter 1 of *Moby-Dick* is public domain.
+MIT for the code, see [LICENSE](LICENSE). Chapter 1 of *Moby-Dick* is public
+domain. The colour tokens in `src/palettes.js` and the landing page come from
+[Ensigns](https://ensigns.tiagojacinto.eu) by Tiago Jacinto, whose tokens and
+documentation are licensed CC BY 4.0.

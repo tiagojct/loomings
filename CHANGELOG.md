@@ -4,6 +4,41 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] — 2026-10-22
+
+The ten families become usable from the site, and the editor's selection
+becomes visible in every one of them.
+
+### Added
+
+- **Theme deep links.** `/app/?theme=goney` (optionally `&mode=dark`) opens the
+  editor in that family, stores it, and strips the parameters so the address
+  bar goes back to the app. Unknown families and modes are ignored rather than
+  guessed at. The ten cards on the landing page now link to their own family
+  instead of being static swatches, and the section says what is true: the
+  editor ships all ten.
+- **Reference tests for the landing page.** Every local `href`/`src` it uses
+  must exist, every stylesheet and script must carry a `?v=`, every
+  `/app/fonts` face must exist in `public/fonts`, and the cards must offer
+  exactly the families `FAMILY_ORDER` ships.
+
+### Changed
+
+- **Mode comes before Family in the Theme menu.** Ten families had pushed the
+  common action below a 500px list.
+- **Selection is deepened in five light families** (Jeroboam, Townho, Rosebud,
+  Bachelor, Rachel): their Ensigns flags sit at ~1.05:1 against the page,
+  which is fine as a browser highlight and invisible as a drawn editor block.
+  Each is blended 10% toward the family's ink, keeping the hue, and the tests
+  now hold a 1.2:1 floor.
+- **Ensigns is credited in the app.** The About dialog and the README name the
+  colour system, whose tokens are CC BY 4.0.
+- **The README screenshot is current and no longer shipped.** It showed the
+  pre-Ensigns palette and sat inside `docs/`, so every visitor downloaded it;
+  it now lives in `assets/` and shows the current split view.
+- The landing page's colour cards are links now, with the focus ring and the
+  hover lift they already had.
+
 ## [2.2.0] — 2026-10-21
 
 The editor's colours now come from Ensigns — the same system the site wears.
@@ -683,6 +718,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.3.0]: https://github.com/tiagojct/loomings/releases/tag/v2.3.0
 [2.2.0]: https://github.com/tiagojct/loomings/releases/tag/v2.2.0
 [2.1.0]: https://github.com/tiagojct/loomings/releases/tag/v2.1.0
 [2.0.10]: https://github.com/tiagojct/loomings/releases/tag/v2.0.10

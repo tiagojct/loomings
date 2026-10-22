@@ -19,7 +19,11 @@
 // no semantic roles at all) the nearest published role is used, or ink is
 // chosen by contrast against the accent. One published pair, Enderby's
 // light on-accent (4.09:1 on brass), sits below AA for the app's 12px
-// labels, so black is used there for the same reason.
+// labels, so black is used there for the same reason. Five light-mode
+// selections (Jeroboam, Townho, Rosebud, Bachelor, Rachel) are high-chroma flags at
+// ~1.05:1 against their page — fine as a browser highlight, invisible as a
+// drawn editor block — so each is deepened 10% toward the family's ink,
+// which keeps the hue and reaches ~1.29:1. The test holds that floor.
 // ========================================
 
 // Keys every mode must define. `heading`, `emphasis`, `code` and `marker`
@@ -127,7 +131,7 @@ export const PALETTES = {
       accentLight:  '#003a95',
       accentDim:    '#70685c',
       border:       '#d8cfbe',
-      selection:    '#f8f337',
+      selection:    '#e1dd33',
       onAccent:     '#f6f2e9',
     },
   },
@@ -160,7 +164,7 @@ export const PALETTES = {
       accentLight:  '#423e4c',
       accentDim:    '#534f4b',
       border:       '#d5d1cb',
-      selection:    '#e5e2de',
+      selection:    '#d2cec9',
       onAccent:     '#fcf9f5',
     },
   },
@@ -226,7 +230,7 @@ export const PALETTES = {
       accentLight:  '#1e807b',
       accentDim:    '#72777d',
       border:       '#c8cbd0',
-      selection:    '#e7f8f6',
+      selection:    '#d3e2e1',
       onAccent:     '#1a1f26',
     },
   },
@@ -292,7 +296,7 @@ export const PALETTES = {
       accentLight:  '#0000c9',
       accentDim:    '#6b7079',
       border:       '#84817a',
-      selection:    '#fff000',
+      selection:    '#e7da03',
       onAccent:     '#ffffff',
     },
   },
@@ -325,7 +329,7 @@ export const PALETTES = {
       accentLight:  '#034574',
       accentDim:    '#4c3b30',
       border:       '#887865',
-      selection:    '#daecfd',
+      selection:    '#c7d7e5',
       onAccent:     '#f7efe0',
     },
   },

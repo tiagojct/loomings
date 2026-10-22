@@ -44,6 +44,7 @@ describe('palettes', () => {
           const p = PALETTES[family][mode];
           expect(contrast(p.onAccent, p.accent), 'onAccent/accent').toBeGreaterThanOrEqual(4.5);
           expect(p.selection).not.toBe(p.bg);
+          expect(contrast(p.selection, p.bg), 'selection/bg').toBeGreaterThanOrEqual(1.2);
         });
 
         it(`${mode}: cssVars covers the properties style.css reads`, () => {
