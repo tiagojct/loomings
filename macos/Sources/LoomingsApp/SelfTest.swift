@@ -273,6 +273,23 @@ enum SelfTest {
         encodingDocument.updateChangeCount(.changeCleared)
         encodingDocument.close()
 
+        // 10b. Save to Shelf never detaches a document from its own file.
+        let guardRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("loomings-shelf-guard-\(UUID().uuidString)", isDirectory: true)
+        let guardFile = guardRoot.appendingPathComponent("own.md")
+        try? FileManager.default.createDirectory(at: guardRoot, withIntermediateDirectories: true)
+        try? Data("keep\n".utf8).write(to: guardFile)
+        let ownFileDocument = LoomingsDocument()
+        ownFileDocument.shelf = LocalShelf(root: guardRoot.appendingPathComponent("shelf"))
+        ownFileDocument.fileURL = guardFile
+        check(!ownFileDocument.canSaveToShelf, "Save to Shelf is unavailable for a document with its own file")
+        ownFileDocument.saveToShelf(nil)
+        check(ownFileDocument.fileURL == guardFile, "Save to Shelf leaves a document attached to its own file")
+        let untitledDocument = LoomingsDocument()
+        untitledDocument.shelf = ownFileDocument.shelf
+        check(untitledDocument.canSaveToShelf, "Save to Shelf is available for an untitled document")
+        try? FileManager.default.removeItem(at: guardRoot)
+
         // 11. Typing marks the document edited; undoing back to the saved
         // text clears it (NSDocument's undo integration is live).
         let dirtyDocument = LoomingsDocument()

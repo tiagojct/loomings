@@ -30,6 +30,10 @@ final class LoomingsDocument: NSDocument {
     override class var autosavesInPlace: Bool { true }
     override class var preservesVersions: Bool { true }
 
+    /// `read(from:)` and `data(ofType:)` use `MainActor.assumeIsolated`, which
+    /// traps off the main thread. Say so, rather than rely on the default.
+    override class func canConcurrentlyReadDocuments(ofType typeName: String) -> Bool { false }
+
     override var displayName: String! {
         get { shelfEntry?.title ?? super.displayName }
         set { super.displayName = newValue }
@@ -134,7 +138,21 @@ final class LoomingsDocument: NSDocument {
 
     // MARK: - Shelf
 
+    /// Save to Shelf is for untitled documents and for documents already on
+    /// the shelf. A document that has its own file stays attached to it:
+    /// moving it onto the shelf would silently stop writing to that file.
+    var canSaveToShelf: Bool {
+        guard let url = fileURL else { return true }
+        return shelf.contains(url)
+    }
+
+    override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
+        if item.action == #selector(saveToShelf(_:)) { return canSaveToShelf }
+        return super.validateUserInterfaceItem(item)
+    }
+
     @objc func saveToShelf(_ sender: Any?) {
+        guard canSaveToShelf else { return }
         if let url = fileURL, shelf.contains(url) {
             save(sender)
             return
