@@ -314,49 +314,36 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
     private func loadImages() {
         guard let storage = textStorage else { return }
         let full = NSRange(location: 0, length: storage.length)
+        let base = documentURL?.deletingLastPathComponent()
         storage.enumerateAttribute(.loomingsImageURL, in: full) { [weak self] value, range, _ in
             guard let self, let raw = value as? String, !raw.isEmpty else { return }
-            if let image = self.imageCache[raw] {
+            let key = PreviewImageLoader.cacheKey(raw, baseURL: base)
+            if let image = self.imageCache[key] {
                 self.applyImage(image, raw: raw)
                 return
             }
-            guard !self.imageTasks.contains(raw) else { return }
-            self.imageTasks.insert(raw)
+            guard !self.imageTasks.contains(key) else { return }
+            self.imageTasks.insert(key)
 
-            let base = self.documentURL?.deletingLastPathComponent()
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let image = PreviewTextView.loadImage(raw, baseURL: base)
+                let result = PreviewImageLoader.load(raw, baseURL: base)
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    self.imageTasks.remove(raw)
-                    if let image {
-                        self.imageCache[raw] = image
+                    self.imageTasks.remove(key)
+                    switch result {
+                    case .image(let image):
+                        // Bounded: a long session of edited images must not grow forever.
+                        if self.imageCache.count >= 64 { self.imageCache.removeAll() }
+                        self.imageCache[key] = image
                         self.applyImage(image, raw: raw)
-                    } else {
-                        self.applyMissingImage(raw: raw)
+                    case .blocked:
+                        self.applyMissingImage(raw: raw, blocked: true)
+                    case .missing:
+                        self.applyMissingImage(raw: raw, blocked: false)
                     }
                 }
             }
         }
-    }
-
-    nonisolated private static func loadImage(_ raw: String, baseURL: URL?) -> NSImage? {
-        if raw.lowercased().hasPrefix("data:image/") {
-            guard let comma = raw.firstIndex(of: ",") else { return nil }
-            let encoded = String(raw[raw.index(after: comma)...])
-            guard let data = Data(base64Encoded: encoded) else { return nil }
-            return NSImage(data: data)
-        }
-
-        if let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
-           scheme == "http" || scheme == "https" {
-            guard let data = try? Data(contentsOf: url) else { return nil }
-            return NSImage(data: data)
-        }
-
-        guard let baseURL else { return nil }
-        let url = URL(fileURLWithPath: raw, relativeTo: baseURL).standardizedFileURL
-        return NSImage(contentsOf: url)
     }
 
     private func applyImage(_ image: NSImage, raw: String) {
@@ -394,7 +381,7 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
         }
     }
 
-    private func applyMissingImage(raw: String) {
+    private func applyMissingImage(raw: String, blocked: Bool) {
         guard let storage = textStorage else { return }
         let top = topSourceLine()
         let full = NSRange(location: 0, length: storage.length)
@@ -412,9 +399,10 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
                 at: range.location,
                 effectiveRange: nil
             ) as? String ?? ""
+            let label = alt.isEmpty ? (blocked ? "Remote image" : "Missing image") : alt
             attachment.image = NSImage(
-                systemSymbolName: "photo.badge.exclamationmark",
-                accessibilityDescription: alt.isEmpty ? "Missing image" : alt
+                systemSymbolName: blocked ? "network.slash" : "photo.badge.exclamationmark",
+                accessibilityDescription: blocked ? "\(label) (remote images are not loaded)" : label
             )
         }
         layoutManager?.invalidateDisplay(forCharacterRange: full)
