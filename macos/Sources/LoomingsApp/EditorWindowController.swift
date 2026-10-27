@@ -3,6 +3,7 @@ import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsPreview
 import LoomingsShare
+import LoomingsTheme
 import UniformTypeIdentifiers
 
 @MainActor
@@ -35,6 +36,7 @@ final class EditorWindowController: NSWindowController,
     private var syncSource: String?
     private var syncUntil = Date.distantPast
     private var previewGeneration = 0
+    private let previewPipeline = PreviewPipeline()
     private let previewQueue = DispatchQueue(
         label: "eu.tiagojacinto.loomings.preview",
         qos: .userInitiated
@@ -324,10 +326,13 @@ final class EditorWindowController: NSWindowController,
         let resolved = ThemeManager.shared.resolved()
         let theme = resolved.map { PreviewTheme.themed($0) } ?? .standard
 
+        let pipeline = previewPipeline
         previewQueue.async { [weak self] in
-            let rendered = PreviewRenderer(theme: theme).render(
+            let rendered = pipeline.render(
                 source: source,
-                documentURL: documentURL
+                documentURL: documentURL,
+                palette: resolved,
+                theme: theme
             )
             DispatchQueue.main.async {
                 guard let self,
@@ -778,5 +783,28 @@ final class EditorWindowController: NSWindowController,
         }
 
         return item
+    }
+}
+
+/// Owns the preview renderer and its block cache. Only ever called on the
+/// window's serial preview queue, so it needs no lock.
+private final class PreviewPipeline: @unchecked Sendable {
+    private let renderer = PreviewRenderer()
+    private var palette: ResolvedPalette?
+    private var themed = false
+
+    func render(
+        source: String,
+        documentURL: URL?,
+        palette: ResolvedPalette?,
+        theme: PreviewTheme
+    ) -> PreviewDocument {
+        // A new theme clears the renderer's cached blocks.
+        if !themed || self.palette != palette {
+            renderer.theme = theme
+            self.palette = palette
+            themed = true
+        }
+        return renderer.render(source: source, documentURL: documentURL)
     }
 }

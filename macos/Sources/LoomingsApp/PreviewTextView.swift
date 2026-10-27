@@ -177,10 +177,13 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
         setFrameSize(NSSize(width: frame.width, height: height))
     }
 
+    /// Same visible text. Source lines are not compared: they move whenever
+    /// text above changes, and `blocks` is replaced on every render, so the
+    /// scroll mapping stays right without rewriting unchanged text. A reused
+    /// block is the same object, which makes the common case a pointer check.
     private func same(_ left: PreviewBlock, _ right: PreviewBlock) -> Bool {
-        left.kind == right.kind && left.html == right.html
-            && left.sourceLine == right.sourceLine
-            && left.attributed.isEqual(to: right.attributed)
+        left.kind == right.kind
+            && (left.attributed === right.attributed || left.attributed.isEqual(to: right.attributed))
     }
 
     private func recomputeRanges() {

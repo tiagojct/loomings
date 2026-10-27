@@ -4,24 +4,82 @@ import LoomingsMarkdown
 import Markdown
 
 public final class PreviewRenderer {
-    public var theme: PreviewTheme
+    public var theme: PreviewTheme {
+        didSet { cache = [:] }
+    }
 
     public init(theme: PreviewTheme = .standard) {
         self.theme = theme
     }
 
+    /// Rendered blocks from the previous render, by block text. Typing
+    /// changes one block; the rest are reused instead of re-rendered. Only
+    /// touched from one thread at a time (the window's preview queue).
+    private struct CacheKey: Hashable {
+        let text: String
+        /// Reference definitions (`[id]: url`) elsewhere in the document
+        /// decide where `[text][id]` links point, so they are part of the key.
+        let definitions: Int
+    }
+    private var cache: [CacheKey: PreviewBlock] = [:]
+    private var cacheDocumentURL: URL?
+
+    /// How many blocks the last `render` reused.
+    public private(set) var reusedBlockCount = 0
+
+    private static let referenceDefinition = try! NSRegularExpression(
+        pattern: #"^ {0,3}\[[^\]\n]+\]:[^\n]*"#,
+        options: [.anchorsMatchLines]
+    )
+
     public func render(source: String, documentURL: URL?) -> PreviewDocument {
+        if cacheDocumentURL != documentURL {
+            cache = [:]
+            cacheDocumentURL = documentURL
+        }
+
         let map = SourceMap(source)
+        let nsSource = source as NSString
         let frontmatter = MarkdownFrontmatter.range(in: source)
         let document = Document(parsing: source)
+
+        var definitions = Hasher()
+        Self.referenceDefinition.enumerateMatches(
+            in: source,
+            range: NSRange(location: 0, length: nsSource.length)
+        ) { match, _, _ in
+            if let match { definitions.combine(nsSource.substring(with: match.range)) }
+        }
+        let definitionsKey = definitions.finalize()
+
         var blocks: [PreviewBlock] = []
+        var used: [CacheKey: PreviewBlock] = [:]
+        var reused = 0
 
         for node in document.children {
-            if let frontmatter,
-               let range = map.nsRange(for: node.range),
-               intersect(range, frontmatter) {
+            let range = map.nsRange(for: node.range)
+            if let frontmatter, let range, intersect(range, frontmatter) {
                 continue
             }
+
+            let line = max(0, (node.range?.lowerBound.line ?? 1) - 1)
+            // `substring(with:)` hands back a bridged NSString, which Swift
+            // hashes about 100x slower than a native String; copy it first.
+            let key = range.map {
+                CacheKey(
+                    text: String(decoding: nsSource.substring(with: $0).utf8, as: UTF8.self),
+                    definitions: definitionsKey
+                )
+            }
+
+            if let key, let hit = cache[key] {
+                let block = hit.moved(toLocation: range?.location ?? 0, line: line)
+                blocks.append(block)
+                used[key] = block
+                reused += 1
+                continue
+            }
+
             if let block = renderBlock(
                 node,
                 map: map,
@@ -29,10 +87,14 @@ public final class PreviewRenderer {
                 documentURL: documentURL
             ) {
                 blocks.append(block)
+                if let key { used[key] = block }
             }
         }
 
-        return PreviewDocument(blocks: blocks, html: blocks.map(\.html).joined())
+        // Keep only what this render used, so the cache never outgrows the document.
+        cache = used
+        reusedBlockCount = reused
+        return PreviewDocument(blocks: blocks)
     }
 
     // MARK: - Blocks
@@ -70,11 +132,6 @@ public final class PreviewRenderer {
                 value: paragraph,
                 range: NSRange(location: 0, length: content.length)
             )
-            content.addAttribute(
-                .loomingsSourceRange,
-                value: NSValue(range: sourceRange),
-                range: NSRange(location: 0, length: content.length)
-            )
             return PreviewBlock(
                 kind: .heading,
                 sourceRange: sourceRange,
@@ -99,11 +156,6 @@ public final class PreviewRenderer {
             content.addAttribute(
                 .paragraphStyle,
                 value: style,
-                range: NSRange(location: 0, length: content.length)
-            )
-            content.addAttribute(
-                .loomingsSourceRange,
-                value: NSValue(range: sourceRange),
                 range: NSRange(location: 0, length: content.length)
             )
             return PreviewBlock(
@@ -195,11 +247,6 @@ public final class PreviewRenderer {
                     .foregroundColor: theme.textColor,
                     .paragraphStyle: style,
                 ]
-            )
-            content.addAttribute(
-                .loomingsSourceRange,
-                value: NSValue(range: sourceRange),
-                range: NSRange(location: 0, length: content.length)
             )
             return PreviewBlock(
                 kind: .html,
@@ -432,11 +479,6 @@ public final class PreviewRenderer {
                 .foregroundColor: theme.codeColor,
                 .paragraphStyle: style,
             ]
-        )
-        content.addAttribute(
-            .loomingsSourceRange,
-            value: NSValue(range: sourceRange),
-            range: NSRange(location: 0, length: content.length)
         )
         return content
     }

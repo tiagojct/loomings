@@ -18,8 +18,6 @@ public extension NSAttributedString.Key {
     static let loomingsImageURL = NSAttributedString.Key("LoomingsImageURL")
     /// Original alt text for an image attachment.
     static let loomingsImageAlt = NSAttributedString.Key("LoomingsImageAlt")
-    /// UTF-16 source range of the block that produced this run.
-    static let loomingsSourceRange = NSAttributedString.Key("LoomingsSourceRange")
 }
 
 public struct PreviewTheme: @unchecked Sendable {
@@ -138,8 +136,16 @@ public struct PreviewBlock {
     public let sourceRange: NSRange
     /// 0-based source line used by markdown-it's data-line.
     public let sourceLine: Int
+    /// Independent of where the block sits in the source, so an unchanged
+    /// block compares equal (and can be the same object) after edits above it.
     public let attributed: NSAttributedString
-    public let html: String
+    private let baseHTML: String
+    private let htmlLineShift: Int
+
+    /// The block as markdown-it would emit it, `data-line` included.
+    public var html: String {
+        htmlLineShift == 0 ? baseHTML : Self.shiftingLines(in: baseHTML, by: htmlLineShift)
+    }
 
     public init(
         kind: PreviewBlockKind,
@@ -148,21 +154,68 @@ public struct PreviewBlock {
         attributed: NSAttributedString,
         html: String
     ) {
+        self.init(
+            kind: kind,
+            sourceRange: sourceRange,
+            sourceLine: sourceLine,
+            attributed: attributed,
+            baseHTML: html,
+            htmlLineShift: 0
+        )
+    }
+
+    private init(
+        kind: PreviewBlockKind,
+        sourceRange: NSRange,
+        sourceLine: Int,
+        attributed: NSAttributedString,
+        baseHTML: String,
+        htmlLineShift: Int
+    ) {
         self.kind = kind
         self.sourceRange = sourceRange
         self.sourceLine = sourceLine
         self.attributed = attributed
-        self.html = html
+        self.baseHTML = baseHTML
+        self.htmlLineShift = htmlLineShift
+    }
+
+    /// The same rendered block at a new place in the source. The attributed
+    /// text is shared; the HTML's line numbers are rewritten when asked for.
+    func moved(toLocation location: Int, line: Int) -> PreviewBlock {
+        PreviewBlock(
+            kind: kind,
+            sourceRange: NSRange(location: location, length: sourceRange.length),
+            sourceLine: line,
+            attributed: attributed,
+            baseHTML: baseHTML,
+            htmlLineShift: htmlLineShift + (line - sourceLine)
+        )
+    }
+
+    private static func shiftingLines(in html: String, by shift: Int) -> String {
+        let marker = "data-line=\""
+        var parts = html.components(separatedBy: marker)
+        guard parts.count > 1 else { return html }
+        for index in 1..<parts.count {
+            let digits = parts[index].prefix { $0.isASCII && $0.isNumber }
+            guard let value = Int(digits) else { continue }
+            parts[index] = String(value + shift) + parts[index].dropFirst(digits.count)
+        }
+        return parts.joined(separator: marker)
     }
 }
 
 public struct PreviewDocument {
     public let blocks: [PreviewBlock]
-    public let html: String
 
-    public init(blocks: [PreviewBlock], html: String) {
+    public init(blocks: [PreviewBlock]) {
         self.blocks = blocks
-        self.html = html
+    }
+
+    /// Built on demand: it is only needed for export, not for every preview.
+    public var html: String {
+        blocks.map(\.html).joined()
     }
 
     public var attributed: NSAttributedString {
