@@ -126,7 +126,8 @@ public final class LocalShelf {
         var result: [ShelfEntry] = []
         for url in urls where url.pathExtension == "json" {
             guard let data = try? Data(contentsOf: url),
-                  let entry = try? decoder.decode(ShelfEntry.self, from: data) else {
+                  let entry = try? decoder.decode(ShelfEntry.self, from: data),
+                  Self.isOwnContent(entry) else {
                 continue
             }
             guard fileManager.fileExists(atPath: contentURL(for: entry).path) else {
@@ -146,7 +147,8 @@ public final class LocalShelf {
     public func entry(id: UUID) throws -> ShelfEntry? {
         let metadata = metadataURL(for: id)
         guard let data = try? Data(contentsOf: metadata) else { return nil }
-        return try decoder.decode(ShelfEntry.self, from: data)
+        let entry = try decoder.decode(ShelfEntry.self, from: data)
+        return Self.isOwnContent(entry) ? entry : nil
     }
 
     public func read(id: UUID) throws -> (entry: ShelfEntry, data: Data) {
@@ -210,7 +212,16 @@ public final class LocalShelf {
             return nil
         }
         let filename = standardized.lastPathComponent
-        return try? entries().first { $0.contentFilename == filename }
+        // The filename is `<id>.<ext>`: look the entry up by id instead of
+        // reading every sidecar. This runs on every autosave.
+        guard let stem = filename.split(separator: ".", maxSplits: 1).first,
+              let id = UUID(uuidString: String(stem)),
+              let entry = try? entry(id: id),
+              entry.contentFilename == filename,
+              fileManager.fileExists(atPath: contentURL(for: entry).path) else {
+            return nil
+        }
+        return entry
     }
 
     // MARK: - Helpers
@@ -226,6 +237,15 @@ public final class LocalShelf {
         try ensureRoot()
         let data = try encoder.encode(entry)
         try data.write(to: metadataURL(for: entry.id), options: .atomic)
+    }
+
+    /// A sidecar is untrusted input: its `contentFilename` is joined to the
+    /// shelf root, so it must be exactly `<id>.<allowed extension>`.
+    private static func isOwnContent(_ entry: ShelfEntry) -> Bool {
+        let parts = entry.contentFilename.split(separator: ".", maxSplits: 1).map(String.init)
+        return parts.count == 2
+            && parts[0] == entry.id.uuidString
+            && allowedExtensions.contains(parts[1])
     }
 
     private static func normalizedExtension(_ value: String) -> String {
