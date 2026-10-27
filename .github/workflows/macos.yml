@@ -1,0 +1,25 @@
+name: macOS
+
+# The native app in macos/. Separate from ci.yml: it needs a macOS runner and
+# only matters when macos/ (or the share format it must decode) changes.
+on:
+  push:
+    branches: [main, macos]
+    paths: ["macos/**", "src/share.js", ".github/workflows/macos.yml"]
+  pull_request:
+    paths: ["macos/**", "src/share.js", ".github/workflows/macos.yml"]
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    name: Test & build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: swift --version
+      # Includes the Swift/Node share-link interop tests, which need node.
+      - run: swift test --package-path macos
+      - run: ./macos/scripts/build-app.sh

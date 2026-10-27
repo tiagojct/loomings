@@ -358,6 +358,38 @@ enum SelfTest {
             check(false, "autosave setup (\(error))")
         }
 
+        // 12b. A clean file-backed document follows a change made on disk.
+        let externalURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("loomings-external-\(UUID().uuidString).md")
+        do {
+            try Data("before\n".utf8).write(to: externalURL)
+            let externalDocument = LoomingsDocument()
+            externalDocument.fileURL = externalURL
+            externalDocument.fileType = "net.daringfireball.markdown"
+            NSDocumentController.shared.addDocument(externalDocument)
+            externalDocument.makeWindowControllers()
+            try externalDocument.read(
+                from: Data("before\n".utf8),
+                ofType: "net.daringfireball.markdown"
+            )
+            externalDocument.updateChangeCount(.changeCleared)
+
+            try Data("after, and longer\n".utf8).write(to: externalURL)
+            externalDocument.checkForExternalChange()
+            let followed = pump(timeout: 3) {
+                (externalDocument.windowControllers.first as? EditorWindowController)?
+                    .editor.source == "after, and longer\n"
+            }
+            check(followed, "a clean document reloads an external change")
+            check(!externalDocument.isDocumentEdited, "a reloaded document is not marked edited")
+
+            externalDocument.updateChangeCount(.changeCleared)
+            externalDocument.close()
+            try? FileManager.default.removeItem(at: externalURL)
+        } catch {
+            check(false, "external change setup (\(error))")
+        }
+
         // 13. Saving to a local shelf creates a stable, readable entry.
         let shelfRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("loomings-selftest-shelf-\(UUID().uuidString)", isDirectory: true)

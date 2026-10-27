@@ -84,8 +84,8 @@ removed afterwards.
 
 ## Verification
 
-- `swift test --package-path macos`: 71 tests pass.
-- `Loomings --self-test`: 84 checks pass, exit 0.
+- `swift test --package-path macos`: 85 tests pass.
+- `Loomings --self-test`: 93 checks pass, exit 0.
 - `npm test`: 189 tests pass; `npm run typecheck`: clean; `npm run build`: succeeds.
 - Share interop runs the web decoder through Node from the Swift suite, and Swift
   decodes web-generated fixtures.
@@ -114,11 +114,20 @@ Startup with theme: 867 ms.
 - Edit-handler target (<8 ms p95 through 1 MB): pass.
 - Typing independent of parsing: pass; insert p95 stays around 1 ms at 10 MB.
 - Scroll styling: 0.01–0.04 ms p95; no layout invalidation on pure scroll.
-- Preview target (150 ms through 1 MB): **miss**. Already 184 ms at 100 KB and 2.19 s at
-  1 MB. Rendering is off-main with a generation token, so typing stays responsive, but
-  the preview lags. The next work is a per-block render cache and incremental parsing.
-- Memory at 10 MB is 468 MB (616 MB after the long-line parse pass). This is higher than
-  the Stage 1 baseline and needs review before regular large-file use.
+- Preview, cold render (table above) versus an edit of one block with the block cache
+  (`swift run -c release LoomingsBench --preview`, p95): 2.4 ms at 10 KB, 26.7 ms at
+  100 KB, 289 ms at 1 MB; a cold render is 20 ms, 212 ms and 2.2 s. The 150 ms target
+  passes at 100 KB and misses at 1 MB on this dense corpus (23.7k blocks per MB). Of
+  the 285 ms at 1 MB, about 210 ms is swift-markdown parsing the whole document;
+  matching and reusing blocks costs about 40 ms. Getting under 150 ms needs an
+  incremental parse. Rendering is off the main thread with a generation token, so
+  typing stays responsive. The 10 MB edit time was not re-measured.
+- Memory at 10 MB is 468 MB (616 MB after the long-line parse pass). A baseline build
+  of the same corpus showed no regression (881 MB against 931 MB in the earlier run), so
+  this is the per-line structure overhead of the parse (roughly 80 bytes per source
+  byte on short lines), not a leak. No optimisation was made.
+- Remote images are not fetched. The preview shows a placeholder, as the web CSP does.
+  Local images and `data:` URIs are size-capped and decoded at preview width.
 
 ## Accessibility and OS matrix
 
@@ -140,10 +149,24 @@ Startup with theme: 867 ms.
 
 ## Known gaps
 
-1. Preview render budget misses the 150 ms target above 10 KB.
-2. Large-file memory and whole-document preview re-rendering need optimisation.
+1. The preview misses the 150 ms edit target at 1 MB of dense Markdown (about 290 ms),
+   because the parse is not incremental.
+2. Large-file memory is high (468 MB at 10 MB) and was not optimised.
 3. Crash recovery relies on NSDocument; it was not simulated end-to-end.
-4. Drag-and-drop, external-change sheets and the Open Share Link dialog are implemented
-   but not covered by automated UI tests.
-5. HTML export names Source Serif 4/JetBrains Mono but cannot embed the fonts; recipients
-   fall back to Georgia/monospace.
+4. Drag-and-drop, the external-change activation sheet, the unsaved-changes sheet and
+   the Open Share Link dialog are not covered by UI automation. Their logic is covered
+   by `ShareLink.parse` and file-change detector tests, and a clean document reloading
+   after an external change is covered by the self-test.
+5. HTML export names Source Serif 4/JetBrains Mono and does not embed the fonts, so
+   recipients fall back to Georgia/monospace. This is deliberate: embedding adds about
+   a megabyte per file.
+6. `.github/workflows/macos.yml` has not run yet and does not run the self-test, which
+   needs a window server.
+
+## Changes in the audit pass
+
+- Save to Shelf is limited to untitled and shelf documents; before, it moved a file
+  document onto the shelf and edits stopped reaching the file.
+- The shelf looks a document up by identifier and ignores sidecars that name a file
+  outside the shelf.
+- Mixed line endings are normalised to the first one found, with a test.

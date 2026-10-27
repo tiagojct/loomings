@@ -133,6 +133,24 @@ on the [releases page](https://github.com/tiagojct/loomings/releases).
 The web app covers the same editor, and installing it from the browser
 gives back an app icon and offline use.
 
+## macOS app
+
+`macos/` is a native version of the editor for Apple Silicon, macOS 15 or
+later (AppKit and Swift; the web app is unchanged). It is a personal build:
+ad-hoc signed, not notarised, no automatic updates. It reads the same share
+links and uses the same ten palettes and lessons.
+
+```sh
+swift test --package-path macos                      # unit tests
+./macos/scripts/build-app.sh                         # macos/dist/Loomings.app
+macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test   # in-app checks
+```
+
+The preview never loads remote images, as the web app's CSP forbids. Documents
+without a file of their own live in
+`~/Library/Application Support/Loomings/Shelf/`. `macos/ACCEPTANCE.md` has the
+parity checklist and the measurements.
+
 ## License
 
 MIT for the code, see [LICENSE](LICENSE). Chapter 1 of *Moby-Dick* is public

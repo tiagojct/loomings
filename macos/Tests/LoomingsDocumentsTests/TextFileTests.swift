@@ -84,4 +84,19 @@ struct TextFileTests {
         let decoded = try TextFileCodec.decode(try TextFileCodec.encode(original))
         #expect(decoded.text == "no trailing newline")
     }
+
+    @Test("Mixed line endings are saved in the first style found")
+    func mixedLineEndings() throws {
+        // The editor addresses LF text, so a file that mixes styles can only
+        // be written back in one. The first line ending decides which; this
+        // pins that behaviour rather than leaving it to chance.
+        let crlfFirst = try TextFileCodec.decode(Data("a\r\nb\nc\r\n".utf8))
+        #expect(crlfFirst.lineEnding == .crlf)
+        #expect(crlfFirst.text == "a\nb\nc\n")
+        #expect(String(data: try TextFileCodec.encode(crlfFirst), encoding: .utf8) == "a\r\nb\r\nc\r\n")
+
+        let lfFirst = try TextFileCodec.decode(Data("a\nb\r\nc\n".utf8))
+        #expect(lfFirst.lineEnding == .lf)
+        #expect(String(data: try TextFileCodec.encode(lfFirst), encoding: .utf8) == "a\nb\nc\n")
+    }
 }

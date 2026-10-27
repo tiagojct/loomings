@@ -300,33 +300,62 @@ private func makeCorpus(bytes: Int, shape: String) -> String {
 
 // MARK: - Reporting
 
-private func printPreviewTable(palette: ResolvedPalette?) {
-    print("preview render (parse + attributed string + HTML), ms")
-    let header = ["bytes", "p50", "p95", "blocks", "html bytes"]
+private func printPreviewTable(
+    palette: ResolvedPalette?,
+    sizes: [Int] = [10 * 1024, 100 * 1024, 1 * 1024 * 1024, 10 * 1024 * 1024]
+) {
+    // Cold: a renderer with an empty cache (opening a document, a new theme).
+    // Edit: the same renderer after one block changed, which is what typing
+    // costs. HTML is built when exported, so it is timed on its own.
+    print("preview render, ms")
+    let header = ["bytes", "cold p50", "cold p95", "edit p50", "edit p95", "reused", "html (export)", "blocks", "html bytes"]
     var rows: [[String]] = []
 
-    for size in [10 * 1024, 100 * 1024, 1 * 1024 * 1024, 10 * 1024 * 1024] {
+    for size in sizes {
         let source = makeCorpus(bytes: size, shape: "mixed")
-        var times: [Double] = []
+        let theme = palette.map { PreviewTheme.themed($0) } ?? .standard
+        var cold: [Double] = []
+        var edit: [Double] = []
         var blockCount = 0
         var htmlBytes = 0
+        var htmlMs = 0.0
+        var reused = 0
+
+        // A one-block edit in the middle: add a word to the paragraph there.
+        let ns = source as NSString
+        let middle = ns.range(of: "\n\n", options: [], range: NSRange(location: ns.length / 2, length: ns.length / 2 - 1))
+        let edited = ns.replacingCharacters(in: NSRange(location: middle.location, length: 0), with: " edited")
 
         for run in 0..<3 {
+            let renderer = PreviewRenderer(theme: theme)
             let start = DispatchTime.now().uptimeNanoseconds
-            let theme = palette.map { PreviewTheme.themed($0) } ?? .standard
-            let rendered = PreviewRenderer(theme: theme).render(source: source, documentURL: nil)
+            let rendered = renderer.render(source: source, documentURL: nil)
             let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
-            if run > 0 {
-                times.append(elapsed)
-            }
+            if run > 0 { cold.append(elapsed) }
             blockCount = rendered.blocks.count
+
+            let htmlStart = DispatchTime.now().uptimeNanoseconds
             htmlBytes = rendered.html.utf8.count
+            htmlMs = Double(DispatchTime.now().uptimeNanoseconds - htmlStart) / 1_000_000
+
+            for text in [edited, source, edited, source] {
+                let editStart = DispatchTime.now().uptimeNanoseconds
+                _ = renderer.render(source: text, documentURL: nil)
+                if run > 0 {
+                    edit.append(Double(DispatchTime.now().uptimeNanoseconds - editStart) / 1_000_000)
+                }
+                reused = renderer.reusedBlockCount
+            }
         }
 
         rows.append([
             "\(size)",
-            format(percentile(times, 0.50)),
-            format(percentile(times, 0.95)),
+            format(percentile(cold, 0.50)),
+            format(percentile(cold, 0.95)),
+            format(percentile(edit, 0.50)),
+            format(percentile(edit, 0.95)),
+            "\(reused)",
+            format(htmlMs),
             "\(blockCount)",
             "\(htmlBytes)",
         ])
@@ -345,7 +374,7 @@ private func printPreviewTable(palette: ResolvedPalette?) {
     for row in rows {
         print(line(row))
     }
-    print("preview target: 150 ms after a typing pause through 1 MB")
+    print("preview target: edit p95 under 150 ms through 1 MB")
 }
 
 private func printTable(_ samples: [Sample]) {
@@ -439,5 +468,10 @@ private func architecture() -> String {
 
 MainActor.assumeIsolated {
     NSApplication.shared.setActivationPolicy(.accessory)
-    run()
+    if CommandLine.arguments.contains("--preview") {
+        // Just the preview table, without the 10 MB editor runs.
+        printPreviewTable(palette: benchPalette(), sizes: [10 * 1024, 100 * 1024, 1024 * 1024])
+    } else {
+        run()
+    }
 }

@@ -4,6 +4,24 @@ All notable changes to Loomings are documented here. Format based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Native macOS app (`macos/`)
+
+- Under version control, with its own CI job.
+- The preview no longer fetches remote images. A document or share link with
+  `![](https://…)` leaked the reader's IP address when previewed; it now shows
+  a placeholder, as the web app's CSP does. Local images are size-capped,
+  decoded at preview width, and refreshed when the file changes.
+- The preview reuses unchanged blocks between edits. One edit renders in about
+  27 ms at 100 KB instead of 195 ms (release build, test corpus).
+- Save to Shelf is limited to untitled and shelf documents. For a document with
+  its own file it used to move the document onto the shelf, so edits stopped
+  reaching the file.
+- The shelf finds a document by its identifier instead of reading every
+  sidecar on each autosave, and ignores a sidecar that names a file outside the
+  shelf.
+
 ## [2.3.0] — 2026-10-22
 
 The ten families become usable from the site, and the editor's selection

@@ -21,7 +21,13 @@ public final class PreviewRenderer {
         /// decide where `[text][id]` links point, so they are part of the key.
         let definitions: Int
     }
-    private var cache: [CacheKey: PreviewBlock] = [:]
+    /// `stamp` is the render that last used the entry; older ones are swept.
+    private struct CacheEntry {
+        var block: PreviewBlock
+        var stamp: Int
+    }
+    private var cache: [CacheKey: CacheEntry] = [:]
+    private var renderCount = 0
     private var cacheDocumentURL: URL?
 
     /// How many blocks the last `render` reused.
@@ -52,8 +58,11 @@ public final class PreviewRenderer {
         }
         let definitionsKey = definitions.finalize()
 
+        renderCount += 1
+        let stamp = renderCount
         var blocks: [PreviewBlock] = []
-        var used: [CacheKey: PreviewBlock] = [:]
+        blocks.reserveCapacity(document.childCount)
+        var fresh: [(CacheKey, PreviewBlock)] = []
         var reused = 0
 
         for node in document.children {
@@ -72,10 +81,12 @@ public final class PreviewRenderer {
                 )
             }
 
-            if let key, let hit = cache[key] {
+            // One hash per hit: find the slot, then update it in place.
+            if let key, let slot = cache.index(forKey: key) {
+                let hit = cache.values[slot].block
                 let block = hit.moved(toLocation: range?.location ?? 0, line: line)
+                cache.values[slot] = CacheEntry(block: block, stamp: stamp)
                 blocks.append(block)
-                used[key] = block
                 reused += 1
                 continue
             }
@@ -87,12 +98,13 @@ public final class PreviewRenderer {
                 documentURL: documentURL
             ) {
                 blocks.append(block)
-                if let key { used[key] = block }
+                if let key { fresh.append((key, block)) }
             }
         }
 
         // Keep only what this render used, so the cache never outgrows the document.
-        cache = used
+        if cache.count != reused { cache = cache.filter { $0.value.stamp == stamp } }
+        for (key, block) in fresh { cache[key] = CacheEntry(block: block, stamp: stamp) }
         reusedBlockCount = reused
         return PreviewDocument(blocks: blocks)
     }
