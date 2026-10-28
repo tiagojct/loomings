@@ -36,6 +36,154 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 - `src/sw-template.js` + the plugin in `vite.config.js` — the service worker,
   emitted as `sw.js` with the build's asset list.
 
+## Native macOS app (Stages 1–6)
+
+`macos/` is a separate SwiftPM app for Apple Silicon on macOS 15+. It does
+not replace or import the web app, and native-only work must not change web
+release numbers.
+
+- `Sources/LoomingsMarkdown` — Swift Markdown parsing plus the UTF-8→UTF-16
+  source map. cmark reports 1-based byte columns; AppKit ranges are UTF-16,
+  so every parser range goes through `SourceMap`. The parse output also
+  carries the outline (ATX and setext), frontmatter range, line starts and a
+  word count (`TextStatistics`, mirroring `src/stats.js`).
+- `Sources/LoomingsTheme` — decodes the exported Ensigns palettes, resolves
+  System/Light/Dark, and provides `NSColor`/contrast helpers. The editor,
+  preview and HTML export all take colours from this one model.
+- `Sources/LoomingsShare` + `Sources/CZlib` — raw DEFLATE (RFC 1951) through
+  zlib for the web share format. `#d=p.` (raw UTF-8) and `#d=z.` are both
+  decoded; links are capped at 4 MB encoded and 8 MB decoded. Links are
+  generated on `loomings.tiagojacinto.eu/app/` and can carry `theme`/`mode`.
+- `Sources/LoomingsPreview` — a native renderer for the preview and export.
+  It walks the Swift Markdown tree once per render and produces per-block
+  attributed text plus HTML. Source lines/ranges ride on the blocks for
+  split-view sync; the HTML mirrors markdown-it (`data-line`, linkify,
+  typographer, sanitised URLs, raw HTML escaped, frontmatter omitted). Tables
+  use `NSTextTable`; images become `NSTextAttachment` placeholders with a
+  sanitised source for the view to load asynchronously.
+- `Sources/LoomingsEditor` — `EditorController` owns the TextKit 2
+  `NSTextView`. `textDidChange` only bumps a revision and schedules a
+  debounced background parse; results apply only when their revision is
+  still current. Syntax colours are supplied by
+  `NSTextLayoutManager.renderingAttributesValidator`, i.e. before a fragment
+  is laid out; applying rendering attributes after layout does not repaint
+  already-drawn text. Attribute-only changes (spelling) do not advance the
+  revision. Editing commands live here too: bold/italic/code/link, list and
+  quotation continuation, Tab indent/outdent, smart typography, find bar,
+  outline jumps, selection statistics, font size, sentence focus and
+  typewriter scrolling.
+- `Sources/LoomingsDocuments` — `TextFileCodec` (UTF-8/UTF-16 BOM in and
+  out, LF/CRLF/CR preserved, unsupported encodings refused), `LocalShelf`
+  (Application Support shelf with UUID filenames, JSON titles and atomic
+  writes), and `SaveGeneration`/`FileChangeDetector` (the save-race and
+  external-change primitives).
+- `Sources/LoomingsApp` — `NSDocument`, window, native toolbar and menus,
+  Write/Split/Preview modes, a native preview text view, scroll sync,
+  Markdown/HTML/PDF/Print export, the Theme menu, bundled Learn material,
+  share commands and About credits.
+  A document's home is a user file, a shelf file, or nothing (untitled).
+  Shelf documents are ordinary file documents under
+  `~/Library/Application Support/Loomings/Shelf/`, so autosave, versions,
+  recents and external-change handling all come from NSDocument. File menu:
+  Open Recent, Open from Shelf, Import from Browser Export…, Save, Save As…,
+  Save to Shelf, Duplicate, Rename…, Browse All Versions…. The window adds a
+  status bar (cursor, words, characters, lines, reading time, word goal) and
+  a line-number ruler; Format/View/Find menus carry the editing commands and
+  preferences. `--self-test` exercises typing, undo/redo, paste, IME,
+  revision races, BOM/CRLF round trips, native dirty tracking, autosave, shelf
+  saving, the save-generation gate, formatting commands, smart typography,
+  focus dimming, the line ruler and typewriter scrolling without a human at
+  the keyboard.
+- `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
+  app-owned handler, snapshot, visible-region styling, footprint) over
+  10 KB–10 MB corpora.
+- `scripts/build-app.sh` — release arm64 `.app` in `macos/dist/`, ad-hoc
+  signed (not Developer ID, not notarised).
+
+```sh
+./macos/scripts/build-app.sh            # build macos/dist/Loomings.app
+macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test
+swift test --package-path macos         # Swift Testing; CLT has no XCTest
+swift run -c release --package-path macos LoomingsBench
+
+node scripts/export-native-resources.mjs       # palettes + lessons + example
+node macos/scripts/render-web-fixtures.mjs     # preview HTML fixtures
+node macos/scripts/render-share-fixtures.mjs   # cross-language share fixtures
+```
+
+Stage 2 decisions worth preserving:
+
+- Saves are forced onto the main thread (`canAsynchronouslyWrite` is false)
+  because the text is main-actor state; do not make writes asynchronous
+  without first snapshotting text and data off the editor.
+- `data(ofType:)` captures the editor's edit generation; a save completion
+  records it through `SaveGeneration`, and an older completion is ignored.
+  The self-test proves edits made during a save stay edited.
+- Every document is read into LF-normalised text. The original encoding,
+  BOM and line ending are stored and restored on write.
+- External changes are checked on app activation: unedited documents reload,
+  edited ones get a Keep/Reload sheet. Deleted files get a Keep/Close sheet.
+- The shelf replaces the browser shelf. It has no automatic migration from
+  IndexedDB; `Import from Browser Export…` copies exported Markdown files.
+- Focus mode stores its dim/label colours in the text storage while active
+  and removes them when switched off. Rendering attributes cannot recolour
+  text that is already laid out, so the transient override is deliberate;
+  focus does not dirty the document (the self-test checks this).
+- Line numbers draw from TextKit line fragments and the parser's line starts,
+  so wrapping, font size and column width stay aligned. Stats use the
+  background parse snapshot; selection stats are computed on demand.
+- Preview rendering runs on its own serial queue with a generation token; a
+  stale render is dropped and typing never waits for it. The preview view
+  replaces only the changed block ranges and restores its top source line
+  across content, image-load and resize changes.
+- The preview is TextKit 1 (not the editor's TextKit 2) so `NSTextTable`,
+  attachment cells and the classic layout APIs are available. It is a
+  separate surface; do not move syntax rendering into it.
+- The Theme menu applies the selected Ensigns family to editor syntax,
+  preview, line numbers and HTML export; native controls follow
+  `NSApp.appearance`. The ten palettes are generated from `src/palettes.js`:
+  `node scripts/export-native-resources.mjs`. Do not hand-edit
+  `macos/Resources/palettes.json`.
+- Editor base text colour lives in the text storage (uniform foreground),
+  because NSTextView's `textColor` is not reliable for TextKit 2 across a
+  string replacement. Syntax markers remain rendering attributes; focus and
+  frontmatter override the storage colour and restore it.
+- Fonts are native TTF files in `macos/Resources/Fonts` (JetBrains Mono and
+  Source Serif 4, both OFL with licence files). `ATSApplicationFontsPath`
+  registers them at launch. Do not add WOFF2 loading.
+- The native icon is separate from the web/social icons. Run
+  `swift macos/scripts/build-icon.swift` to redraw the Adamastor-style padded
+  squircle (830/1024 optical), cream keyline and flat L into
+  `macos/Resources/AppIcon.icns`; `build-app.sh` copies that. Do not feed
+  `icons/rendered` or the Icon Composer export to the native bundle: they are
+  full-bleed and glassy.
+- Share fixtures are generated with `node macos/scripts/render-share-fixtures.mjs`;
+  the Swift tests decode those and also run the web decoder through Node, so
+  both directions are exercised. No custom URL scheme or universal link is
+  registered: opening an https URL stays in the browser unless the user picks
+  File → Share → Open Share Link.
+- HTML fixtures live in
+  `macos/Tests/LoomingsPreviewTests/Fixtures` and are generated from the web
+  renderer with `node macos/scripts/render-web-fixtures.mjs`;
+  `PreviewHTMLTests` compares the output byte for byte.
+- `macos/ACCEPTANCE.md` is the Stage 6 checklist, themed measurements, data-replacement
+  test and the explicit list of untested environments and performance misses. Read it
+  before claiming parity or performance.
+- Preview rendering is still whole-document per update. Measured render times
+  (parse + attributed text + HTML): 16.8 ms at 10 KB, 177 ms at 100 KB,
+  1.8 s at 1 MB, 20.4 s at 10 MB. The 150 ms target is missed above 10 KB;
+  rendering runs off-main with a generation token so typing stays responsive,
+  but the preview lags on large files. The next step is a per-block render
+  cache and incremental parsing, not a faster whole-document renderer.
+- Native shortcuts that collide with macOS conventions were deliberately not
+  kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
+  ⇧⌘G is Find Previous).
+
+Appearance, teaching material and share links are in place. Stage 6 remains:
+personal installation, the complete parity checklist against web release
+2.3.0, accessibility/performance retesting, and honest reporting of the
+preview render budget.
+
 ## Commands
 
 ```sh

@@ -1,0 +1,16 @@
+# Quarterdeck project metadata. See ~/quarterdeck/templates/project/workspace.yml for the fields.
+name: loomings
+category: apps
+type: docker-app
+status: active
+build: actions
+deploy_target: rokovoko
+deploy_method: GHCR, manual pull
+url: https://loomings.tiagojacinto.eu
+host: loomings.tiagojacinto.eu
+build_command: docker build .
+artifact: docker-image
+remote_path: /opt/vps/apps/loomings
+service: loomings
+checks:
+  - curl -fsS -o /dev/null https://loomings.tiagojacinto.eu
