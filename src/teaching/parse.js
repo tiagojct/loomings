@@ -133,6 +133,31 @@ export function parseSource(source) {
 }
 
 /**
+ * Finds `part` in `text` from `from`, letting a backslash-escaped pipe in the
+ * text stand for a pipe in `part`. Returns the text offset of every character
+ * of `part`, and one past its end, or null.
+ *
+ * @param {string} text
+ * @param {string} part
+ * @param {number} from
+ * @returns {{offsets: number[]}|null}
+ */
+function findLoosely(text, part, from) {
+  for (let s = from; s <= text.length - part.length; s++) {
+    const offsets = [];
+    let i = s;
+    let j = 0;
+    while (j < part.length && i < text.length) {
+      if (text[i] === part[j]) { offsets.push(i); i++; j++; }
+      else if (part[j] === '|' && text[i] === '\\' && text[i + 1] === '|') { offsets.push(i); i += 2; j++; }
+      else break;
+    }
+    if (j === part.length) { offsets.push(i); return { offsets }; }
+  }
+  return null;
+}
+
+/**
  * Maps offsets in an inline token's content back to the document. A content
  * line is the end of its source line (containers and indentation removed),
  * except in table cells and ATX headings, which are found left to right.
@@ -152,32 +177,56 @@ function createMapper(lines) {
     forInline(inline, ordered, row = 0) {
       const parts = inline.content.split('\n');
       const first = inline.map ? inline.map[0] : row;
-      /** @type {{start: number, source: number}[]} */
+      /** @type {{start: number, at: (d: number) => number}[]} */
       const starts = [];
       let start = 0;
       parts.forEach((part, k) => {
         const line = lines[first + k] || { from: 0, text: '', end: 0 };
         const text = line.text;
         const cursor = cursors.get(first + k) || 0;
-        let col = -1;
+        const end = line.from + text.length;
+        /** @type {((d: number) => number)|null} */
+        let at = null;
         if (ordered) {
-          col = text.indexOf(part, cursor);
-        } else if (text.endsWith(part)) {
-          col = text.length - part.length;
+          // A table cell or ATX heading: found left to right. markdown-it
+          // drops the backslash of an escaped pipe, so \| may stand for |.
+          const found = findLoosely(text, part, cursor);
+          if (found) {
+            at = (d) => line.from + found.offsets[Math.min(d, found.offsets.length - 1)];
+            cursors.set(first + k, found.offsets[found.offsets.length - 1]);
+          }
         } else {
           const trimmed = text.trimEnd();
-          if (trimmed.endsWith(part)) col = trimmed.length - part.length;
+          // markdown-it turns a tab it only partly consumes into spaces, so
+          // a content line may begin with spaces the source does not have.
+          const rest = part.replace(/^ +/, '');
+          const lead = part.length - rest.length;
+          let col = -1;
+          let skip = 0;
+          if (text.endsWith(part)) col = text.length - part.length;
+          else if (trimmed.endsWith(part)) col = trimmed.length - part.length;
+          else if (lead && text.endsWith(rest)) { col = text.length - rest.length; skip = lead; }
+          else if (lead && trimmed.endsWith(rest)) { col = trimmed.length - rest.length; skip = lead; }
           else col = text.indexOf(part, cursor);
+          if (col >= 0) {
+            const base = line.from + col;
+            at = (d) => base + Math.max(0, d - skip);
+            cursors.set(first + k, col + part.length - skip);
+          }
         }
-        if (col < 0) col = Math.max(0, text.length - part.length);
-        cursors.set(first + k, col + part.length);
-        starts.push({ start, source: line.from + col });
+        if (!at) {
+          const base = line.from + Math.max(0, text.length - part.length);
+          at = (d) => base + d;
+          cursors.set(first + k, text.length);
+        }
+        const map = at;
+        starts.push({ start, at: (d) => Math.min(end, map(d)) });
         start += part.length + 1;
       });
       return (offset) => {
         let k = starts.length - 1;
         while (k > 0 && starts[k].start > offset) k--;
-        return starts[k].source + (offset - starts[k].start);
+        return starts[k].at(offset - starts[k].start);
       };
     },
   };

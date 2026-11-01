@@ -27,6 +27,7 @@ describe("learner's checker: shared cases", () => {
       const issues = lint(item.source);
       expect(issues.map((i) => i.rule)).toEqual(item.rules);
       expect(applyFixes(issues, item.source)).toBe(item.fixed);
+      if (item.starts) expect(issues.map((i) => i.from)).toEqual(item.starts);
       for (const issue of issues) {
         expect(issue.message).not.toBe('');
         expect(issue.from).toBeGreaterThanOrEqual(0);
@@ -69,6 +70,15 @@ describe("learner's checker", () => {
     expect(source.slice(marks.from, marks.to)).toBe('**');
     expect(marks.from).toBe(10);
     expect(source.slice(image.from, image.to)).toBe('![](x.png)');
+  });
+
+  it('marks the whole image after an escaped pipe or a tab-indented line', () => {
+    const cell = '| x \\| y | ![](i) |\n|---|---|\n| d | e |\n';
+    const [a] = lint(cell);
+    expect(cell.slice(a.from, a.to)).toBe('![](i)');
+    const tabbed = '- a\n\t\t\t![](x)\n';
+    const [b] = lint(tabbed);
+    expect(tabbed.slice(b.from, b.to)).toBe('![](x)');
   });
 
   it('finds marks and images inside lists, quotations, headings and tables', () => {

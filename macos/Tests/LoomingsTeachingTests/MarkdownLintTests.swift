@@ -9,6 +9,8 @@ struct MarkdownLintTests {
         let source: String
         let rules: [String]
         let fixed: String
+        /// Where each note starts (UTF-16), when the case pins it.
+        let starts: [Int]?
     }
 
     static func cases() throws -> [Case] {
@@ -33,6 +35,9 @@ struct MarkdownLintTests {
             let issues = MarkdownLint.lint(item.source)
             #expect(issues.map(\.rule) == item.rules, "\(item.name)")
             #expect(Self.applyingFixes(issues, to: item.source) == item.fixed, "\(item.name)")
+            if let starts = item.starts {
+                #expect(issues.map(\.range.location) == starts, "\(item.name): starts")
+            }
             for issue in issues {
                 #expect(!issue.message.isEmpty, "\(item.name)")
                 #expect(NSMaxRange(issue.range) <= (item.source as NSString).length, "\(item.name)")

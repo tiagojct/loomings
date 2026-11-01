@@ -379,5 +379,46 @@
       "unpaired-emphasis"
     ],
     "fixed": "**bold**text**\n"
+  },
+  {
+    "name": "marks after an escaped pipe in a table cell",
+    "source": "| a \\| **b | c |\n|---|---|\n| d | e |\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "| a \\| **b | c |\n|---|---|\n| d | e |\n",
+    "starts": [
+      7
+    ]
+  },
+  {
+    "name": "an image in the cell after an escaped pipe",
+    "source": "| x \\| y | ![](i) |\n|---|---|\n| d | e |\n",
+    "rules": [
+      "image-alt"
+    ],
+    "fixed": "| x \\| y | ![](i) |\n|---|---|\n| d | e |\n",
+    "starts": [
+      11
+    ]
+  },
+  {
+    "name": "marks on a tab-indented continuation line",
+    "source": "- a\n\t\t**b\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "- a\n\t\t**b\n",
+    "starts": [
+      6
+    ]
+  },
+  {
+    "name": "an image on a tab-indented continuation line",
+    "source": "- a\n\t\t\t![](x)\n",
+    "rules": [
+      "image-alt"
+    ],
+    "fixed": "- a\n\t\t\t![](x)\n"
   }
 ]
