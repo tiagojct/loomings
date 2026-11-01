@@ -48,6 +48,7 @@
         <button type="button" class="tb-menu-item" role="menuitem" data-action="html"><span class="tb-menu-label">HTML file</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="print"><span class="tb-menu-label">Print / PDF…</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="share"><span class="tb-menu-label">Copy share link</span><span class="tb-menu-hint">whole document in the URL</span></button>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="qr"><span class="tb-menu-label">Show QR code</span><span class="tb-menu-hint">the share link, for phones</span></button>
       </div>
     </div>
     <span class="tb-spacer"></span>
@@ -175,6 +176,15 @@
       <input id="palette-input" type="text" placeholder="Jump to heading…" autocomplete="off" spellcheck="false"
              role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="palette-list">
       <ul id="palette-list" role="listbox" aria-label="Headings"></ul>
+    </div>
+  </div>
+
+  <div id="qr-dialog" class="hidden" role="dialog" aria-modal="true" aria-labelledby="qr-title">
+    <div id="qr-inner">
+      <h2 id="qr-title">Share link as a QR code</h2>
+      <div id="qr-code"></div>
+      <p id="qr-caption"></p>
+      <button type="button" id="qr-close">Close</button>
     </div>
   </div>
 

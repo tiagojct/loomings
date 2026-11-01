@@ -18,6 +18,8 @@ import { parseCheck } from './teaching/directives.js';
 import { outline, sections, limitsIn, sectionAt } from './teaching/sections.js';
 import lessonChecks from '../lessons/checks.json';
 import { PROJECTOR, markerName, createProjector } from './projector.js';
+import { qrSvg, qrPrintSide } from './qr.js';
+import { handoutCss, paperFor } from './handout.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -1583,18 +1585,77 @@ function updatePreview() {
   if (effectiveViewMode() === 'split') syncPreviewToEditor();
 }
 
-// Print / PDF: the print stylesheet shows only the rendered preview, so make
-// sure it is current even when the user is in editor-only mode.
-function printPreview() {
+// Print / PDF: the handout. The print stylesheet shows only the rendered
+// preview, so make it current even in editor-only mode; add the share link
+// as a QR code at the end, and the page size, page numbers and light
+// palette of the family for this print only.
+const QR_CAPTION = 'Scan to open this document in Loomings.';
+const QR_TOO_LONG = 'This document is too long for a QR code; share it as a link.';
+
+async function printPreview() {
+  const text = getText();
+  let qr = '';
+  if (text.trim()) {
+    /** @type {string|null} */ let url = null;
+    try { url = await shareUrl(text, location.href); } catch (_) { url = null; }
+    const side = url ? qrPrintSide(url) : null;
+    const svg = url && side ? qrSvg(url, 1, `${side}pt`) : null;
+    qr = `<section class="handout-qr">${svg || ''}<p>${svg ? QR_CAPTION : QR_TOO_LONG}</p></section>`;
+  }
   const wasShown = previewShown();
-  preview.innerHTML = renderPreview(getText());
+  preview.innerHTML = renderPreview(text) + qr;
   pairedBlockEl = null;
   invalidatePreviewBlocks();
+  const page = document.createElement('style');
+  page.id = 'handout-page';
+  page.textContent = handoutCss({
+    title: currentFile ? displayName(currentFile) : firstHeading(text) || '',
+    palette: roles(themeFamily, 'light'),
+    paper: paperFor(navigator.language || 'en-GB'),
+  });
+  document.head.append(page);
   if (!wasShown) preview.classList.remove('hidden');
-  const cleanup = () => { if (!wasShown) preview.classList.add('hidden'); window.removeEventListener('afterprint', cleanup); };
+  const cleanup = () => {
+    window.removeEventListener('afterprint', cleanup);
+    page.remove();
+    if (wasShown) updatePreview(); else preview.classList.add('hidden');
+  };
   window.addEventListener('afterprint', cleanup);
   window.print();
 }
+
+// ==========================
+//  Share link as a QR code
+// ==========================
+
+const qrDialog  = el('qr-dialog');
+const qrCodeEl  = el('qr-code');
+const qrCaption = el('qr-caption');
+/** @type {{close: () => void}|null} */ let qrModal = null;
+
+async function showQrCode() {
+  const text = getText();
+  if (!text.trim()) { flashStatus('Nothing to share yet'); return; }
+  let url;
+  try { url = await shareUrl(text, location.href); }
+  catch (err) { flashStatus('Could not build link: ' + (err?.message || err)); return; }
+  const svg = qrSvg(url, 4);
+  const paper = roles(themeFamily, 'light');
+  qrCodeEl.innerHTML = svg || '';
+  qrCodeEl.style.background = paper.bg;
+  qrCodeEl.style.color = paper.fg;
+  qrCodeEl.classList.toggle('hidden', !svg);
+  qrCaption.textContent = svg ? QR_CAPTION : QR_TOO_LONG;
+  qrModal = openModal(qrDialog, { opener: el('tb-export'), initialFocus: el('qr-close') });
+}
+
+function closeQrCode() {
+  qrModal?.close();
+  qrModal = null;
+}
+
+el('qr-close').addEventListener('click', closeQrCode);
+qrDialog.addEventListener('click', (e) => { if (e.target === qrDialog) closeQrCode(); });
 
 // Links in the rendered preview open in a new tab rather than navigating
 // the editor away from an unsaved buffer.
@@ -2121,6 +2182,7 @@ attachMenu(el('tb-export'), el('export-menu'), {
     if (item.dataset.action === 'html')  exportHtml();
     if (item.dataset.action === 'print') printPreview();
     if (item.dataset.action === 'share') copyShareLink();
+    if (item.dataset.action === 'qr')    showQrCode();
     if (item.dataset.action === 'md')    downloadMarkdown(getText(), suggestedFilename());
   },
 });

@@ -134,6 +134,8 @@ body { display: flex; flex-direction: column; }
   font-size: 13px;
 }
 .tb-menu-right { left: auto; right: 0; }
+/* Labels with hints: wide enough that neither is cut short. */
+#export-menu { min-width: 340px; }
 .tb-menu-section {
   padding: 6px 10px 4px;
   font-size: 10px;
@@ -625,6 +627,47 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
 .palette-item.lvl-5,
 .palette-item.lvl-6 { padding-left: 64px; }
 
+/* The share link as a QR code: dark modules on the light paper of the
+   family, whatever the theme, so a phone can read it. */
+#qr-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+#qr-inner {
+  width: min(380px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 24px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  text-align: center;
+}
+#qr-title { margin: 0 0 16px; font-size: 16px; font-weight: 600; color: var(--heading); }
+#qr-code { padding: 8px; border-radius: 6px; line-height: 0; }
+#qr-code svg { width: 100%; height: auto; max-width: 300px; }
+#qr-caption { margin: 14px 0 18px; font-size: 13px; color: var(--fg-dim); }
+#qr-close {
+  padding: 5px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+#qr-close:hover { border-color: var(--accent); color: var(--accent-light); }
+
 #about {
   position: fixed;
   inset: 0;
@@ -820,9 +863,14 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
 /* ========================================
    Print: only the rendered document, on paper colours
    ======================================== */
+/* The handout: light colours of the family on white paper (the --print-*
+   values are written just before printing, with the page size and the
+   page numbers), and a QR code holding the share link at the end. */
+@media screen { .handout-qr { display: none; } }
 @media print {
   html, body { height: auto; overflow: visible; background: #fff; color: #000; }
-  #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu, #explain, #projector-caption { display: none !important; }
+  #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu, #explain, #projector-caption,
+  #qr-dialog, .masthead, .skip { display: none !important; }
   #editor-container { display: block; overflow: visible; background: #fff; }
   #content-area { display: block; max-width: none; overflow: visible; }
   #preview {
@@ -832,14 +880,21 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
     padding: 0;
     border: none;
     background: #fff;
-    color: #000;
+    color: var(--print-fg, #000);
     font-size: 12pt;
     line-height: 1.6;
   }
-  #preview h1, #preview h2, #preview h3, #preview strong, #preview em, #preview code { color: #000; }
-  #preview a { color: #000; text-decoration: underline; }
-  #preview code, #preview pre { background: #f2f2f2; border-color: #ccc; }
-  #preview pre code { color: #000; }
-  #preview blockquote { border-left-color: #999; color: #333; }
-  #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: #555; }
+  #preview :is(h1, h2, h3, h4, h5, h6) { color: var(--print-heading, #000); }
+  #preview strong { color: var(--print-fg, #000); }
+  #preview em { color: var(--print-emphasis, #000); }
+  #preview code { color: var(--print-code, #000); }
+  #preview a { color: var(--print-link, #000); text-decoration: underline; }
+  #preview code, #preview pre { background: var(--print-code-bg, #f2f2f2); border-color: var(--print-border, #ccc); }
+  #preview pre code { color: var(--print-fg, #000); }
+  #preview blockquote { border-left-color: var(--print-border, #999); color: var(--print-dim, #333); }
+  #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: var(--print-dim, #555); }
+  #preview .paired { background: none; box-shadow: none; }
+  #preview .handout-qr { display: block; break-inside: avoid; margin-top: 2.5em; text-align: center; color: #000; }
+  #preview .handout-qr svg { display: block; margin: 0 auto; }
+  #preview .handout-qr p { margin: 6pt 0 0; font-family: var(--font-ui); font-size: 9pt; color: var(--print-dim, #555); }
 }

@@ -36,4 +36,44 @@ struct ShareQRCodeTests {
         #expect(denseSide <= 300)
         #expect(ShareQRCode.printSide(for: URL(string: "https://x.example/" + String(repeating: "y", count: 3_000))!) == nil)
     }
+
+    struct WebMatrix: Decodable {
+        let name: String
+        let text: String
+        let rows: [String]
+    }
+
+    /// Draws a matrix black on white, with a four-module quiet zone.
+    static func render(_ rows: [String], scale: Int) -> CGImage? {
+        let size = rows.count + 8
+        let side = size * scale
+        guard let context = CGContext(
+            data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side,
+            space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else { return nil }
+        context.setFillColor(gray: 1, alpha: 1)
+        context.fill(CGRect(x: 0, y: 0, width: side, height: side))
+        context.setFillColor(gray: 0, alpha: 1)
+        for (y, row) in rows.enumerated() {
+            for (x, cell) in row.enumerated() where cell == "1" {
+                // CoreGraphics counts rows from the bottom.
+                context.fill(CGRect(x: (x + 4) * scale, y: (size - 1 - (y + 4)) * scale, width: scale, height: scale))
+            }
+        }
+        return context.makeImage()
+    }
+
+    @Test("Every QR code the web encoder draws decodes back to its text")
+    func webMatricesDecode() throws {
+        let url = try #require(Bundle.module.url(forResource: "qr-matrices", withExtension: "json", subdirectory: "Fixtures"))
+        let cases = try JSONDecoder().decode([WebMatrix].self, from: Data(contentsOf: url))
+        #expect(cases.count >= 8)
+        let detector = try #require(CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]))
+        for item in cases {
+            #expect(item.rows.allSatisfy { $0.count == item.rows.count }, "\(item.name): square")
+            let image = try #require(Self.render(item.rows, scale: 6), "\(item.name)")
+            let found = detector.features(in: CIImage(cgImage: image)).compactMap { ($0 as? CIQRCodeFeature)?.messageString }
+            #expect(found == [item.text], "\(item.name)")
+        }
+    }
 }
