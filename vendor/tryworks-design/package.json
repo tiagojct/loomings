@@ -1,0 +1,36 @@
+{
+  "name": "@tiagojct/tryworks-design",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Tryworks design: tokens, base styles, components, masthead, and an 11ty layer",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./11ty/index.js",
+    "./css": "./css/index.css",
+    "./css/*": "./css/*",
+    "./fonts/*": "./fonts/*",
+    "./11ty/*": "./11ty/*",
+    "./js": "./js/design.js",
+    "./js/*": "./js/*"
+  },
+  "files": [
+    "css",
+    "fonts",
+    "assets",
+    "11ty",
+    "README.md",
+    "js",
+    "LICENSE"
+  ],
+  "scripts": {
+    "demo": "eleventy --config=demo/eleventy.config.js --serve --port=8099",
+    "check": "node scripts/check.mjs"
+  },
+  "devDependencies": {
+    "@11ty/eleventy": "^3.0.0"
+  },
+  "dependencies": {
+    "markdown-it-anchor": "^9.2.1"
+  }
+}

@@ -12,11 +12,24 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <a class="skip" href="#editor">Skip to editor</a>
+  <div class="masthead">
+    <div class="wrap masthead-inner">
+      <p>Part of <a href="https://tryworks.tiagojacinto.eu/">Tryworks</a>, a learning hub for health researchers.</p>
+      <nav aria-label="Tryworks tools">
+        <ul>
+          <li><a href="https://tryworks.tiagojacinto.eu/tools/sub-sub/">Sub-Sub</a></li>
+          <li><a href="https://tryworks.tiagojacinto.eu/tools/antedraft/">Antedraft</a></li>
+          <li><a href="https://tryworks.tiagojacinto.eu/tools/loomings/" aria-current="page">Loomings</a></li>
+        </ul>
+      </nav>
+    </div>
+  </div>
   <div id="web-toolbar">
-    <button id="tb-new" title="New">New</button>
-    <button id="tb-open" title="Open">Open</button>
+    <button type="button" id="tb-new" title="New">New</button>
+    <button type="button" id="tb-open" title="Open">Open</button>
     <div class="tb-menu-wrap">
-      <button id="tb-docs" title="Documents kept in this browser" aria-haspopup="menu" aria-expanded="false">Documents</button>
+      <button type="button" id="tb-docs" title="Documents kept in this browser" aria-haspopup="menu" aria-expanded="false">Documents</button>
       <div id="docs-menu" class="tb-menu hidden" role="menu" aria-label="Documents">
         <div class="tb-menu-section">In this browser</div>
         <div id="docs-list"></div>
@@ -27,9 +40,9 @@
         </div>
       </div>
     </div>
-    <button id="tb-save" title="Save">Save</button>
+    <button type="button" id="tb-save" title="Save">Save</button>
     <div class="tb-menu-wrap">
-      <button id="tb-export" title="Export" aria-haspopup="menu" aria-expanded="false">Export</button>
+      <button type="button" id="tb-export" title="Export" aria-haspopup="menu" aria-expanded="false">Export</button>
       <div id="export-menu" class="tb-menu hidden" role="menu" aria-label="Export">
         <button type="button" class="tb-menu-item" role="menuitem" data-action="md"><span class="tb-menu-label">Markdown file (.md)</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="html"><span class="tb-menu-label">HTML file</span></button>
@@ -44,7 +57,7 @@
       <button type="button" data-view="preview" aria-pressed="false" title="Preview only (⌘⇧P)">Preview</button>
     </div>
     <div class="tb-menu-wrap">
-      <button id="tb-focus" title="Focus" aria-haspopup="menu" aria-expanded="false">Focus</button>
+      <button type="button" id="tb-focus" title="Focus" aria-haspopup="menu" aria-expanded="false">Focus</button>
       <div id="focus-menu" class="tb-menu hidden" role="menu" aria-label="Focus">
         <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="sentence"><span class="tb-menu-label">Dim other sentences</span><span class="tb-menu-hint">⌘⇧D</span></button>
         <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="typewriter"><span class="tb-menu-label">Keep cursor centred</span><span class="tb-menu-hint">⌘⇧Y</span></button>
@@ -53,7 +66,7 @@
     </div>
     <span class="tb-spacer"></span>
     <div class="tb-menu-wrap">
-      <button id="tb-learn" title="Learn Markdown" aria-haspopup="menu" aria-expanded="false">Learn</button>
+      <button type="button" id="tb-learn" title="Learn Markdown" aria-haspopup="menu" aria-expanded="false">Learn</button>
       <div id="learn-menu" class="tb-menu tb-menu-right hidden" role="menu" aria-label="Learn">
         <div class="tb-menu-section">Lessons</div>
         <div id="learn-lessons"></div>
@@ -63,7 +76,7 @@
       </div>
     </div>
     <div class="tb-menu-wrap">
-      <button id="tb-theme" title="Theme" aria-haspopup="menu" aria-expanded="false">Theme</button>
+      <button type="button" id="tb-theme" title="Theme" aria-haspopup="menu" aria-expanded="false">Theme</button>
       <div id="theme-menu" class="tb-menu tb-menu-right hidden" role="menu" aria-label="Theme">
         <div class="tb-menu-section">Mode</div>
         <div id="theme-modes"></div>
@@ -71,13 +84,13 @@
         <div id="theme-families"></div>
       </div>
     </div>
-    <button id="tb-about" title="About">About</button>
+    <button type="button" id="tb-about" title="About">About</button>
   </div>
 
   <div id="editor-container">
     <div id="content-area" class="width-normal">
-      <div id="editor"></div>
-      <div id="preview" class="hidden"></div>
+      <div id="editor" tabindex="-1"></div>
+      <section id="preview" class="hidden" tabindex="0" aria-label="Rendered preview"></section>
     </div>
   </div>
 
@@ -85,7 +98,7 @@
     <div id="status-left">
       <span id="status-app" role="status" aria-live="polite">Loomings</span>
       <span id="status-file" class="hidden"></span>
-      <span id="dirty" class="hidden" aria-label="Unsaved changes" title="Unsaved changes">&bull;</span>
+      <span id="dirty" class="hidden" role="img" aria-label="Unsaved changes" title="Unsaved changes">&bull;</span>
     </div>
     <div id="status-right">
       <span id="cursor-pos">Ln 1, Col 1</span>
@@ -105,7 +118,7 @@
     </div>
     <table>
       <tbody>
-        <tr><th colspan="2">Blocks</th></tr>
+        <tr><th colspan="2" scope="colgroup">Blocks</th></tr>
         <tr><td><code># Title</code></td><td>Heading level 1 (## for 2, ### for 3)</td></tr>
         <tr><td><code>(empty line)</code></td><td>New paragraph</td></tr>
         <tr><td><code>- item</code></td><td>Bulleted list</td></tr>
@@ -115,14 +128,14 @@
         <tr><td><code>```</code></td><td>Code block (open and close)</td></tr>
         <tr><td><code>---</code></td><td>Horizontal rule</td></tr>
         <tr><td><code>| a | b |</code></td><td>Table row; <code>| --- | --- |</code> under the header</td></tr>
-        <tr><th colspan="2">Inline</th></tr>
+        <tr><th colspan="2" scope="colgroup">Inline</th></tr>
         <tr><td><code>*text*</code></td><td><em>Emphasis</em></td></tr>
         <tr><td><code>**text**</code></td><td><strong>Strong</strong></td></tr>
         <tr><td><code>`code`</code></td><td><code>Inline code</code></td></tr>
         <tr><td><code>[text](url)</code></td><td>Link</td></tr>
         <tr><td><code>![alt](url)</code></td><td>Image</td></tr>
         <tr><td><code>\*</code></td><td>Literal character (escape)</td></tr>
-        <tr><th colspan="2">Shortcuts</th></tr>
+        <tr><th colspan="2" scope="colgroup">Shortcuts</th></tr>
         <tr><td><kbd>⌘B</kbd> <kbd>⌘I</kbd> <kbd>⌘`</kbd> <kbd>⌘K</kbd></td><td>Bold, italic, code, link</td></tr>
         <tr><td><kbd>⌘\</kbd> <kbd>⌘⇧P</kbd></td><td>Split, preview</td></tr>
         <tr><td><kbd>⌘P</kbd> <kbd>⌘F</kbd></td><td>Jump to heading, find</td></tr>
@@ -137,14 +150,14 @@
   <div id="palette" class="hidden" role="dialog" aria-modal="true" aria-label="Jump to heading">
     <div id="palette-inner">
       <input id="palette-input" type="text" placeholder="Jump to heading…" autocomplete="off" spellcheck="false"
-             role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="palette-list"/>
+             role="combobox" aria-expanded="true" aria-autocomplete="list" aria-controls="palette-list">
       <ul id="palette-list" role="listbox" aria-label="Headings"></ul>
     </div>
   </div>
 
   <div id="about" class="hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div id="about-inner" tabindex="-1">
-      <img id="about-icon" src="" alt="Loomings" width="96" height="96">
+      <img id="about-icon" src="icons/icon-192.png" alt="Loomings" width="96" height="96">
       <h2 id="about-title">Loomings</h2>
       <p id="about-version">Version</p>
       <p class="about-tagline">A markdown writing app. The shapes loom before they take form.</p>

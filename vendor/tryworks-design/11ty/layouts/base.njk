@@ -1,0 +1,78 @@
+{%- set L = strings -%}
+{%- set home = "/" -%}
+<!doctype html>
+<html lang="{{ lang or 'en-GB' }}" data-theme-key="{{ design.themeKey or 'tryworks-theme' }}">
+<head>
+	{% include "head.njk" %}
+</head>
+<body class="{{ bodyClass or 'page' }}">
+	<a class="skip" href="#main">{{ L.skip or "Skip to content" }}</a>
+
+	{%- if masthead %}
+	{% include "masthead.njk" %}
+	{%- endif %}
+
+	<header class="site-header">
+		<div class="wrap header-inner">
+			<a class="brand" href="{{ home }}">
+				{%- if site.brandMark %}{{ site.brandMark | safe }}{% endif %}
+				<span>{{ site.brand or site.title }}</span>
+			</a>
+			<nav class="nav" id="site-nav" aria-label="{{ L.mainMenu or 'Main menu' }}">
+				<ul>
+				{%- for item in nav %}
+					<li><a href="{{ item.url }}"{% if page.url == item.url %} aria-current="page"{% endif %}>{{ item.label }}</a></li>
+				{%- endfor %}
+				</ul>
+			</nav>
+			<div class="header-tools">
+				{%- if alt %}
+				<a class="tool-link lang-link" href="{{ alt }}" hreflang="{{ altLang }}" lang="{{ altLang }}">{{ altLabel }}</a>
+				{%- endif %}
+				{%- if site.repo %}
+				<a class="tool-link gh-link" href="{{ site.repo }}" rel="noopener">GitHub</a>
+				{%- endif %}
+				<button type="button" class="theme-btn menu-btn" id="menu-toggle" aria-controls="site-nav" aria-expanded="false" aria-label="{{ L.menu or 'Menu' }}">
+					<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+				</button>
+				<button type="button" class="theme-btn" id="theme-toggle" aria-label="{{ L.theme or 'Switch theme' }}">
+					<svg class="i-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/></svg>
+					<svg class="i-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z"/></svg>
+				</button>
+			</div>
+		</div>
+	</header>
+
+	{% if bodyClass == "home" %}
+		<main id="main">
+			{{ content | safe }}
+		</main>
+	{% else %}
+		<main id="main" class="wrap doc">
+			{%- if title and not hideTitle %}
+			<header class="doc-header">
+				<p class="runhead"><span>{{ site.title }}</span>{% if eyebrow %}<span class="mid">{{ eyebrow }}</span>{% endif %}</p>
+				<h1>{{ title }}</h1>
+				{% if lead %}<p class="lead">{{ lead }}</p>{% endif %}
+			</header>
+			{%- endif %}
+			<div class="doc-body">
+				<article class="prose">
+					{{ content | safe }}
+					{% if contentLicense == "CC BY 4.0" %}
+					<p class="content-licence">Tiago Jacinto. Text: <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Third-party assets retain their stated credits.</p>
+					{% endif %}
+				</article>
+				{% if content | hasToc %}
+			<aside class="toc" id="toc" hidden>
+					<h2 class="toc-title">{{ L.onThisPage or "On this page" }}</h2>
+					<ol></ol>
+				</aside>
+				{% endif %}
+			</div>
+		</main>
+	{% endif %}
+
+	{% include "footer.njk" %}
+</body>
+</html>

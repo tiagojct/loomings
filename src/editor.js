@@ -471,6 +471,7 @@ function buildState(doc = '') {
         spellcheck: 'true',
         autocorrect: 'on',
         autocapitalize: 'sentences',
+        'aria-label': 'Markdown document',
       }),
       search({ top: true }),
       placeholderCompartment.of(placeholder('The shapes loom before they take form…')),
@@ -517,6 +518,10 @@ const view = new EditorView({
   state: buildState(''),
   parent: editorEl,
 });
+
+view.scrollDOM.setAttribute('tabindex', '0');
+view.scrollDOM.setAttribute('role', 'region');
+view.scrollDOM.setAttribute('aria-label', 'Document text');
 
 function getText() { return view.state.doc.toString(); }
 
@@ -983,10 +988,10 @@ function docTitle(text) { return firstHeading(text) || 'Untitled'; }
 function refreshStatusBar() {
   statusApp.textContent = 'Loomings';
   if (currentFile) {
-    statusFile.textContent = '— ' + basename(currentFile);
+    statusFile.textContent = '· ' + basename(currentFile);
     statusFile.classList.remove('hidden');
   } else if (currentDocId) {
-    statusFile.textContent = '— ' + docTitle(getText()) + ' (in this browser)';
+    statusFile.textContent = '· ' + docTitle(getText()) + ' (in this browser)';
     statusFile.classList.remove('hidden');
   } else {
     statusFile.classList.add('hidden');
@@ -1031,7 +1036,7 @@ async function handleSaveAs() {
     } else if (!hasFileSystemAccess) {
       // Firefox/Safari: the "save" was a download, so the buffer is still
       // only in this tab — say so instead of pretending it's on disk.
-      flashStatus('Downloaded a copy — this browser can’t save in place');
+      flashStatus('Downloaded a copy; this browser can’t save in place');
     }
   } catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
 }
@@ -1427,7 +1432,7 @@ async function copyShareLink() {
     const kb = Math.max(1, Math.round(url.length / 1024));
     if (navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(url);
-      flashStatus(`Link copied (${kb} KB) — the whole document travels in it`);
+      flashStatus(`Link copied (${kb} KB); the whole document travels in it`);
     } else {
       window.prompt('Copy this link:', url);
     }
@@ -1581,7 +1586,7 @@ attachMenu(el('tb-docs'), el('docs-menu'), {
       if (!entry) return;
       const payload = await openRecent(entry);
       if (payload) await loadFile(payload);
-      else flashStatus('Could not reopen — permission declined or the file has moved');
+      else flashStatus('Could not reopen: permission declined or the file has moved');
     }
   },
 });
@@ -1662,5 +1667,5 @@ async function offerScratchRecovery() {
   if (!(await loadFromLocation())) await offerScratchRecovery();
   updateStats(); updateCursorPos(); refreshStatusBar();
   view.focus();
-  registerServiceWorker(() => flashStatus('A new version of Loomings is ready — reload to use it'));
+  registerServiceWorker(() => flashStatus('A new version of Loomings is ready; reload to use it'));
 })();

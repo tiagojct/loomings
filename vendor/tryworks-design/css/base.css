@@ -1,0 +1,62 @@
+/* Base: reset, page type, links, focus, skip link, measure. */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+	-webkit-text-size-adjust: 100%;
+	scroll-padding-top: 5rem;
+	scrollbar-color: var(--rule-strong) var(--bg);
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--serif);
+	font-size: 1.0625rem;
+	line-height: 1.6;
+	font-variant-numeric: oldstyle-nums proportional-nums;
+	caret-color: var(--accent);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+}
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+a:hover { text-decoration-thickness: 2px; }
+img { max-width: 100%; height: auto; display: block; }
+code, pre, kbd { font-family: var(--mono); font-variant-numeric: normal; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+::selection { background: var(--accent-soft); color: var(--text); }
+[hidden] { display: none !important; }
+button { font: inherit; }
+
+.wrap { width: min(100% - 2.5rem, var(--wrap)); margin-inline: auto; }
+
+/* Small capitals for plate and figure numbers. */
+.sc { font-variant-caps: small-caps; letter-spacing: 0.04em; font-style: normal; }
+/* A name that must not break, least of all at its hyphen. */
+.nobr { white-space: nowrap; }
+
+.skip {
+	position: absolute;
+	left: 1rem;
+	top: -3rem;
+	padding: 0.5rem 0.9rem;
+	background: var(--text);
+	color: var(--bg);
+	font-family: var(--sans);
+	z-index: 50;
+}
+.skip:focus { top: 1rem; }
+
+.visually-hidden {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	margin: -1px;
+	padding: 0;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}

@@ -1,0 +1,116 @@
+/* Tryworks design: tokens.
+   The plate system: a grey-green sheet, a lighter plate field inside its mark,
+   copperplate ink, and four washes as the only colour. State is drawn by line.
+   Literata for text, Atkinson Hyperlegible Next for controls, Atkinson
+   Hyperlegible Mono for commands.
+
+   The accent is one property, --accent. Change it here and --accent-soft
+   follows. Nothing else in the package sets either. */
+
+@font-face {
+	font-family: "Literata";
+	src: url("../fonts/Literata.woff2") format("woff2");
+	font-weight: 400 700;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Literata";
+	src: url("../fonts/Literata-Italic.woff2") format("woff2");
+	font-weight: 400 700;
+	font-style: italic;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Atkinson Hyperlegible Next";
+	src: url("../fonts/AtkinsonHyperlegibleNext.woff2") format("woff2");
+	font-weight: 400 700;
+	font-display: swap;
+}
+@font-face {
+	font-family: "Atkinson Hyperlegible Mono";
+	src: url("../fonts/AtkinsonHyperlegibleMono.woff2") format("woff2");
+	font-weight: 400 600;
+	font-display: swap;
+}
+
+:root {
+	--serif: "Literata", Georgia, "Times New Roman", serif;
+	--sans: "Atkinson Hyperlegible Next", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--mono: "Atkinson Hyperlegible Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+	--bg: #e9ece6; /* the sheet */
+	--surface: #dfe3dc; /* a sunk field: inline code, table heads */
+	--raised: #f4f5f1; /* the plate field, inside the plate mark */
+	--text: #16202a; /* copperplate ink */
+	--muted: #44505b;
+	--faint: #5d6870;
+	--rule: #c6ccc6; /* a fine engraved line */
+	--rule-strong: #7d878e; /* the plate mark, field borders */
+
+	/* The one accent. Sub-Sub value: Prussian blue. */
+	--accent: #2c5d87;
+	--accent-soft: color-mix(in srgb, var(--accent) 18%, var(--bg));
+
+	--sap: #4f6a2e; /* applied, checked */
+	--sap-soft: #dfe7d2;
+	--gamboge: #86601a; /* a preview */
+	--gamboge-soft: #f2e5c6;
+
+	--term-bg: #16202a;
+	--term-text: #e3e7e3;
+	--term-dim: #8e9aa1;
+	--term-acc: #86b4da;
+	--term-add: #a3c078;
+	--term-rem: #e6866d;
+
+	--wrap: 76rem;
+	--radius: 2px;
+}
+
+/* Dark: the steel plate itself. A blue-black ground, pale engraved line,
+   brighter washes. */
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) {
+		--bg: #12171c;
+		--surface: #0d1115;
+		--raised: #192128;
+		--text: #dce1de;
+		--muted: #a6b0b3;
+		--faint: #8d989d;
+		--rule: #2c363f;
+		--rule-strong: #66727c;
+		--accent: #86b4da;
+		--sap: #a3c078;
+		--sap-soft: #253220;
+		--gamboge: #e2b45a;
+		--gamboge-soft: #3a3019;
+		--term-bg: #0b0f13;
+	}
+}
+
+:root[data-theme="dark"] {
+	--bg: #12171c;
+	--surface: #0d1115;
+	--raised: #192128;
+	--text: #dce1de;
+	--muted: #a6b0b3;
+	--faint: #8d989d;
+	--rule: #2c363f;
+	--rule-strong: #66727c;
+	--accent: #86b4da;
+	--sap: #a3c078;
+	--sap-soft: #253220;
+	--gamboge: #e2b45a;
+	--gamboge-soft: #3a3019;
+	--term-bg: #0b0f13;
+}
+
+/* Screenshots exist in both themes; show the one that matches. */
+.only-dark { display: none; }
+:root[data-theme="dark"] .only-dark { display: block; }
+:root[data-theme="dark"] .only-light { display: none; }
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .only-dark { display: block; }
+	:root:not([data-theme="light"]) .only-light { display: none; }
+}

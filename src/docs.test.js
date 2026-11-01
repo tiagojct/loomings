@@ -40,17 +40,22 @@ describe('landing page references', () => {
 });
 
 describe('landing page fonts', () => {
-  // The landing page borrows the app's self-hosted faces from /app/fonts.
-  const urls = [...css.matchAll(/url\('(\/app\/fonts\/[^']+)'\)/g)].map((m) => m[1]);
+  // The landing page imports the shared design, which declares its own
+  // self-hosted faces. No hosted font service is involved.
+  const importRef = css.match(/@import url\("(\/vendor\/[^"]+)"\)/);
 
-  it('declares the faces it loads', () => {
-    expect(urls.length).toBeGreaterThanOrEqual(6);
+  it('imports the shared design layer', () => {
+    expect(importRef).not.toBeNull();
+    expect(existsSync(join(root, importRef[1].replace('/vendor/', 'vendor/')))).toBe(true);
+    expect(css).not.toMatch(/fonts\.(?:googleapis|gstatic)\.com/);
   });
 
-  it('every face it points at exists in the app’s public directory', () => {
+  it('every face the shared layer declares ships with the vendor copy', () => {
+    const tokens = readFileSync(join(root, 'vendor/tryworks-design/css/tokens.css'), 'utf8');
+    const urls = [...tokens.matchAll(/url\("\.\.\/fonts\/([^"]+)"\)/g)].map((m) => m[1]);
+    expect(urls.length).toBeGreaterThanOrEqual(4);
     for (const url of urls) {
-      const file = join(root, 'public', url.replace('/app/', ''));
-      expect(existsSync(file), url).toBe(true);
+      expect(existsSync(join(root, 'vendor/tryworks-design/fonts', url)), url).toBe(true);
     }
   });
 });

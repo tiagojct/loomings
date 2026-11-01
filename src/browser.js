@@ -143,7 +143,7 @@ export async function ask(message) {
 }
 
 export async function setTitle(title) {
-  document.title = title ? `${title} — Loomings` : 'Loomings';
+  document.title = title ? `${title} · Loomings` : 'Loomings';
 }
 
 // ==========================

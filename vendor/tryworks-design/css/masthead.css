@@ -1,0 +1,37 @@
+/* The masthead strip: "Part of Tryworks", the hub, the tools.
+   A site turns it on by including the markup and loading this file.
+   It sits above the site header and never sticks. */
+
+.masthead {
+	border-bottom: 1px solid var(--rule);
+	background: var(--surface);
+	font-family: var(--sans);
+	font-size: 0.82rem;
+	line-height: 1.4;
+}
+.masthead-inner {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.3rem 1.1rem;
+	padding: 0.45rem 0;
+}
+.masthead p { margin: 0; color: var(--muted); }
+.masthead a { color: var(--text); text-decoration-thickness: 1px; text-underline-offset: 0.18em; }
+.masthead a:hover { color: var(--accent); }
+.masthead nav { margin-left: auto; }
+.masthead nav ul {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.3rem 1.1rem;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+.masthead nav a { color: var(--muted); text-decoration: none; }
+.masthead nav a:hover { color: var(--text); text-decoration: underline; }
+.masthead nav a[aria-current="page"] { color: var(--text); text-decoration: underline; }
+
+@media (max-width: 34rem) {
+	.masthead nav { margin-left: 0; }
+}

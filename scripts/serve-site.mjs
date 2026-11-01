@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const root = fileURLToPath(new URL('..', import.meta.url));
 const docs = join(root, 'docs');
 const dist = join(root, 'dist');
+const vendor = join(root, 'vendor');
 const port = Number(process.env.PORT || 8080);
 const types = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript',
@@ -19,9 +20,10 @@ const types = {
 http.createServer(async (req, res) => {
   const url = decodeURIComponent(req.url.split('?')[0]);
   const isApp = url.startsWith('/app/');
-  const rel = normalize(isApp ? url.slice(5) : url === '/' ? 'index.html' : url.slice(1));
+  const isVendor = url.startsWith('/vendor/');
+  const rel = normalize(isApp ? url.slice(5) : isVendor ? url.slice(8) : url === '/' ? 'index.html' : url.slice(1));
   if (rel.startsWith('..')) { res.writeHead(403).end(); return; }
-  const file = join(isApp ? dist : docs, rel || 'index.html');
+  const file = join(isApp ? dist : isVendor ? vendor : docs, !rel || rel === '.' ? 'index.html' : rel);
   try {
     const data = await readFile(file);
     res.writeHead(200, { 'content-type': types[extname(file)] || 'application/octet-stream' });

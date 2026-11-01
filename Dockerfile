@@ -3,6 +3,7 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY vite.config.js ./
+COPY vendor ./vendor
 COPY src ./src
 COPY public ./public
 COPY examples ./examples
@@ -12,7 +13,9 @@ RUN npm run build
 
 FROM nginx:alpine
 # Landing page (docs/) owns the root; the editor app lives at /app.
+# The landing imports the shared design from /vendor.
 COPY docs /usr/share/nginx/html
+COPY vendor /usr/share/nginx/html/vendor
 COPY --from=build /src/dist /usr/share/nginx/html/app
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80

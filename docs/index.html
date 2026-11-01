@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Loomings — a markdown editor for writing and teaching</title>
+  <title>Loomings: a markdown editor for writing and teaching</title>
   <meta name="description" content="A markdown editor, for writing and teaching. The source on the left, what it becomes on the right. Nothing leaves the machine unless you make it a link.">
   <meta property="og:title" content="Loomings">
   <meta property="og:description" content="A markdown editor, for writing and teaching. The source on the left, what it becomes on the right. Nothing leaves the machine unless you make it a link.">
@@ -16,14 +16,28 @@
   <meta property="og:locale" content="en_GB">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="https://loomings.tiagojacinto.eu/assets/og.png?v=2.1.0">
-  <meta name="theme-color" content="#0b1720">
+  <meta name="theme-color" content="#e9ece6" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#12171c" media="(prefers-color-scheme: dark)">
   <link rel="icon" type="image/png" href="assets/icon.png">
-  <link rel="stylesheet" href="style.css?v=2.3.0">
+  <link rel="stylesheet" href="style.css?v=2.3.1">
   <script defer src="https://umami.tiagojct.eu/script.js" data-website-id="b93699dc-76ec-4db9-afd0-0bcd23da0316"></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to the page</a>
-  <h1 class="sr-only">Loomings — a markdown editor for writing and teaching</h1>
+  <h1 class="sr-only">Loomings: a markdown editor for writing and teaching</h1>
+
+  <div class="masthead">
+    <div class="wrap masthead-inner">
+      <p>Part of <a href="https://tryworks.tiagojacinto.eu/">Tryworks</a>, a learning hub for health researchers.</p>
+      <nav aria-label="Tryworks tools">
+        <ul>
+          <li><a href="https://tryworks.tiagojacinto.eu/tools/sub-sub/">Sub-Sub</a></li>
+          <li><a href="https://tryworks.tiagojacinto.eu/tools/antedraft/">Antedraft</a></li>
+          <li><a href="https://tryworks.tiagojacinto.eu/tools/loomings/" aria-current="page">Loomings</a></li>
+        </ul>
+      </nav>
+    </div>
+  </div>
 
   <header class="machine-head">
     <a class="wordmark" href="#top">Loomings</a>
@@ -40,19 +54,19 @@
     <section class="console" id="top" aria-label="Loomings, demonstrated">
       <div class="plate">
         <p class="plate-rail">
-          <span>A markdown editor in the browser<span class="rail-long"> — the source on the left, what it becomes on the right</span></span>
+          <span>A markdown editor in the browser<span class="rail-long">: the source on the left, what it becomes on the right</span></span>
           <span class="hint"><span class="hint-pointer">Point at a line</span><span class="hint-touch">Tap a line</span></span>
         </p>
 
         <div class="pane source">
           <p class="pane-label">What you type</p>
-          <pre aria-label="Markdown source of the example"><span class="src" data-pair="title"><span class="mark">#</span> Loomings</span><span class="src" data-pair="para">Call me <span class="mark">**</span>Ishmael<span class="mark">**</span>. Some years ago — never
+          <pre><span class="src" data-pair="title"><span class="mark">#</span> Loomings</span><span class="src" data-pair="para">Call me <span class="mark">**</span>Ishmael<span class="mark">**</span>. Some years ago — never
 mind how long precisely — having little or no
 money in my purse, I thought I would sail
 about a little and see the watery part of the
 world.</span></pre>
           <p class="hand" aria-hidden="true">the marks are the page
-            <svg width="92" height="44" viewBox="0 0 92 44"><path d="M3 41 C20 20, 46 9, 84 7" fill="none" stroke="#a8331f" stroke-width="1.6" stroke-linecap="round"/><path d="M73 3 L85 7 L78 17" fill="none" stroke="#a8331f" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="92" height="44" viewBox="0 0 92 44"><path d="M3 41 C20 20, 46 9, 84 7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M73 3 L85 7 L78 17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </p>
         </div>
 
@@ -83,7 +97,7 @@ world.</span></pre>
         <aside class="ticket">
           <dl>
             <dt>Provenance</dt>
-            <dd>Chapter 1, <i>Moby-Dick</i> — the opening lines, abridged. The bundled example.</dd>
+            <dd>Chapter 1, <i>Moby-Dick</i>: the opening lines, abridged. The bundled example.</dd>
           </dl>
         </aside>
       </div>
@@ -94,7 +108,7 @@ world.</span></pre>
       <div class="write-grid">
         <div>
           <h2>The source and the result are <em>the same sheet</em>.</h2>
-          <p class="prose">Bold reads bold, headings read as headings. Lists continue themselves on Return, <strong>⌘P</strong> jumps you anywhere in the outline, and the preview keeps pace as you scroll either pane. There is no tab to switch to — the Markdown is the document.</p>
+          <p class="prose">Bold reads bold, headings read as headings. Lists continue themselves on Return, <strong>⌘P</strong> jumps you anywhere in the outline, and the preview keeps pace as you scroll either pane. There is no tab to switch to: the Markdown is the document.</p>
         </div>
 
         <div>
@@ -103,7 +117,7 @@ world.</span></pre>
             <code class="url">https://loomings.tiagojacinto.eu/app/#d=z.3VhCk0XQ7r2mN8pLwYt…<span class="dim">The rest of the chapter is in the address, compressed.</span></code>
             <span class="stamp">No upload</span>
           </div>
-          <p class="prose">The document is compressed into the address, and a fragment never reaches the server — there is no server to reach. Send it to a student: it opens in their own editor, with the text already there.</p>
+          <p class="prose">The document is compressed into the address, and a fragment never reaches the server: there is no server to reach. Send it to a student: it opens in their own editor, with the text already there.</p>
         </div>
       </div>
     </section>
@@ -144,118 +158,118 @@ combine them for ***both***.
       <div class="bindings-wrap">
         <div>
           <h2>Ten ensigns.</h2>
-          <p class="prose">Each family is named for a ship in <em>Moby-Dick</em> and measured for one place of use, and each has a light and a dark side. The editor ships all ten: pick one to open it in that family. This page wears <strong>Pequod</strong>, the host ship. Colours from <a href="https://ensigns.tiagojacinto.eu">Ensigns</a>.</p>
+          <p class="prose">Each family is named for a ship in <em>Moby-Dick</em> and measured for one place of use, and each has a light and a dark side. The editor ships all ten. This page shows each family below; pick one to open it in that family. Colours from <a href="https://ensigns.tiagojacinto.eu">Ensigns</a>.</p>
         </div>
 
-        <div class="bindings" aria-label="The ten Ensigns families, each split between its light and dark side">
+        <div class="bindings" role="group" aria-label="The ten Ensigns families, each split between its light and dark side">
           <a class="binding" href="/app/?theme=pequod" aria-label="Open the editor in Pequod">
-            <div class="half dark" style="background:#0b1720">
-              <div class="top" style="color:#eae1d7">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Pequod</div>
-                <div class="line" style="color:#bd8c68">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#eae1d7">
-              <div class="modes" style="color:#0d2f42">Parchment<br>Below deck</div>
+            <div class="half light">
+              <div class="modes">Parchment<br>Below deck</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=goney" aria-label="Open the editor in Goney">
-            <div class="half dark" style="background:#10161c">
-              <div class="top" style="color:#e8eef2">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Goney</div>
-                <div class="line" style="color:#3d97ff">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#f0f4f6">
-              <div class="modes" style="color:#16222a">Pruina<br>Profundum</div>
+            <div class="half light">
+              <div class="modes">Pruina<br>Profundum</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=townho" aria-label="Open the editor in Townho">
-            <div class="half dark" style="background:#161310">
-              <div class="top" style="color:#f2ece2">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Townho</div>
-                <div class="line" style="color:#8fbeff">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#f6f2e9">
-              <div class="modes" style="color:#151210">Golden Inn daylight<br>Golden Inn night</div>
+            <div class="half light">
+              <div class="modes">Golden Inn daylight<br>Golden Inn night</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=jeroboam" aria-label="Open the editor in Jeroboam">
-            <div class="half dark" style="background:#1a1713">
-              <div class="top" style="color:#f1edea">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Jeroboam</div>
-                <div class="line" style="color:#b3aebf">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#f6f3f0">
-              <div class="modes" style="color:#1e1b17">Light<br>Dark</div>
+            <div class="half light">
+              <div class="modes">Light<br>Dark</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=jungfrau" aria-label="Open the editor in Jungfrau">
-            <div class="half dark" style="background:#171b21">
-              <div class="top" style="color:#afaca2">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Jungfrau</div>
-                <div class="line" style="color:#d56f2b">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#b5a892">
-              <div class="modes" style="color:#16100a">Lamp-feeder<br>Try-Fire</div>
+            <div class="half light">
+              <div class="modes">Lamp-feeder<br>Try-Fire</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=rosebud" aria-label="Open the editor in Rosebud">
-            <div class="half dark" style="background:#1a1f26">
-              <div class="top" style="color:#eaedef">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Rosebud</div>
-                <div class="line" style="color:#2f9f99">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#fafbfd">
-              <div class="modes" style="color:#1a1f26">Light<br>Dark</div>
+            <div class="half light">
+              <div class="modes">Light<br>Dark</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=enderby" aria-label="Open the editor in Enderby">
-            <div class="half dark" style="background:#0e1824">
-              <div class="top" style="color:#ece8d9">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Enderby</div>
-                <div class="line" style="color:#d8b456">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#faf7ee">
-              <div class="modes" style="color:#1e2736">Ivory<br>Pilot-cloth</div>
+            <div class="half light">
+              <div class="modes">Ivory<br>Pilot-cloth</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=bachelor" aria-label="Open the editor in Bachelor">
-            <div class="half dark" style="background:#080e1c">
-              <div class="top" style="color:#f7f4ec">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Bachelor</div>
-                <div class="line" style="color:#fff000">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#f3f0e9">
-              <div class="modes" style="color:#0b111f">Holiday apparel<br>Brazen lamp</div>
+            <div class="half light">
+              <div class="modes">Holiday apparel<br>Brazen lamp</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=rachel" aria-label="Open the editor in Rachel">
-            <div class="half dark" style="background:#1f1813">
-              <div class="top" style="color:#f1e7d2">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Rachel</div>
-                <div class="line" style="color:#9dd1ff">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#f7efe0">
-              <div class="modes" style="color:#20160e">Daylight<br>Beacon</div>
+            <div class="half light">
+              <div class="modes">Daylight<br>Beacon</div>
             </div>
           </a>
           <a class="binding" href="/app/?theme=delight" aria-label="Open the editor in Delight">
-            <div class="half dark" style="background:#111111">
-              <div class="top" style="color:#eeeeee">
+            <div class="half dark">
+              <div class="top">
                 <div class="name">Delight</div>
-                <div class="line" style="color:#ffffff">Call me Ishmael.</div>
+                <div class="line">Call me Ishmael.</div>
               </div>
             </div>
-            <div class="half light" style="background:#ffffff">
-              <div class="modes" style="color:#000000">White ribs<br>Sad burial</div>
+            <div class="half light">
+              <div class="modes">White ribs<br>Sad burial</div>
             </div>
           </a>
         </div>

@@ -1,0 +1,52 @@
+{%- set cssHref = design.css or "/assets/css/site.css" -%}
+{%- set jsHref = design.js -%}
+{%- set themeKey = design.themeKey or "tryworks-theme" -%}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% if title and title != site.title %}{{ title }} · {{ site.title }}{% else %}{{ site.title }}{% endif %}</title>
+<meta name="description" content="{{ description or site.description }}">
+{% if noindex %}<meta name="robots" content="noindex">
+{% endif %}<link rel="canonical" href="{{ site.url }}{{ page.url }}">
+{%- if alt %}
+<link rel="alternate" hreflang="{{ altLang }}" href="{{ site.url }}{{ alt }}">
+<link rel="alternate" hreflang="x-default" href="{{ site.url }}{{ page.url }}">
+{%- endif %}
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#e9ece6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12171c" media="(prefers-color-scheme: dark)">
+<meta property="og:title" content="{{ title or site.title }}">
+<meta property="og:description" content="{{ description or site.description }}">
+<meta property="og:url" content="{{ site.url }}{{ page.url }}">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="en_GB">
+{%- if design.ogImage %}
+<meta property="og:image" content="{{ site.url }}{{ design.ogImage }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+{%- endif %}
+{%- if site.favicon %}
+<link rel="icon" href="{{ site.favicon }}" type="image/svg+xml">
+{%- endif %}
+{%- if design.preload %}
+{%- for face in design.preload %}
+<link rel="preload" href="{{ face }}" as="font" type="font/woff2" crossorigin>
+{%- endfor %}
+{%- endif %}
+<link rel="stylesheet" href="{{ cssHref }}{% if assetVersion %}?v={{ assetVersion }}{% endif %}">
+{%- for extra in design.extraCss %}
+<link rel="stylesheet" href="{{ extra }}{% if assetVersion %}?v={{ assetVersion }}{% endif %}">
+{%- endfor %}
+<script>
+	// Set the theme before the first paint: the saved choice, or the system setting.
+	try {
+		var saved = localStorage.getItem({{ themeKey | dump | safe }});
+		if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
+	} catch (e) {}
+</script>
+{%- if site.analytics %}
+<script defer src="{{ site.analytics.src }}"{% if site.analytics.id %} data-website-id="{{ site.analytics.id }}"{% endif %}></script>
+{%- endif %}
+{%- if jsHref %}
+<script src="{{ jsHref }}{% if assetVersion %}?v={{ assetVersion }}{% endif %}" defer></script>
+{%- endif %}

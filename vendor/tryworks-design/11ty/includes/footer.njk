@@ -1,0 +1,38 @@
+	<footer class="site-footer">
+		<div class="wrap footer-inner">
+			<div class="footer-about">
+				<a class="brand" href="/">
+					{%- if site.brandMark %}{{ site.brandMark | safe }}{% endif %}
+					<span>{{ site.brand or site.title }}</span>
+				</a>
+				{%- if site.footerAbout %}
+				<p>{{ site.footerAbout | safe }}</p>
+				{%- endif %}
+				{%- if site.citation %}
+				<p class="cite"><span class="cite-label">Cite as</span> {{ site.citation | safe }}</p>
+				{%- endif %}
+			</div>
+			<nav class="footer-nav" aria-label="{{ strings.footer or 'Footer' }}">
+				{%- for col in nav | batch(5) %}
+				<ul>
+					{%- for item in col %}
+					<li><a href="{{ item.url }}">{{ item.label }}</a></li>
+					{%- endfor %}
+				</ul>
+				{%- endfor %}
+				{%- if site.repo %}
+				<ul>
+					<li><a href="{{ site.repo }}" rel="noopener">GitHub</a></li>
+					<li><a href="{{ site.repo }}/issues" rel="noopener">Report a problem</a></li>
+				</ul>
+				{%- endif %}
+			</nav>
+		</div>
+		{%- if versions %}
+		<div class="wrap footer-versions">
+			{%- for v in versions %}
+			<span>{{ v }}</span>
+			{%- endfor %}
+		</div>
+		{%- endif %}
+	</footer>

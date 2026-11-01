@@ -1,3 +1,5 @@
+@import '../vendor/tryworks-design/css/tokens.css';
+@import '../vendor/tryworks-design/css/masthead.css';
 @import './fonts.css';
 
 /* ========================================
@@ -565,6 +567,112 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   font-size: 11px;
   color: var(--fg-ghost);
   letter-spacing: 0.04em;
+}
+
+/* ---------- Tryworks chrome ---------- */
+
+/* The editor's ten families own colour and the writing surface. The chrome
+   takes the shared type, rules and control shape, so the app belongs to the
+   hub without flattening the families. */
+:root {
+  --font-ui: var(--sans);
+  --font-mono: var(--mono);
+  --font-serif: var(--serif);
+}
+
+.masthead { flex-shrink: 0; }
+.masthead .wrap {
+  width: min(100% - 2rem, 76rem);
+  margin-inline: auto;
+}
+
+#web-toolbar {
+  border-bottom-color: var(--rule-strong);
+}
+
+#web-toolbar button,
+#web-toolbar select {
+  border-radius: var(--radius);
+  font-family: var(--sans);
+  min-height: 30px;
+}
+
+#web-toolbar .tb-seg button {
+  border-radius: 0;
+}
+
+#web-toolbar .tb-seg button:first-child {
+  border-radius: var(--radius) 0 0 var(--radius);
+}
+
+#web-toolbar .tb-seg button:last-child {
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+#statusbar {
+  border-top-color: var(--rule-strong);
+  font-family: var(--sans);
+  color: var(--fg-dim);
+}
+
+#status-file,
+#cursor-pos,
+#stats span {
+  color: var(--fg-dim);
+}
+
+.tb-menu {
+  border-color: var(--rule-strong);
+  border-radius: var(--radius);
+}
+
+#about-inner,
+#palette-inner {
+  border-radius: var(--radius);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: -3rem;
+  z-index: 50;
+  padding: 0.5rem 0.9rem;
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--sans);
+}
+
+.skip:focus {
+  top: 1rem;
+}
+
+@media (pointer: coarse) {
+  #web-toolbar button,
+  #web-toolbar select {
+    min-height: 44px;
+  }
+
+  .masthead nav a {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 760px) {
+  #web-toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  #web-toolbar > * {
+    flex-shrink: 0;
+  }
 }
 
 /* Motion here is decoration (theme cross-fade, sentence dimming, toolbar
