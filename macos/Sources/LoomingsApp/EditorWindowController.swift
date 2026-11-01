@@ -67,6 +67,13 @@ final class EditorWindowController: NSWindowController,
         configureContent()
         installOverlay()
         history.load(fileURL: document.fileURL)
+        history.onError = { [weak self] reason in
+            guard let self, let window = self.window else { return }
+            let alert = NSAlert()
+            alert.messageText = "The writing history could not be saved."
+            alert.informativeText = "\(reason)\n\nThe document itself is not affected. Loomings keeps trying; free some disk space or check the Application Support folder."
+            alert.beginSheetModal(for: window)
+        }
         configureToolbar()
         wireEditorCallbacks()
 

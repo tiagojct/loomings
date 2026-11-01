@@ -612,6 +612,17 @@ enum SelfTest {
 
             recorder.deleteHistory()
             check((try? store.entries(for: id))?.isEmpty == true && !recorder.isRecording, "deleting the history removes it and stops recording")
+
+            // A history that cannot be written says so, once.
+            let blocker = historyRoot.appendingPathComponent("not-a-folder")
+            try "x".write(to: blocker, atomically: true, encoding: .utf8)
+            var errors: [String] = []
+            let failing = HistoryRecorder(store: HistoryStore(root: blocker.appendingPathComponent("History")), clock: { now })
+            failing.onError = { errors.append($0) }
+            failing.setRecording(true, fileURL: file, text: "one")
+            now = 10; failing.textChanged("one two")
+            now = 20; failing.textChanged("one two three")
+            check(errors.count == 1, "a history that cannot be saved is reported once, not silently dropped")
             historyDocument.close()
         } catch {
             check(false, "writing history: \(error.localizedDescription)")

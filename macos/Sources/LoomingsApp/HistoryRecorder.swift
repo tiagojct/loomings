@@ -21,6 +21,11 @@ final class HistoryRecorder {
         self.clock = clock
     }
 
+    /// Called once when the history cannot be written (a full disk, a
+    /// folder that cannot be made), with the reason.
+    var onError: ((String) -> Void)?
+    private var reportedError = false
+
     var isRecording: Bool { recordingID != nil }
 
     /// Whether this file has a history to replay or delete.
@@ -87,6 +92,12 @@ final class HistoryRecorder {
         guard let id = recordingID else { return }
         pending = nil
         lastRecorded = clock()
-        try? store.record(text: text, at: Date().timeIntervalSince1970, for: id)
+        do {
+            try store.record(text: text, at: Date().timeIntervalSince1970, for: id)
+        } catch {
+            guard !reportedError else { return }
+            reportedError = true
+            onError?(error.localizedDescription)
+        }
     }
 }

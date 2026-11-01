@@ -107,4 +107,39 @@ struct HistoryLogTests {
         #expect(try store.entries(for: "doc").isEmpty)
         #expect(!store.isRecording("doc"))
     }
+
+    @Test("A damaged line is skipped, and recording goes on")
+    func corruptLineIsSkipped() throws {
+        let root = try Self.temporaryRoot()
+        let store = HistoryStore(root: root)
+        for (step, text) in ["one", "one two", "one two three"].enumerated() {
+            try store.record(text: text, at: TimeInterval(step), for: "doc")
+        }
+        let handle = try FileHandle(forWritingTo: root.appendingPathComponent("doc.jsonl"))
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data("{\"time\": 3, \"locat".utf8))
+        try handle.close()
+        let fresh = HistoryStore(root: root)
+        #expect(try fresh.entries(for: "doc").count == 3)
+        try fresh.record(text: "one two three four", at: 4, for: "doc")
+        let entries = try fresh.entries(for: "doc")
+        #expect(entries.count == 4)
+        #expect(HistoryLog.reconstruct(entries, upTo: 3) == "one two three four")
+    }
+
+    @Test("A copy of a recorded file gets its own history")
+    func copyGetsItsOwnHistory() throws {
+        let root = try Self.temporaryRoot()
+        let store = HistoryStore(root: root.appendingPathComponent("History"))
+        let original = root.appendingPathComponent("essay.md")
+        try "essay".write(to: original, atomically: true, encoding: .utf8)
+        let id = try store.identifier(for: original)
+        let copy = root.appendingPathComponent("essay copy.md")
+        try FileManager.default.copyItem(at: original, to: copy)
+        #expect(store.existingIdentifier(for: copy) == nil, "a copy is not taken for the original")
+        let copyID = try store.identifier(for: copy)
+        #expect(copyID != id)
+        #expect(store.existingIdentifier(for: original) == id)
+        #expect(store.existingIdentifier(for: copy) == copyID)
+    }
 }

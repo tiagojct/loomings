@@ -94,16 +94,56 @@ public final class HistoryStore: @unchecked Sendable {
 
     // MARK: Identity
 
-    /// The file's identifier if it has one; never writes to the file.
+    /// The file's identifier if it has one; never writes to the file. A copy
+    /// of a recorded file (the original still in place with the same id) has
+    /// none of its own yet.
     public func existingIdentifier(for file: URL) -> String? {
-        Self.readAttribute(file)
+        lock.lock(); defer { lock.unlock() }
+        guard let id = Self.readAttribute(file), !isCopy(file, claiming: id) else { return nil }
+        register(id, at: file)
+        return id
     }
 
     public func identifier(for file: URL) throws -> String {
-        if let existing = Self.readAttribute(file) { return existing }
+        lock.lock(); defer { lock.unlock() }
+        if let existing = Self.readAttribute(file), !isCopy(file, claiming: existing) {
+            register(existing, at: file)
+            return existing
+        }
         let id = UUID().uuidString
         try Self.writeAttribute(id, to: file)
+        register(id, at: file)
         return id
+    }
+
+    // MARK: Paths: telling a copy from a move
+
+    private var pathsURL: URL { root.appendingPathComponent("paths.json") }
+
+    private func paths() -> [String: String] {
+        guard let data = try? Data(contentsOf: pathsURL),
+              let table = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return table
+    }
+
+    /// Finder Duplicate and cp copy extended attributes. If the path last
+    /// seen with this id still exists and still claims it, this is a copy.
+    /// If that path is gone, the file was moved or renamed.
+    private func isCopy(_ file: URL, claiming id: String) -> Bool {
+        guard let known = paths()[id], known != file.standardizedFileURL.path else { return false }
+        let other = URL(fileURLWithPath: known)
+        return FileManager.default.fileExists(atPath: known) && Self.readAttribute(other) == id
+    }
+
+    private func register(_ id: String, at file: URL) {
+        var table = paths()
+        let path = file.standardizedFileURL.path
+        guard table[id] != path else { return }
+        table[id] = path
+        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        if let data = try? JSONEncoder().encode(table) {
+            try? data.write(to: pathsURL, options: .atomic)
+        }
     }
 
     private static func readAttribute(_ file: URL) -> String? {
@@ -161,9 +201,10 @@ public final class HistoryStore: @unchecked Sendable {
         let url = fileURL(id)
         guard FileManager.default.fileExists(atPath: url.path) else { return [] }
         let decoder = JSONDecoder()
-        return try String(contentsOf: url, encoding: .utf8)
+        // A line cut short by a crash or a full disk is skipped, not fatal.
+        return String(decoding: try Data(contentsOf: url), as: UTF8.self)
             .split(separator: "\n", omittingEmptySubsequences: true)
-            .map { try decoder.decode(HistoryEntry.self, from: Data($0.utf8)) }
+            .compactMap { try? decoder.decode(HistoryEntry.self, from: Data($0.utf8)) }
     }
 
     /// Records `text` as the next step, if it changed since the last one.
@@ -191,9 +232,15 @@ public final class HistoryStore: @unchecked Sendable {
         var line = try JSONEncoder().encode(entry)
         line.append(0x0A)
         let url = fileURL(id)
-        if let handle = try? FileHandle(forWritingTo: url) {
+        if let handle = try? FileHandle(forUpdating: url) {
             defer { try? handle.close() }
-            try handle.seekToEnd()
+            let end = try handle.seekToEnd()
+            if end > 0 {
+                // After a damaged last line, start on a fresh one.
+                try handle.seek(toOffset: end - 1)
+                if handle.readData(ofLength: 1) != Data([0x0A]) { line.insert(0x0A, at: 0) }
+                try handle.seekToEnd()
+            }
             try handle.write(contentsOf: line)
         } else {
             try line.write(to: url, options: .atomic)
