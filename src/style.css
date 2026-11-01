@@ -464,6 +464,35 @@ body.view-split #preview { border-left: 1px solid var(--border); }
 .check-detail { font-size: 11px; color: var(--fg-ghost); }
 .check-note { padding: 6px 10px; font-size: 12px; color: var(--fg-dim); white-space: normal; }
 
+/* Projector mode: large type, chrome out of the way, the current line
+   marked, and a caption naming the markup just used. */
+body.projector .masthead,
+body.projector #statusbar { display: none; }
+body.projector #web-toolbar { opacity: 0; transition: opacity 0.4s ease; }
+body.projector #web-toolbar:hover,
+body.projector #web-toolbar:focus-within { opacity: 1; }
+body.projector #preview { font-size: 26px; }
+body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 35%, transparent); }
+#projector-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  z-index: 90;
+  transform: translateX(-50%);
+  padding: 10px 18px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 500;
+  white-space: pre;
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+#projector-caption.fading { opacity: 0; }
+
 /* Explain this marker: a small card under the marker. */
 #explain {
   position: fixed;
@@ -793,7 +822,7 @@ body.view-split #preview { border-left: 1px solid var(--border); }
    ======================================== */
 @media print {
   html, body { height: auto; overflow: visible; background: #fff; color: #000; }
-  #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu, #explain { display: none !important; }
+  #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu, #explain, #projector-caption { display: none !important; }
   #editor-container { display: block; overflow: visible; background: #fff; }
   #content-area { display: block; max-width: none; overflow: visible; }
   #preview {

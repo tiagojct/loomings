@@ -3,7 +3,7 @@
 // ========================================
 
 import { EditorState, Compartment, RangeSetBuilder, StateEffect } from '@codemirror/state';
-import { EditorView, keymap, drawSelection, lineNumbers, placeholder, ViewPlugin, Decoration } from '@codemirror/view';
+import { EditorView, keymap, drawSelection, lineNumbers, placeholder, ViewPlugin, Decoration, highlightActiveLine } from '@codemirror/view';
 import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
@@ -17,6 +17,7 @@ import { evaluate } from './teaching/exercises.js';
 import { parseCheck } from './teaching/directives.js';
 import { outline, sections, limitsIn, sectionAt } from './teaching/sections.js';
 import lessonChecks from '../lessons/checks.json';
+import { PROJECTOR, markerName, createProjector } from './projector.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -88,7 +89,12 @@ const narrowMq = window.matchMedia('(max-width: 760px)');
 const FONT_MIN = 11;
 const FONT_MAX = 24;
 
-contentArea.classList.add('width-' + colWidth);
+// Projector mode overrides size and width without touching the stored
+// preferences; its apply step lives below, with the editor.
+const projector = createProjector({ body, apply: (on) => applyProjector(on) });
+const effectiveFontSize = () => (projector.on ? PROJECTOR.editorFontSize : editorFontSize);
+
+applyWidth();
 if (showStats) statsEl.classList.add('visible');
 applyFontSize();
 if (isMac) body.classList.add('mac');
@@ -167,6 +173,7 @@ const placeholderCompartment = new Compartment();
 const themeCompartment       = new Compartment();
 const highlightCompartment   = new Compartment();
 const lineNumbersCompartment = new Compartment();
+const activeLineCompartment  = new Compartment();
 
 // A deep link from the landing page's colour cards (?theme=goney&mode=dark)
 // wins over the stored choice, becomes it, and is stripped so the address bar
@@ -546,6 +553,7 @@ function buildState(doc = '') {
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
+      activeLineCompartment.of(projector.on ? projectorEditorExtensions() : []),
       EditorView.lineWrapping,
       EditorView.contentAttributes.of({
         spellcheck: 'true',
@@ -555,7 +563,7 @@ function buildState(doc = '') {
       }),
       search({ top: true }),
       placeholderCompartment.of(placeholder('The shapes loom before they take form…')),
-      fontSizeCompartment.of(EditorView.theme({ '&': { fontSize: editorFontSize + 'px' } })),
+      fontSizeCompartment.of(EditorView.theme({ '&': { fontSize: effectiveFontSize() + 'px' } })),
       keymap.of([
         continueListKey,
         ...defaultKeymap,
@@ -565,9 +573,9 @@ function buildState(doc = '') {
         { key: 'Mod-s',       run: () => { handleSave(); return true; } },
         { key: 'Mod-Shift-s', run: () => { handleSaveAs(); return true; } },
         { key: 'Mod-f',       run: (v) => { openSearchPanel(v); return true; } },
-        { key: 'Mod-b',       run: wrapSelection('**', '**') },
-        { key: 'Mod-i',       run: wrapSelection('*', '*') },
-        { key: 'Mod-`',       run: wrapSelection('`', '`') },
+        { key: 'Mod-b',       run: captioned(wrapSelection('**', '**'), 'Bold: **text**') },
+        { key: 'Mod-i',       run: captioned(wrapSelection('*', '*'), 'Italic: *text*') },
+        { key: 'Mod-`',       run: captioned(wrapSelection('`', '`'), 'Inline code: `text`') },
         { key: 'Mod-k',       run: insertLink },
         { key: 'Mod-Alt-/',   run: (v) => {
           if (!explainAt(v.state.selection.main.head, true)) flashStatus('No Markdown marker at the cursor');
@@ -587,6 +595,9 @@ function buildState(doc = '') {
       }),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) { markDirty(); closeExplanation(false); }
+        if (projector.on && update.docChanged && update.transactions.some((tr) => tr.isUserEvent('input.type'))) {
+          captionTypedMarker(update.state);
+        }
         if (update.selectionSet || update.docChanged) {
           updateCursorPos();
           // Selection stats (word count of selection) track the selection —
@@ -631,7 +642,7 @@ function setText(text) {
 // ==========================
 
 function applyFontSize() {
-  document.documentElement.style.setProperty('--editor-fs', editorFontSize + 'px');
+  document.documentElement.style.setProperty('--editor-fs', effectiveFontSize() + 'px');
 }
 
 function changeFontSize(delta) {
@@ -640,7 +651,7 @@ function changeFontSize(delta) {
   applyFontSize();
   view.dispatch({
     effects: fontSizeCompartment.reconfigure(
-      EditorView.theme({ '&': { fontSize: editorFontSize + 'px' } })
+      EditorView.theme({ '&': { fontSize: effectiveFontSize() + 'px' } })
     ),
   });
 }
@@ -653,8 +664,83 @@ function cycleWidth() {
   const idx = WIDTHS.indexOf(colWidth);
   colWidth = WIDTHS[(idx + 1) % WIDTHS.length];
   STORE.set('colWidth', colWidth);
-  contentArea.className = contentArea.className.replace(/width-\w+/g, '');
-  contentArea.classList.add('width-' + colWidth);
+  applyWidth();
+}
+
+function applyWidth() {
+  const width = projector.on ? PROJECTOR.columnWidth : colWidth;
+  contentArea.className = contentArea.className.replace(/width-\w+/g, '').trim();
+  contentArea.classList.add('width-' + width);
+}
+
+// ==========================
+//  Projector mode
+// ==========================
+
+const captionEl = el('projector-caption');
+/** @type {ReturnType<typeof setTimeout>|null} */ let captionTimer = null;
+
+/** @param {boolean} on */
+function applyProjector(on) {
+  applyFontSize();
+  applyWidth();
+  view.dispatch({
+    effects: [
+      fontSizeCompartment.reconfigure(EditorView.theme({ '&': { fontSize: effectiveFontSize() + 'px' } })),
+      activeLineCompartment.reconfigure(on ? projectorEditorExtensions() : []),
+    ],
+  });
+  if (!on) hideCaption();
+  invalidatePreviewBlocks();
+  renderFocusMenu();
+}
+
+// The current line marked, and room under the caret for the caption.
+function projectorEditorExtensions() {
+  return [highlightActiveLine(), EditorView.scrollMargins.of(() => ({ bottom: 96 }))];
+}
+
+function toggleProjector() {
+  const on = projector.toggle();
+  if (on) showCaption('Projector mode: on'); else flashStatus('Projector mode: off');
+}
+
+/** Shows `text` and fades it out after 1.6 s (at once with reduced motion). */
+function showCaption(text) {
+  if (!projector.on) return;
+  if (captionTimer) clearTimeout(captionTimer);
+  captionEl.textContent = text;
+  captionEl.classList.remove('hidden', 'fading');
+  captionTimer = setTimeout(() => {
+    captionEl.classList.add('fading');
+    captionTimer = setTimeout(hideCaption, 400);
+  }, 1600);
+}
+
+function hideCaption() {
+  if (captionTimer) clearTimeout(captionTimer);
+  captionTimer = null;
+  captionEl.classList.add('hidden');
+  captionEl.classList.remove('fading');
+}
+
+/** @param {(view: EditorView) => boolean} command @param {string} caption */
+function captioned(command, caption) {
+  return (/** @type {EditorView} */ v) => {
+    const done = command(v);
+    if (done) showCaption(caption);
+    return done;
+  };
+}
+
+/** Names a block marker just typed at the start of a line. */
+function captionTypedMarker(state) {
+  const head = state.selection.main.head;
+  const line = state.doc.lineAt(head);
+  const length = head - line.from;
+  if (length < 1 || length > 12) return;
+  const name = markerName(line.text.slice(0, length));
+  if (name) showCaption(name);
 }
 
 // ==========================
@@ -751,6 +837,7 @@ function renderFocusMenu() {
   /** @type {NodeListOf<HTMLElement>} */ (focusMenuEl.querySelectorAll('[data-toggle]')).forEach((btn) => {
     const on = btn.dataset.toggle === 'sentence' ? isFocusMode
       : btn.dataset.toggle === 'typewriter' ? typewriterOn
+      : btn.dataset.toggle === 'projector' ? projector.on
       : isFullscreen();
     btn.classList.toggle('on', on);
     btn.setAttribute('aria-checked', String(on));
@@ -763,6 +850,7 @@ attachMenu(el('tb-focus'), focusMenuEl, {
     if (item.dataset.toggle === 'sentence') toggleFocusMode();
     if (item.dataset.toggle === 'typewriter') toggleTypewriter();
     if (item.dataset.toggle === 'fullscreen') toggleFullscreen();
+    if (item.dataset.toggle === 'projector') toggleProjector();
   },
 });
 
@@ -1534,6 +1622,7 @@ document.addEventListener('keydown', (e) => {
     if (hasOpenMenus()) { closeAllMenus(); return; }
     if (!cheatsheetEl.classList.contains('hidden')) { toggleCheatsheet(false); return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
+    if (projector.on)                            { toggleProjector(); return; }
     if (effectiveViewMode() === 'preview')       { setViewMode('editor'); return; }
     if (isFocusMode)                             { toggleFocusMode(); return; }
     // Fullscreen is deliberately not handled here: the Fullscreen API spec
@@ -1548,6 +1637,11 @@ document.addEventListener('keydown', (e) => {
 
   // toUpperCase: with caps lock on, shift+d reports key 'd'.
   const k = e.key.length === 1 ? e.key.toUpperCase() : e.key;
+  // Projector: Ctrl-Cmd-P on the Mac, Ctrl-Alt-P elsewhere (Ctrl-P is the
+  // heading palette there). e.code, because Alt changes e.key.
+  if (e.code === 'KeyP' && e.ctrlKey && !e.shiftKey && (isMac ? e.metaKey && !e.altKey : e.altKey && !e.metaKey)) {
+    e.preventDefault(); toggleProjector(); return;
+  }
   if (mod && e.shiftKey && k === 'D') { e.preventDefault(); toggleFocusMode(); return; }
   if (mod && e.shiftKey && k === 'Y') { e.preventDefault(); toggleTypewriter(); return; }
   if (mod && e.shiftKey && k === 'F') { e.preventDefault(); toggleFullscreen(); return; }

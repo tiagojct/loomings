@@ -62,6 +62,7 @@
         <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="sentence"><span class="tb-menu-label">Dim other sentences</span><span class="tb-menu-hint">⌘⇧D</span></button>
         <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="typewriter"><span class="tb-menu-label">Keep cursor centred</span><span class="tb-menu-hint">⌘⇧Y</span></button>
         <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="fullscreen"><span class="tb-menu-label">Full screen</span><span class="tb-menu-hint">⌘⇧F</span></button>
+        <button type="button" class="tb-menu-item" role="menuitemcheckbox" data-toggle="projector"><span class="tb-menu-label">Projector mode</span><span class="tb-menu-hint">⌃⌘P</span></button>
       </div>
     </div>
     <span class="tb-spacer"></span>
@@ -149,6 +150,7 @@
         <tr><td><kbd>⌘\</kbd> <kbd>⌘⇧P</kbd></td><td>Split, preview</td></tr>
         <tr><td><kbd>⌘P</kbd> <kbd>⌘F</kbd></td><td>Jump to heading, find</td></tr>
         <tr><td><kbd>⌥</kbd>-click, <kbd>⌘⌥/</kbd></td><td>Explain a marker</td></tr>
+        <tr><td><kbd>⌃⌘P</kbd></td><td>Projector mode (Ctrl+Alt+P off the Mac)</td></tr>
         <tr><td><kbd>⌘⇧D</kbd></td><td>Focus mode (dim other sentences)</td></tr>
         <tr><td><kbd>⌘⇧Y</kbd></td><td>Typewriter scrolling (keep cursor centred)</td></tr>
         <tr><td><kbd>⌘⇧F</kbd></td><td>Full screen</td></tr>
@@ -156,6 +158,8 @@
     </table>
     <p class="cheatsheet-foot">⌘ is Ctrl on Windows and Linux.</p>
   </aside>
+
+  <div id="projector-caption" class="hidden" role="status" aria-live="polite"></div>
 
   <div id="explain" class="hidden" role="dialog" aria-labelledby="explain-title" aria-live="polite">
     <h2 id="explain-title"></h2>
