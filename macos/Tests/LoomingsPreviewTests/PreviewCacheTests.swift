@@ -174,4 +174,56 @@ struct PreviewCacheTests {
         _ = renderer.render(source: Self.sample, documentURL: URL(fileURLWithPath: "/tmp/b.md"))
         #expect(renderer.reusedBlockCount == 0)
     }
+
+    @Test("The preview without HTML shows the same text as an export render")
+    func attributedOnlyRender() throws {
+        let source = Self.sample + (try lessons())
+        let live = PreviewRenderer(producesHTML: false).render(source: source, documentURL: nil)
+        let export = PreviewRenderer().render(source: source, documentURL: nil)
+        #expect(live.html.isEmpty)
+        #expect(!export.html.isEmpty)
+        #expect(live.blocks.count == export.blocks.count)
+        for (left, right) in zip(live.blocks, export.blocks) {
+            #expect(left.sourceRange == right.sourceRange)
+            #expect(appearance(left.attributed) == appearance(right.attributed))
+        }
+    }
+}
+
+/// The fast paths may only skip work that would not change the result.
+@Suite("Typographer and linkify fast paths")
+struct FastPathTests {
+    private static let samples = [
+        "", "plain words only", "one. two. three", "a - b", "x+y", "(c) 2026", "(TM) and (r)",
+        "wait...", "en--dash", "em---dash", "+-3", "\"quoted\"", "it's", "‘curly’ already",
+        "visit www.example.com now", "WWW.EXAMPLE.COM", "ww.not", "https://x.y/z", "a:/b", "a: //b",
+        "mail me@example.org", "user@host", "café 🌊 naïve", "ftp://host.example",
+    ]
+
+    @Test("Typographer skips only text it would leave unchanged")
+    func typographer() {
+        for sample in Self.samples where !Typographer.needsTransform(sample) {
+            // A full pass with the guard bypassed: every substitution, then quotes.
+            var value = sample
+            for (from, to) in [("...", "…"), ("---", "—"), ("--", "–"), ("+-", "±")] {
+                value = value.replacingOccurrences(of: from, with: to)
+            }
+            #expect(value == sample, "\(sample)")
+            #expect(!sample.contains("\"") && !sample.contains("'") && !sample.contains("("), "\(sample)")
+        }
+        #expect(Typographer.transform("(c) wait... --") == "© wait… –")
+        #expect(Typographer.transform("plain") == "plain")
+    }
+
+    @Test("Linkify skips only text with no possible link")
+    func linkify() {
+        for sample in Self.samples where !Linkifier.mightContainLink(sample) {
+            #expect(Linkifier.matches(in: sample + " ").isEmpty, "\(sample)")
+        }
+        #expect(Linkifier.mightContainLink("WWW.EXAMPLE.COM"))
+        #expect(Linkifier.mightContainLink("https://x.y"))
+        #expect(Linkifier.mightContainLink("me@example.org"))
+        #expect(!Linkifier.mightContainLink("a: //b"))
+        #expect(Linkifier.matches(in: "go to www.example.com.").first?.url == "http://www.example.com")
+    }
 }

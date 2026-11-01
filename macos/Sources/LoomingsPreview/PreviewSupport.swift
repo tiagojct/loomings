@@ -265,7 +265,7 @@ public enum Typographer {
     /// markdown-it's typographer substitutions for text nodes. Order matters:
     /// three dashes before two, and ellipses before anything that could eat a dot.
     public static func transform(_ text: String) -> String {
-        guard !text.isEmpty else { return text }
+        guard needsTransform(text) else { return text }
         var value = text
         value = value.replacingOccurrences(of: "...", with: "…")
         value = value.replacingOccurrences(of: "---", with: "—")
@@ -275,6 +275,26 @@ public enum Typographer {
         value = value.replacingOccurrences(of: "(tm)", with: "™", options: .caseInsensitive)
         value = value.replacingOccurrences(of: "+-", with: "±")
         return smartQuotes(value)
+    }
+
+    /// Every substitution needs one of `..`, `--`, `(`, `+-` or a straight
+    /// quote; most text nodes have none, and skip the eight passes below.
+    static func needsTransform(_ text: String) -> Bool {
+        var previous: UInt8 = 0
+        for byte in text.utf8 {
+            switch byte {
+            case UInt8(ascii: "("), UInt8(ascii: "\""), UInt8(ascii: "'"):
+                return true
+            case UInt8(ascii: "."):
+                if previous == UInt8(ascii: ".") { return true }
+            case UInt8(ascii: "-"):
+                if previous == UInt8(ascii: "-") || previous == UInt8(ascii: "+") { return true }
+            default:
+                break
+            }
+            previous = byte
+        }
+        return false
     }
 
     private static func smartQuotes(_ text: String) -> String {
@@ -329,6 +349,7 @@ public enum Linkifier {
     )
 
     public static func matches(in text: String) -> [LinkMatch] {
+        guard mightContainLink(text) else { return [] }
         let ns = text as NSString
         let full = NSRange(location: 0, length: ns.length)
         var matches: [LinkMatch] = []
@@ -347,6 +368,43 @@ public enum Linkifier {
         }
 
         return matches.sorted { $0.range.location < $1.range.location }
+    }
+
+    /// A URL match needs `://` or `www.` and an e-mail match needs `@`;
+    /// without them the two regular expressions cannot match.
+    static func mightContainLink(_ text: String) -> Bool {
+        var colon = 0
+        var slashes = 0
+        var ws = 0
+        for byte in text.utf8 {
+            switch byte {
+            case UInt8(ascii: "@"):
+                return true
+            case UInt8(ascii: ":"):
+                colon = 1
+                slashes = 0
+                ws = 0
+                continue
+            case UInt8(ascii: "/"):
+                if colon == 1 {
+                    slashes += 1
+                    if slashes == 2 { return true }
+                    continue
+                }
+            case UInt8(ascii: "w"), UInt8(ascii: "W"):
+                ws += 1
+                colon = 0
+                continue
+            case UInt8(ascii: "."):
+                if ws >= 3 { return true }
+            default:
+                break
+            }
+            colon = 0
+            slashes = 0
+            ws = 0
+        }
+        return false
     }
 
     private static func trimmed(_ range: NSRange, in text: NSString) -> NSRange? {

@@ -1,24 +1,27 @@
 import Foundation
-import Markdown
 
 /// Walks the swift-markdown syntax tree once and produces the source ranges
 /// the editor dims. Parsing is pure: no AppKit, no text storage, no state.
 public enum MarkdownParser {
-    public static func parse(_ source: String, options: ParseOptions = []) -> MarkdownParseOutput {
+    public static func parse(_ source: String) -> MarkdownParseOutput {
         let map = SourceMap(source)
         let text = source as NSString
-        let document = Document(parsing: source, options: options)
+        let tree = MarkdownTree(parsing: source)
 
         var spans: [MarkdownSyntaxSpan] = []
         var outline: [OutlineItem] = []
         var nodeCount = 0
 
-        var stack: [Markup] = [document]
-        while let node = stack.popLast() {
-            nodeCount += 1
-            emit(node, map: map, text: text, spans: &spans, outline: &outline)
-            for child in node.children {
-                stack.append(child)
+        withExtendedLifetime(tree) {
+            var stack: [MarkdownNode] = [tree.document]
+            while let node = stack.popLast() {
+                nodeCount += 1
+                emit(node, map: map, text: text, spans: &spans, outline: &outline)
+                var child = node.firstChild
+                while let current = child {
+                    stack.append(current)
+                    child = current.nextSibling
+                }
             }
         }
 
@@ -45,54 +48,50 @@ public enum MarkdownParser {
     // MARK: - Node emission
 
     private static func emit(
-        _ node: Markup,
+        _ node: MarkdownNode,
         map: SourceMap,
         text: NSString,
         spans: inout [MarkdownSyntaxSpan],
         outline: inout [OutlineItem]
     ) {
-        switch node {
-        case let heading as Heading:
-            emitHeading(heading, map: map, text: text, spans: &spans, outline: &outline)
+        switch node.kind {
+        case .heading:
+            emitHeading(node, map: map, text: text, spans: &spans, outline: &outline)
 
-        case let emphasis as Emphasis:
-            emitChildDelimiters(emphasis, kind: .emphasisMarker, map: map, text: text, spans: &spans)
+        case .emphasis:
+            emitChildDelimiters(node, kind: .emphasisMarker, map: map, text: text, spans: &spans)
 
-        case let strong as Strong:
-            emitChildDelimiters(strong, kind: .strongMarker, map: map, text: text, spans: &spans)
+        case .strong:
+            emitChildDelimiters(node, kind: .strongMarker, map: map, text: text, spans: &spans)
 
-        case let strike as Strikethrough:
-            emitChildDelimiters(strike, kind: .strikethroughMarker, map: map, text: text, spans: &spans)
+        case .strikethrough:
+            emitChildDelimiters(node, kind: .strikethroughMarker, map: map, text: text, spans: &spans)
 
-        case let code as InlineCode:
-            emitInlineCode(code, map: map, text: text, spans: &spans)
+        case .code:
+            emitInlineCode(node, map: map, text: text, spans: &spans)
 
-        case let codeBlock as CodeBlock:
-            emitCodeBlock(codeBlock, map: map, text: text, spans: &spans)
+        case .codeBlock:
+            emitCodeBlock(node, map: map, text: text, spans: &spans)
 
-        case let quote as BlockQuote:
-            emitLineMarkers(quote, marker: 0x3E, kind: .blockQuoteMarker, map: map, text: text, spans: &spans)
+        case .blockQuote:
+            emitLineMarkers(node, marker: 0x3E, kind: .blockQuoteMarker, map: map, text: text, spans: &spans)
 
-        case let item as ListItem:
-            emitListMarker(item, map: map, text: text, spans: &spans)
+        case .item:
+            emitListMarker(node, map: map, text: text, spans: &spans)
 
-        case let link as Link:
-            emitChildDelimiters(link, kind: .linkPunctuation, map: map, text: text, spans: &spans)
+        case .link:
+            emitChildDelimiters(node, kind: .linkPunctuation, map: map, text: text, spans: &spans)
 
-        case let image as Image:
-            emitChildDelimiters(image, kind: .imagePunctuation, map: map, text: text, spans: &spans)
+        case .image:
+            emitChildDelimiters(node, kind: .imagePunctuation, map: map, text: text, spans: &spans)
 
-        case let rule as ThematicBreak:
-            guard let range = clamped(map.nsRange(for: rule.range), text: text) else { return }
+        case .thematicBreak:
+            guard let range = clamped(map.nsRange(for: node.range), text: text) else { return }
             let line = text.lineRange(for: NSRange(location: range.location, length: 0))
             append(trimmedToContent(line, text: text), .thematicBreak, to: &spans, limit: text.length)
 
-        case let html as HTMLBlock:
-            guard let range = clamped(map.nsRange(for: html.range), text: text) else { return }
-            append(range, .rawHTML, to: &spans, limit: text.length)
-
-        case let html as InlineHTML:
-            guard let range = clamped(map.nsRange(for: html.range), text: text) else { return }
+        case .htmlBlock, .inlineHTML:
+            guard let range = clamped(map.nsRange(for: node.range), text: text) else { return }
             append(range, .rawHTML, to: &spans, limit: text.length)
 
         default:
@@ -103,7 +102,7 @@ public enum MarkdownParser {
     // MARK: - Headings
 
     private static func emitHeading(
-        _ heading: Heading,
+        _ heading: MarkdownNode,
         map: SourceMap,
         text: NSString,
         spans: inout [MarkdownSyntaxSpan],
@@ -163,7 +162,7 @@ public enum MarkdownParser {
         )
         outline.append(
             OutlineItem(
-                level: heading.level,
+                level: heading.headingLevel,
                 title: rawTitle.trimmingCharacters(in: .whitespacesAndNewlines),
                 range: NSRange(location: line.location, length: 0)
             )
@@ -226,14 +225,14 @@ public enum MarkdownParser {
     // MARK: - Inline and fenced markers
 
     private static func emitChildDelimiters(
-        _ node: Markup,
+        _ node: MarkdownNode,
         kind: MarkdownSyntaxKind,
         map: SourceMap,
         text: NSString,
         spans: inout [MarkdownSyntaxSpan]
     ) {
         guard let range = clamped(map.nsRange(for: node.range), text: text) else { return }
-        guard node.childCount > 0 else {
+        guard node.hasChildren else {
             append(range, kind, to: &spans, limit: text.length)
             return
         }
@@ -273,7 +272,7 @@ public enum MarkdownParser {
     }
 
     private static func emitInlineCode(
-        _ code: InlineCode,
+        _ code: MarkdownNode,
         map: SourceMap,
         text: NSString,
         spans: inout [MarkdownSyntaxSpan]
@@ -308,7 +307,7 @@ public enum MarkdownParser {
     }
 
     private static func emitCodeBlock(
-        _ block: CodeBlock,
+        _ block: MarkdownNode,
         map: SourceMap,
         text: NSString,
         spans: inout [MarkdownSyntaxSpan]
@@ -392,7 +391,7 @@ public enum MarkdownParser {
     // MARK: - Line prefixes and list markers
 
     private static func emitLineMarkers(
-        _ node: Markup,
+        _ node: MarkdownNode,
         marker: unichar,
         kind: MarkdownSyntaxKind,
         map: SourceMap,
@@ -433,7 +432,7 @@ public enum MarkdownParser {
     }
 
     private static func emitListMarker(
-        _ item: ListItem,
+        _ item: MarkdownNode,
         map: SourceMap,
         text: NSString,
         spans: inout [MarkdownSyntaxSpan]

@@ -306,9 +306,10 @@ private func printPreviewTable(
 ) {
     // Cold: a renderer with an empty cache (opening a document, a new theme).
     // Edit: the same renderer after one block changed, which is what typing
-    // costs. HTML is built when exported, so it is timed on its own.
+    // costs. Both use the live preview's renderer, which builds no HTML.
+    // Export renders from scratch with HTML, so it is timed on its own.
     print("preview render, ms")
-    let header = ["bytes", "cold p50", "cold p95", "edit p50", "edit p95", "reused", "html (export)", "blocks", "html bytes"]
+    let header = ["bytes", "cold p50", "cold p95", "edit p50", "edit p95", "reused", "export (html)", "blocks", "html bytes"]
     var rows: [[String]] = []
 
     for size in sizes {
@@ -327,7 +328,7 @@ private func printPreviewTable(
         let edited = ns.replacingCharacters(in: NSRange(location: middle.location, length: 0), with: " edited")
 
         for run in 0..<3 {
-            let renderer = PreviewRenderer(theme: theme)
+            let renderer = PreviewRenderer(theme: theme, producesHTML: false)
             let start = DispatchTime.now().uptimeNanoseconds
             let rendered = renderer.render(source: source, documentURL: nil)
             let elapsed = Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
@@ -335,7 +336,7 @@ private func printPreviewTable(
             blockCount = rendered.blocks.count
 
             let htmlStart = DispatchTime.now().uptimeNanoseconds
-            htmlBytes = rendered.html.utf8.count
+            htmlBytes = PreviewRenderer(theme: theme).render(source: source, documentURL: nil).html.utf8.count
             htmlMs = Double(DispatchTime.now().uptimeNanoseconds - htmlStart) / 1_000_000
 
             for text in [edited, source, edited, source] {

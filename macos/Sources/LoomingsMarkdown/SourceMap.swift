@@ -1,5 +1,4 @@
 import Foundation
-import Markdown
 
 /// Converts the parser's line/column source locations into UTF-16 offsets.
 ///
@@ -75,10 +74,21 @@ public struct SourceMap {
     public var lineStarts: [Int] { lineStartsUTF16 }
     public var characterCount: Int { utf16Count }
 
-    public func nsRange(for range: SourceRange?) -> NSRange? {
+    public func nsRange(for range: MarkdownSourceRange?) -> NSRange? {
         guard let range else { return nil }
-        guard let start = utf16Offset(line: range.lowerBound.line, column: range.lowerBound.column),
-              let end = utf16Offset(line: range.upperBound.line, column: range.upperBound.column),
+        return nsRange(
+            startLine: range.startLine, startColumn: range.startColumn,
+            endLine: range.endLine, endColumn: range.endColumn
+        )
+    }
+
+    public func nsRange(for node: MarkdownNode) -> NSRange? {
+        nsRange(for: node.range)
+    }
+
+    private func nsRange(startLine: Int, startColumn: Int, endLine: Int, endColumn: Int) -> NSRange? {
+        guard let start = utf16Offset(line: startLine, column: startColumn),
+              let end = utf16Offset(line: endLine, column: endColumn),
               end >= start else {
             return nil
         }

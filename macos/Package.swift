@@ -15,13 +15,14 @@ let package = Package(
         .library(name: "LoomingsMarkdown", targets: ["LoomingsMarkdown"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-markdown.git", from: "0.9.0"),
+        .package(url: "https://github.com/swiftlang/swift-cmark.git", from: "0.9.0"),
     ],
     targets: [
         .target(
             name: "LoomingsMarkdown",
             dependencies: [
-                .product(name: "Markdown", package: "swift-markdown"),
+                .product(name: "cmark-gfm", package: "swift-cmark"),
+                .product(name: "cmark-gfm-extensions", package: "swift-cmark"),
             ]
         ),
         .target(

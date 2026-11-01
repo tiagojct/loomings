@@ -1,15 +1,29 @@
 import AppKit
 import Foundation
 import LoomingsMarkdown
-import Markdown
 
 public final class PreviewRenderer {
     public var theme: PreviewTheme {
-        didSet { cache = [:] }
+        didSet {
+            cache = [:]
+            fonts = [:]
+            headingFonts = [:]
+        }
     }
 
-    public init(theme: PreviewTheme = .standard) {
+    /// The live preview only shows attributed text; HTML is for export and
+    /// costs about a third of a render, so the preview turns it off.
+    public var producesHTML: Bool {
+        didSet { if producesHTML != oldValue { cache = [:] } }
+    }
+
+    public init(theme: PreviewTheme = .standard, producesHTML: Bool = true) {
         self.theme = theme
+        self.producesHTML = producesHTML
+    }
+
+    private func html(_ make: @autoclosure () -> String) -> String {
+        producesHTML ? make() : ""
     }
 
     /// Rendered blocks from the previous render, by block text. Typing
@@ -47,7 +61,8 @@ public final class PreviewRenderer {
         let map = SourceMap(source)
         let nsSource = source as NSString
         let frontmatter = MarkdownFrontmatter.range(in: source)
-        let document = Document(parsing: source)
+        let tree = MarkdownTree(parsing: source)
+        defer { withExtendedLifetime(tree) {} }
 
         var definitions = Hasher()
         Self.referenceDefinition.enumerateMatches(
@@ -61,17 +76,16 @@ public final class PreviewRenderer {
         renderCount += 1
         let stamp = renderCount
         var blocks: [PreviewBlock] = []
-        blocks.reserveCapacity(document.childCount)
-        var fresh: [(CacheKey, PreviewBlock)] = []
+                var fresh: [(CacheKey, PreviewBlock)] = []
         var reused = 0
 
-        for node in document.children {
+        for node in tree.document.children {
             let range = map.nsRange(for: node.range)
             if let frontmatter, let range, intersect(range, frontmatter) {
                 continue
             }
 
-            let line = max(0, (node.range?.lowerBound.line ?? 1) - 1)
+            let line = node.startLine0
             // `substring(with:)` hands back a bridged NSString, which Swift
             // hashes about 100x slower than a native String; copy it first.
             let key = range.map {
@@ -112,20 +126,21 @@ public final class PreviewRenderer {
     // MARK: - Blocks
 
     private func renderBlock(
-        _ node: Markup,
+        _ node: MarkdownNode,
         map: SourceMap,
         source: String,
         documentURL: URL?
     ) -> PreviewBlock? {
         let range = map.nsRange(for: node.range) ?? NSRange(location: 0, length: 0)
-        let line = max(0, (node.range?.lowerBound.line ?? 1) - 1)
+        let line = node.startLine0
         let sourceRange = range
 
-        switch node {
-        case let heading as Heading:
-            let base = theme.headingFont(level: heading.level)
+        switch node.kind {
+        case .heading:
+            let heading = node
+            let base = headingFont(heading.headingLevel)
             let paragraph = NSMutableParagraphStyle()
-            paragraph.paragraphSpacingBefore = heading.level <= 2 ? 20 : 14
+            paragraph.paragraphSpacingBefore = heading.headingLevel <= 2 ? 20 : 14
             paragraph.paragraphSpacing = 8
             paragraph.lineHeightMultiple = 1.2
             let content = inline(
@@ -149,10 +164,11 @@ public final class PreviewRenderer {
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: "<h\(heading.level) data-line=\"\(line)\">\(inlineHTML(heading.children, documentURL: documentURL))</h\(heading.level)>\n"
+                html: html("<h\(heading.headingLevel) data-line=\"\(line)\">\(inlineHTML(heading.children, documentURL: documentURL))</h\(heading.headingLevel)>\n")
             )
 
-        case let paragraph as Paragraph:
+        case .paragraph:
+            let paragraph = node
             let style = bodyStyle()
             let content = inline(
                 paragraph.children,
@@ -175,81 +191,77 @@ public final class PreviewRenderer {
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: "<p data-line=\"\(line)\">\(inlineHTML(paragraph.children, documentURL: documentURL))</p>\n"
+                html: html("<p data-line=\"\(line)\">\(inlineHTML(paragraph.children, documentURL: documentURL))</p>\n")
             )
 
-        case let list as UnorderedList:
-            let content = renderList(list.children, ordered: false, start: 1, depth: 0, documentURL: documentURL)
+        case .list:
+            let ordered = node.isOrderedList
+            let start = ordered ? node.listStart : 1
+            let content = renderList(node.children, ordered: ordered, start: start, depth: 0, documentURL: documentURL)
             return PreviewBlock(
                 kind: .list,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: listHTML(list.children, ordered: false, start: 1, line: line, documentURL: documentURL)
+                html: html(listHTML(node.children, ordered: ordered, start: start, line: line, documentURL: documentURL))
             )
 
-        case let list as OrderedList:
-            let content = renderList(list.children, ordered: true, start: Int(list.startIndex), depth: 0, documentURL: documentURL)
-            return PreviewBlock(
-                kind: .list,
-                sourceRange: sourceRange,
-                sourceLine: line,
-                attributed: content,
-                html: listHTML(list.children, ordered: true, start: Int(list.startIndex), line: line, documentURL: documentURL)
-            )
-
-        case let quote as BlockQuote:
+        case .blockQuote:
+            let quote = node
             let content = renderQuote(quote, documentURL: documentURL)
             return PreviewBlock(
                 kind: .quote,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: "<blockquote data-line=\"\(line)\">\n\(blockChildrenHTML(quote, documentURL: documentURL))</blockquote>\n"
+                html: html("<blockquote data-line=\"\(line)\">\n\(blockChildrenHTML(quote, documentURL: documentURL))</blockquote>\n")
             )
 
-        case let code as CodeBlock:
+        case .codeBlock:
+            let code = node
             let content = renderCode(code, sourceRange: sourceRange, map: map, source: source)
             let fenced = isFencedCode(code, map: map, source: source)
-            let language = code.language?.trimmingCharacters(in: .whitespaces)
-            let escapedCode = escapeHTML(normalizedCode(code.code))
-            let html: String
-            if fenced {
-                let classAttribute = language.map { " class=\"language-\(escapeAttribute($0))\"" } ?? ""
-                html = "<pre><code data-line=\"\(line)\"\(classAttribute)>\(escapedCode)</code></pre>\n"
-            } else {
-                html = "<pre data-line=\"\(line)\"><code>\(escapedCode)</code></pre>\n"
+            let language = code.fenceInfo?.trimmingCharacters(in: .whitespaces)
+            var codeHTML = ""
+            if producesHTML {
+                let escapedCode = escapeHTML(normalizedCode(code.literal))
+                if fenced {
+                    let classAttribute = language.map { " class=\"language-\(escapeAttribute($0))\"" } ?? ""
+                    codeHTML = "<pre><code data-line=\"\(line)\"\(classAttribute)>\(escapedCode)</code></pre>\n"
+                } else {
+                    codeHTML = "<pre data-line=\"\(line)\"><code>\(escapedCode)</code></pre>\n"
+                }
             }
             return PreviewBlock(
                 kind: .code,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: html
+                html: codeHTML
             )
 
-        case is ThematicBreak:
+        case .thematicBreak:
             let content = renderRule()
             return PreviewBlock(
                 kind: .rule,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: "<hr data-line=\"\(line)\">\n"
+                html: html("<hr data-line=\"\(line)\">\n")
             )
 
-        case let table as Table:
-            let (content, html) = renderTable(table, map: map, line: line, documentURL: documentURL)
+        case .table:
+            let (content, tableHTML) = renderTable(node, map: map, line: line, documentURL: documentURL)
             return PreviewBlock(
                 kind: .table,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: html
+                html: tableHTML
             )
 
-        case let htmlBlock as HTMLBlock:
-            let text = htmlBlock.rawHTML
+        case .htmlBlock:
+            let text = node.literal
                 .trimmingCharacters(in: .newlines)
             let style = bodyStyle()
             let content = NSMutableAttributedString(
@@ -265,7 +277,7 @@ public final class PreviewRenderer {
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: "<p data-line=\"\(line)\">\(escapeHTML(text))</p>\n"
+                html: html("<p data-line=\"\(line)\">\(escapeHTML(text))</p>\n")
             )
 
         default:
@@ -291,7 +303,7 @@ public final class PreviewRenderer {
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: "<p data-line=\"\(line)\">\(inlineHTML(node.children, documentURL: documentURL))</p>\n"
+                html: html("<p data-line=\"\(line)\">\(inlineHTML(node.children, documentURL: documentURL))</p>\n")
             )
         }
     }
@@ -299,7 +311,7 @@ public final class PreviewRenderer {
     // MARK: - Attributed lists, quotes, code, rules, tables
 
     private func renderList(
-        _ items: MarkupChildren,
+        _ items: MarkdownChildren,
         ordered: Bool,
         start: Int,
         depth: Int,
@@ -311,18 +323,15 @@ public final class PreviewRenderer {
         let markerWidth: CGFloat = ordered ? 30 : 20
 
         for item in items {
-            guard let listItem = item as? ListItem else { continue }
+            guard item.kind == .item else { continue }
+            let listItem = item
             let marker = ordered ? "\(number)." : "•"
-            let checkbox: String
-            switch listItem.checkbox {
-            case .checked: checkbox = "[x] "
-            case .unchecked: checkbox = "[ ] "
-            case .none: checkbox = ""
-            }
+            let checkbox = checkboxPrefix(listItem)
 
             var first = true
             for child in listItem.children {
-                if let paragraph = child as? Paragraph {
+                if child.kind == .paragraph {
+                    let paragraph = child
                     let style = listStyle(
                         indent: indent,
                         markerWidth: markerWidth,
@@ -356,31 +365,24 @@ public final class PreviewRenderer {
                     )
                     result.append(content)
                     first = false
-                } else if let nested = child as? UnorderedList {
+                } else if child.kind == .list {
+                    let nestedOrdered = child.isOrderedList
                     result.append(renderList(
-                        nested.children,
-                        ordered: false,
-                        start: 1,
+                        child.children,
+                        ordered: nestedOrdered,
+                        start: nestedOrdered ? child.listStart : 1,
                         depth: depth + 1,
                         documentURL: documentURL
                     ))
-                } else if let nested = child as? OrderedList {
-                    result.append(renderList(
-                        nested.children,
-                        ordered: true,
-                        start: Int(nested.startIndex),
-                        depth: depth + 1,
-                        documentURL: documentURL
-                    ))
-                } else if let code = child as? CodeBlock {
+                } else if child.kind == .codeBlock {
                     result.append(renderCode(
-                        code,
+                        child,
                         sourceRange: NSRange(location: 0, length: 0),
                         map: SourceMap(""),
                         source: ""
                     ))
-                } else if let quote = child as? BlockQuote {
-                    result.append(renderQuote(quote, documentURL: documentURL))
+                } else if child.kind == .blockQuote {
+                    result.append(renderQuote(child, documentURL: documentURL))
                 }
             }
             number += 1
@@ -400,10 +402,11 @@ public final class PreviewRenderer {
         return style
     }
 
-    private func renderQuote(_ quote: BlockQuote, documentURL: URL?) -> NSAttributedString {
+    private func renderQuote(_ quote: MarkdownNode, documentURL: URL?) -> NSAttributedString {
         let content = NSMutableAttributedString()
         for child in quote.children {
-            if let paragraph = child as? Paragraph {
+            if child.kind == .paragraph {
+                let paragraph = child
                 content.append(inline(
                     paragraph.children,
                     base: [
@@ -415,11 +418,12 @@ public final class PreviewRenderer {
                     documentURL: documentURL
                 ))
                 content.append(NSAttributedString(string: "\n"))
-            } else if let heading = child as? Heading {
+            } else if child.kind == .heading {
+                let heading = child
                 content.append(inline(
                     heading.children,
                     base: [
-                        .font: theme.headingFont(level: heading.level),
+                        .font: headingFont(heading.headingLevel),
                         .foregroundColor: theme.secondaryTextColor,
                     ],
                     allowLinkify: true,
@@ -427,9 +431,9 @@ public final class PreviewRenderer {
                     documentURL: documentURL
                 ))
                 content.append(NSAttributedString(string: "\n"))
-            } else if let code = child as? CodeBlock {
+            } else if child.kind == .codeBlock {
                 content.append(renderCode(
-                    code,
+                    child,
                     sourceRange: NSRange(location: 0, length: 0),
                     map: SourceMap(""),
                     source: ""
@@ -463,7 +467,7 @@ public final class PreviewRenderer {
     }
 
     private func renderCode(
-        _ code: CodeBlock,
+        _ code: MarkdownNode,
         sourceRange: NSRange,
         map: SourceMap,
         source: String
@@ -483,7 +487,7 @@ public final class PreviewRenderer {
         block.backgroundColor = theme.codeBackground
         style.textBlocks = [block]
 
-        let value = normalizedCode(code.code)
+        let value = normalizedCode(code.literal)
         let content = NSMutableAttributedString(
             string: value + (value.hasSuffix("\n") ? "" : "\n"),
             attributes: [
@@ -521,12 +525,13 @@ public final class PreviewRenderer {
     }
 
     private func renderTable(
-        _ table: Table,
+        _ table: MarkdownNode,
         map: SourceMap,
         line: Int,
         documentURL: URL?
     ) -> (NSAttributedString, String) {
-        let columnCount = table.maxColumnCount
+        let parts = TableParts(table)
+        let columnCount = parts.maxColumnCount
         guard columnCount > 0 else {
             return (NSAttributedString(), "")
         }
@@ -539,15 +544,15 @@ public final class PreviewRenderer {
         let result = NSMutableAttributedString()
         var html = "<table data-line=\"\(line)\">\n"
 
-        let headLine = max(0, (table.head.range?.lowerBound.line ?? 1) - 1)
-        let head = table.head
+        let headLine = parts.head?.startLine0 ?? 0
+        let head = parts.head
         html += "<thead data-line=\"\(headLine)\">\n"
         html += "<tr data-line=\"\(headLine)\">\n"
 
         for column in 0..<columnCount {
-            let cell = column < head.childCount ? head.child(at: column) as? Table.Cell : nil
+            let cell = head?.child(at: column)
             let text = cell.map { inline($0.children, base: [
-                .font: NSFontManager.shared.convert(theme.bodyFont, toHaveTrait: .boldFontMask),
+                .font: converted(theme.bodyFont, adding: .boldFontMask),
                 .foregroundColor: theme.textColor,
             ], allowLinkify: true, sourceRange: map.nsRange(for: $0.range) ?? NSRange(location: 0, length: 0), documentURL: documentURL) }
                 ?? NSAttributedString(string: "")
@@ -558,27 +563,27 @@ public final class PreviewRenderer {
                 table: textTable,
                 row: 0,
                 column: column,
-                alignment: alignment(table, column),
+                alignment: alignment(parts, column),
                 header: true
             )
             result.append(cellString)
 
-            let alignmentStyle = alignmentStyle(table, column)
+            let alignmentStyle = alignmentStyle(parts, column)
             let tag = alignmentStyle
-            let cellHTML = cell.map { inlineHTML($0.children, documentURL: documentURL) } ?? ""
+            let cellHTML = producesHTML ? cell.map { inlineHTML($0.children, documentURL: documentURL) } ?? "" : ""
             html += "<th\(tag)>\(cellHTML)</th>\n"
         }
         html += "</tr>\n</thead>\n"
 
-        if !table.body.isEmpty {
-            let bodyLine = max(0, (table.body.range?.lowerBound.line ?? 1) - 1)
+        if let firstRow = parts.rows.first {
+            let bodyLine = firstRow.startLine0
             html += "<tbody data-line=\"\(bodyLine)\">\n"
             var rowIndex = 1
-            for row in table.body.rows {
-                let rowLine = max(0, (row.range?.lowerBound.line ?? 1) - 1)
+            for row in parts.rows {
+                let rowLine = row.startLine0
                 html += "<tr data-line=\"\(rowLine)\">\n"
                 for column in 0..<columnCount {
-                    let cell = column < row.childCount ? row.child(at: column) as? Table.Cell : nil
+                    let cell = row.child(at: column)
                     let text = cell.map { inline($0.children, base: [
                         .font: theme.bodyFont,
                         .foregroundColor: theme.textColor,
@@ -591,13 +596,13 @@ public final class PreviewRenderer {
                         table: textTable,
                         row: rowIndex,
                         column: column,
-                        alignment: alignment(table, column),
+                        alignment: alignment(parts, column),
                         header: false
                     )
                     result.append(cellString)
 
-                    let cellHTML = cell.map { inlineHTML($0.children, documentURL: documentURL) } ?? ""
-                    html += "<td\(alignmentStyle(table, column))>\(cellHTML)</td>\n"
+                    let cellHTML = producesHTML ? cell.map { inlineHTML($0.children, documentURL: documentURL) } ?? "" : ""
+                    html += "<td\(alignmentStyle(parts, column))>\(cellHTML)</td>\n"
                 }
                 html += "</tr>\n"
                 rowIndex += 1
@@ -606,7 +611,7 @@ public final class PreviewRenderer {
         }
 
         html += "</table>\n"
-        return (result, html)
+        return (result, producesHTML ? html : "")
     }
 
     private func applyTableCell(
@@ -642,7 +647,7 @@ public final class PreviewRenderer {
         )
     }
 
-    private func alignment(_ table: Table, _ column: Int) -> NSTextAlignment {
+    private func alignment(_ table: TableParts, _ column: Int) -> NSTextAlignment {
         guard column < table.columnAlignments.count,
               let value = table.columnAlignments[column] else {
             return .left
@@ -654,7 +659,7 @@ public final class PreviewRenderer {
         }
     }
 
-    private func alignmentStyle(_ table: Table, _ column: Int) -> String {
+    private func alignmentStyle(_ table: TableParts, _ column: Int) -> String {
         guard column < table.columnAlignments.count,
               let value = table.columnAlignments[column] else {
             return ""
@@ -669,7 +674,7 @@ public final class PreviewRenderer {
     // MARK: - Inline attributed text
 
     private func inline(
-        _ nodes: MarkupChildren,
+        _ nodes: MarkdownChildren,
         base: [NSAttributedString.Key: Any],
         allowLinkify: Bool,
         sourceRange: NSRange,
@@ -678,57 +683,58 @@ public final class PreviewRenderer {
         let result = NSMutableAttributedString()
 
         for node in nodes {
-            switch node {
-            case let text as Text:
-                let value = Typographer.transform(text.string)
+            switch node.kind {
+            case .text:
+                let value = Typographer.transform(node.literal)
                 let start = result.length
                 result.append(NSAttributedString(string: value, attributes: base))
                 if allowLinkify {
                     applyLinkify(to: result, startingAt: start, attributes: base)
                 }
 
-            case let emphasis as Emphasis:
+            case .emphasis:
                 var attributes = base
                 attributes[.font] = font(base, adding: .italicFontMask)
                 attributes[.foregroundColor] = theme.emphasisColor
                 result.append(inline(
-                    emphasis.children,
+                    node.children,
                     base: attributes,
                     allowLinkify: allowLinkify,
                     sourceRange: sourceRange,
                     documentURL: documentURL
                 ))
 
-            case let strong as Strong:
+            case .strong:
                 var attributes = base
                 attributes[.font] = font(base, adding: .boldFontMask)
                 result.append(inline(
-                    strong.children,
+                    node.children,
                     base: attributes,
                     allowLinkify: allowLinkify,
                     sourceRange: sourceRange,
                     documentURL: documentURL
                 ))
 
-            case let strike as Strikethrough:
+            case .strikethrough:
                 var attributes = base
                 attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
                 result.append(inline(
-                    strike.children,
+                    node.children,
                     base: attributes,
                     allowLinkify: allowLinkify,
                     sourceRange: sourceRange,
                     documentURL: documentURL
                 ))
 
-            case let code as InlineCode:
+            case .code:
                 var attributes = base
                 attributes[.font] = theme.codeFont
                 attributes[.backgroundColor] = theme.codeBackground
                 attributes[.foregroundColor] = theme.codeColor
-                result.append(NSAttributedString(string: code.code, attributes: attributes))
+                result.append(NSAttributedString(string: node.literal, attributes: attributes))
 
-            case let link as Link:
+            case .link:
+                let link = node
                 let destination = link.destination ?? ""
                 if PreviewURL.markdownItRejects(destination, isImage: false) {
                     let literal = "[\(plainText(link.children))](\(destination))"
@@ -753,20 +759,20 @@ public final class PreviewRenderer {
                     documentURL: documentURL
                 ))
 
-            case let image as Image:
-                result.append(renderImage(image, documentURL: documentURL))
+            case .image:
+                result.append(renderImage(node, documentURL: documentURL))
 
-            case is SoftBreak:
+            case .softBreak:
                 result.append(NSAttributedString(string: " ", attributes: base))
 
-            case is LineBreak:
+            case .lineBreak:
                 result.append(NSAttributedString(string: "\n", attributes: base))
 
-            case let html as InlineHTML:
-                result.append(NSAttributedString(string: html.rawHTML, attributes: base))
+            case .inlineHTML:
+                result.append(NSAttributedString(string: node.literal, attributes: base))
 
             default:
-                if node.childCount > 0 {
+                if node.hasChildren {
                     result.append(inline(
                         node.children,
                         base: base,
@@ -786,15 +792,37 @@ public final class PreviewRenderer {
         adding trait: NSFontTraitMask
     ) -> NSFont {
         let current = attributes[.font] as? NSFont ?? theme.bodyFont
-        return NSFontManager.shared.convert(current, toHaveTrait: trait)
+        return converted(current, adding: trait)
     }
 
-    private func renderImage(_ image: Image, documentURL: URL?) -> NSAttributedString {
-        let source = image.source ?? ""
-        let alt = image.children
-            .compactMap { $0 as? Text }
-            .map(\.string)
-            .joined()
+    /// Font conversion goes through Core Text matching and costs more than
+    /// the rest of an inline run, so each result is kept for the theme.
+    private struct FontKey: Hashable {
+        let name: String
+        let size: CGFloat
+        let trait: UInt
+    }
+    private var fonts: [FontKey: NSFont] = [:]
+    private var headingFonts: [Int: NSFont] = [:]
+
+    private func converted(_ font: NSFont, adding trait: NSFontTraitMask) -> NSFont {
+        let key = FontKey(name: font.fontName, size: font.pointSize, trait: trait.rawValue)
+        if let known = fonts[key] { return known }
+        let result = NSFontManager.shared.convert(font, toHaveTrait: trait)
+        fonts[key] = result
+        return result
+    }
+
+    private func headingFont(_ level: Int) -> NSFont {
+        if let known = headingFonts[level] { return known }
+        let result = theme.headingFont(level: level)
+        headingFonts[level] = result
+        return result
+    }
+
+    private func renderImage(_ image: MarkdownNode, documentURL: URL?) -> NSAttributedString {
+        let source = image.destination ?? ""
+        let alt = altText(image)
 
         if PreviewURL.markdownItRejects(source, isImage: true) {
             return NSAttributedString(
@@ -858,27 +886,28 @@ public final class PreviewRenderer {
 
     // MARK: - HTML inline
 
-    private func inlineHTML(_ nodes: MarkupChildren, documentURL: URL?) -> String {
+    private func inlineHTML(_ nodes: MarkdownChildren, documentURL: URL?) -> String {
         var result = ""
         for node in nodes {
-            switch node {
-            case let text as Text:
-                let value = Typographer.transform(text.string)
+            switch node.kind {
+            case .text:
+                let value = Typographer.transform(node.literal)
                 result += linkifiedHTML(value)
 
-            case let emphasis as Emphasis:
-                result += "<em>\(inlineHTML(emphasis.children, documentURL: documentURL))</em>"
+            case .emphasis:
+                result += "<em>\(inlineHTML(node.children, documentURL: documentURL))</em>"
 
-            case let strong as Strong:
-                result += "<strong>\(inlineHTML(strong.children, documentURL: documentURL))</strong>"
+            case .strong:
+                result += "<strong>\(inlineHTML(node.children, documentURL: documentURL))</strong>"
 
-            case let strike as Strikethrough:
-                result += "<s>\(inlineHTML(strike.children, documentURL: documentURL))</s>"
+            case .strikethrough:
+                result += "<s>\(inlineHTML(node.children, documentURL: documentURL))</s>"
 
-            case let code as InlineCode:
-                result += "<code>\(escapeHTML(code.code))</code>"
+            case .code:
+                result += "<code>\(escapeHTML(node.literal))</code>"
 
-            case let link as Link:
+            case .link:
+                let link = node
                 let raw = link.destination ?? ""
                 if PreviewURL.markdownItRejects(raw, isImage: false) {
                     result += escapeHTML("[\(plainText(link.children))](\(raw))")
@@ -888,9 +917,10 @@ public final class PreviewRenderer {
                 let title = link.title.map { " title=\"\(escapeAttribute($0))\"" } ?? ""
                 result += "<a href=\"\(escapeAttribute(destination))\"\(title) rel=\"noopener noreferrer\">\(inlineHTML(link.children, documentURL: documentURL))</a>"
 
-            case let image as Image:
-                let raw = image.source ?? ""
-                let altText = image.children.compactMap { $0 as? Text }.map(\.string).joined()
+            case .image:
+                let image = node
+                let raw = image.destination ?? ""
+                let altText = altText(image)
                 if PreviewURL.markdownItRejects(raw, isImage: true) {
                     result += escapeHTML("![\(altText)](\(raw))")
                     break
@@ -900,17 +930,17 @@ public final class PreviewRenderer {
                 let title = image.title.map { " title=\"\(escapeAttribute($0))\"" } ?? ""
                 result += "<img src=\"\(escapeAttribute(source))\" alt=\"\(alt)\"\(title)>"
 
-            case is SoftBreak:
+            case .softBreak:
                 result += "\n"
 
-            case is LineBreak:
+            case .lineBreak:
                 result += "<br>\n"
 
-            case let html as InlineHTML:
-                result += escapeHTML(html.rawHTML)
+            case .inlineHTML:
+                result += escapeHTML(node.literal)
 
             default:
-                if node.childCount > 0 {
+                if node.hasChildren {
                     result += inlineHTML(node.children, documentURL: documentURL)
                 }
             }
@@ -944,7 +974,7 @@ public final class PreviewRenderer {
 
     // MARK: - HTML blocks
 
-    private func blockChildrenHTML(_ node: Markup, documentURL: URL?) -> String {
+    private func blockChildrenHTML(_ node: MarkdownNode, documentURL: URL?) -> String {
         var result = ""
         for child in node.children {
             if let block = renderBlock(
@@ -960,7 +990,7 @@ public final class PreviewRenderer {
     }
 
     private func listHTML(
-        _ items: MarkupChildren,
+        _ items: MarkdownChildren,
         ordered: Bool,
         start: Int,
         line: Int,
@@ -970,43 +1000,33 @@ public final class PreviewRenderer {
         let startAttribute = ordered && start != 1 ? " start=\"\(start)\"" : ""
         var result = "<\(tag)\(startAttribute) data-line=\"\(line)\">\n"
         for item in items {
-            guard let listItem = item as? ListItem else { continue }
-            let itemLine = max(0, (listItem.range?.lowerBound.line ?? 1) - 1)
+            guard item.kind == .item else { continue }
+            let listItem = item
+            let itemLine = listItem.startLine0
             result += "<li data-line=\"\(itemLine)\">"
 
-            let checkbox: String
-            switch listItem.checkbox {
-            case .checked: checkbox = "[x] "
-            case .unchecked: checkbox = "[ ] "
-            case .none: checkbox = ""
-            }
+            let checkbox = checkboxPrefix(listItem)
 
             var first = true
             for child in listItem.children {
-                if let paragraph = child as? Paragraph {
+                if child.kind == .paragraph {
                     if first {
                         result += checkbox
                     }
-                    result += inlineHTML(paragraph.children, documentURL: documentURL)
+                    result += inlineHTML(child.children, documentURL: documentURL)
                     first = false
-                } else if let nested = child as? UnorderedList {
+                } else if child.kind == .list {
+                    let nestedOrdered = child.isOrderedList
                     result += "\n" + listHTML(
-                        nested.children,
-                        ordered: false,
-                        start: 1,
-                        line: max(0, (nested.range?.lowerBound.line ?? 1) - 1),
+                        child.children,
+                        ordered: nestedOrdered,
+                        start: nestedOrdered ? child.listStart : 1,
+                        line: child.startLine0,
                         documentURL: documentURL
                     )
-                } else if let nested = child as? OrderedList {
-                    result += "\n" + listHTML(
-                        nested.children,
-                        ordered: true,
-                        start: Int(nested.startIndex),
-                        line: max(0, (nested.range?.lowerBound.line ?? 1) - 1),
-                        documentURL: documentURL
-                    )
-                } else if let quote = child as? BlockQuote {
-                    result += "\n<blockquote data-line=\"\(max(0, (quote.range?.lowerBound.line ?? 1) - 1))\">\n"
+                } else if child.kind == .blockQuote {
+                    let quote = child
+                    result += "\n<blockquote data-line=\"\(quote.startLine0)\">\n"
                     result += blockChildrenHTML(quote, documentURL: documentURL)
                     result += "</blockquote>\n"
                 }
@@ -1017,14 +1037,14 @@ public final class PreviewRenderer {
         return result
     }
 
-    private func plainText(_ nodes: MarkupChildren) -> String {
+    private func plainText(_ nodes: MarkdownChildren) -> String {
         var result = ""
         for node in nodes {
-            if let text = node as? Text {
-                result += text.string
-            } else if let code = node as? InlineCode {
-                result += code.code
-            } else if node.childCount > 0 {
+            if node.kind == .text {
+                result += node.literal
+            } else if node.kind == .code {
+                result += node.literal
+            } else if node.hasChildren {
                 result += plainText(node.children)
             }
         }
@@ -1032,6 +1052,18 @@ public final class PreviewRenderer {
     }
 
     // MARK: - Shared helpers
+
+    private func checkboxPrefix(_ item: MarkdownNode) -> String {
+        switch item.checkbox {
+        case .checked: return "[x] "
+        case .unchecked: return "[ ] "
+        case nil: return ""
+        }
+    }
+
+    private func altText(_ image: MarkdownNode) -> String {
+        image.children.filter { $0.kind == .text }.map(\.literal).joined()
+    }
 
     private func bodyStyle() -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
@@ -1044,11 +1076,11 @@ public final class PreviewRenderer {
         value.hasSuffix("\n") ? value : value + "\n"
     }
 
-    private func mapRange(of node: Markup) -> NSRange {
+    private func mapRange(of node: MarkdownNode) -> NSRange {
         NSRange(location: 0, length: 0)
     }
 
-    private func isFencedCode(_ code: CodeBlock, map: SourceMap, source: String) -> Bool {
+    private func isFencedCode(_ code: MarkdownNode, map: SourceMap, source: String) -> Bool {
         guard let range = map.nsRange(for: code.range) else { return false }
         let text = source as NSString
         guard range.location < text.length else { return false }
@@ -1083,5 +1115,32 @@ public final class PreviewRenderer {
 
     private func escapeAttribute(_ value: String) -> String {
         escapeHTML(value).replacingOccurrences(of: "\"", with: "&quot;")
+    }
+}
+
+/// A GFM table as swift-markdown presented it: the header row, the body rows
+/// and the column alignments.
+private struct TableParts {
+    let head: MarkdownNode?
+    let rows: [MarkdownNode]
+    let columnAlignments: [MarkdownColumnAlignment?]
+
+    init(_ table: MarkdownNode) {
+        var head: MarkdownNode?
+        var rows: [MarkdownNode] = []
+        for child in table.children {
+            switch child.kind {
+            case .tableHead where head == nil && rows.isEmpty: head = child
+            case .tableRow: rows.append(child)
+            default: break
+            }
+        }
+        self.head = head
+        self.rows = rows
+        self.columnAlignments = table.columnAlignments
+    }
+
+    var maxColumnCount: Int {
+        rows.reduce(head?.childCount ?? 0) { max($0, $1.childCount) }
     }
 }

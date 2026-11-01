@@ -11,7 +11,7 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
     private var imageCache: [String: NSImage] = [:]
     private var imageTasks: Set<String> = []
     private var scrollObserver: NSObjectProtocol?
-    private let renderer = PreviewRenderer()
+    private let renderer = PreviewRenderer(producesHTML: false)
 
     convenience init() {
         self.init(frame: .zero, textContainer: nil)

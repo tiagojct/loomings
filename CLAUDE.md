@@ -42,9 +42,13 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 not replace or import the web app, and native-only work must not change web
 release numbers.
 
-- `Sources/LoomingsMarkdown` — Swift Markdown parsing plus the UTF-8→UTF-16
-  source map. cmark reports 1-based byte columns; AppKit ranges are UTF-16,
-  so every parser range goes through `SourceMap`. The parse output also
+- `Sources/LoomingsMarkdown` — cmark-gfm parsing plus the UTF-8→UTF-16
+  source map. `MarkdownTree` reads cmark's own nodes in place; swift-markdown
+  was dropped because copying every node into its Swift tree was about 85% of
+  a parse. Options match swift-markdown's defaults (smart punctuation,
+  source positions, table spans; table, strikethrough and tasklist). cmark
+  reports 1-based byte columns; AppKit ranges are UTF-16, so every parser
+  range goes through `SourceMap`. The parse output also
   carries the outline (ATX and setext), frontmatter range, line starts and a
   word count (`TextStatistics`, mirroring `src/stats.js`).
 - `Sources/LoomingsTheme` — decodes the exported Ensigns palettes, resolves
@@ -55,7 +59,7 @@ release numbers.
   decoded; links are capped at 4 MB encoded and 8 MB decoded. Links are
   generated on `loomings.tiagojacinto.eu/app/` and can carry `theme`/`mode`.
 - `Sources/LoomingsPreview` — a native renderer for the preview and export.
-  It walks the Swift Markdown tree once per render and produces per-block
+  It walks the cmark tree once per render and produces per-block
   attributed text plus HTML. Source lines/ranges ride on the blocks for
   split-view sync; the HTML mirrors markdown-it (`data-line`, linkify,
   typographer, sanitised URLs, raw HTML escaped, frontmatter omitted). Tables
@@ -169,12 +173,12 @@ Stage 2 decisions worth preserving:
 - `macos/ACCEPTANCE.md` is the Stage 6 checklist, themed measurements, data-replacement
   test and the explicit list of untested environments and performance misses. Read it
   before claiming parity or performance.
-- Preview rendering is still whole-document per update. Measured render times
-  (parse + attributed text + HTML): 16.8 ms at 10 KB, 177 ms at 100 KB,
-  1.8 s at 1 MB, 20.4 s at 10 MB. The 150 ms target is missed above 10 KB;
-  rendering runs off-main with a generation token so typing stays responsive,
-  but the preview lags on large files. The next step is a per-block render
-  cache and incremental parsing, not a faster whole-document renderer.
+- Preview rendering is whole-document per update with a per-block cache.
+  Release p95 (`LoomingsBench --preview`): a one-block edit is 4.4 ms at
+  100 KB and 52 ms at 1 MB; a cold render 38 ms and 398 ms. The live
+  preview renderer is `PreviewRenderer(producesHTML: false)`; export builds a
+  fresh renderer with HTML. Keep the Typographer/Linkifier fast paths exact:
+  a test checks they skip only text that cannot change.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).

@@ -789,7 +789,7 @@ final class EditorWindowController: NSWindowController,
 /// Owns the preview renderer and its block cache. Only ever called on the
 /// window's serial preview queue, so it needs no lock.
 private final class PreviewPipeline: @unchecked Sendable {
-    private let renderer = PreviewRenderer()
+    private let renderer = PreviewRenderer(producesHTML: false)
     private var palette: ResolvedPalette?
     private var themed = false
 

@@ -84,7 +84,7 @@ removed afterwards.
 
 ## Verification
 
-- `swift test --package-path macos`: 85 tests pass.
+- `swift test --package-path macos`: 88 tests pass.
 - `Loomings --self-test`: 93 checks pass, exit 0.
 - `npm test`: 189 tests pass; `npm run typecheck`: clean; `npm run build`: succeeds.
 - Share interop runs the web decoder through Node from the Swift suite, and Swift
@@ -116,12 +116,29 @@ Startup with theme: 867 ms.
 - Scroll styling: 0.01–0.04 ms p95; no layout invalidation on pure scroll.
 - Preview, cold render (table above) versus an edit of one block with the block cache
   (`swift run -c release LoomingsBench --preview`, p95): 2.4 ms at 10 KB, 26.7 ms at
-  100 KB, 289 ms at 1 MB; a cold render is 20 ms, 212 ms and 2.2 s. The 150 ms target
-  passes at 100 KB and misses at 1 MB on this dense corpus (23.7k blocks per MB). Of
-  the 285 ms at 1 MB, about 210 ms is swift-markdown parsing the whole document;
-  matching and reusing blocks costs about 40 ms. Getting under 150 ms needs an
-  incremental parse. Rendering is off the main thread with a generation token, so
-  typing stays responsive. The 10 MB edit time was not re-measured.
+  100 KB, 289 ms at 1 MB; a cold render is 20 ms, 212 ms and 2.2 s. Of the 285 ms at
+  1 MB, about 210 ms was swift-markdown building its Swift tree.
+
+## Performance after the cmark pass (2026-11-01)
+
+swift-markdown is gone: the editor parser and the preview read cmark-gfm's nodes in
+place (`MarkdownTree`). The live preview no longer builds HTML (export renders from
+scratch with HTML), Typographer and Linkifier skip text that cannot change, and
+converted fonts are cached per theme. Same machine, release build, Pequod dark.
+
+| Corpus | Editor parse p95 | Preview cold p95 | Preview edit p95 | HTML export | Footprint |
+|---:|---:|---:|---:|---:|---:|
+| 10 KB | 0.85 ms (was 3.45) | 3.8 ms (was 20) | 0.46 ms (was 2.4) | 5.6 ms | 60 MB |
+| 100 KB | 8.96 ms (was 33.3) | 38.2 ms (was 212) | 4.35 ms (was 26.7) | 55 ms | 124 MB |
+| 1 MB | 90.9 ms (was 351) | 398 ms (was 2.2 s) | 51.5 ms (was 289) | 581 ms | 187 MB |
+| 10 MB | 931 ms (was 3.99 s) | 4.72 s (was 32.6 s) | 538 ms | 6.5 s | 459 MB |
+
+- The 150 ms preview edit target now passes through 1 MB (51.5 ms). It misses at
+  10 MB (538 ms), which stays off the main thread.
+- Spans and outlines were compared between the old and new parser on 3,001 Markdown
+  files from the workspace: identical. `nodeCount` is one lower per table because
+  swift-markdown added a synthetic table-body node; it is a diagnostic only.
+- Memory at 10 MB is unchanged (459 MB); it is dominated by TextKit, not the parse.
 - Memory at 10 MB is 468 MB (616 MB after the long-line parse pass). A baseline build
   of the same corpus showed no regression (881 MB against 931 MB in the earlier run), so
   this is the per-line structure overhead of the parse (roughly 80 bytes per source
@@ -149,8 +166,7 @@ Startup with theme: 867 ms.
 
 ## Known gaps
 
-1. The preview misses the 150 ms edit target at 1 MB of dense Markdown (about 290 ms),
-   because the parse is not incremental.
+1. The preview misses the 150 ms edit target at 10 MB (538 ms); it passes through 1 MB.
 2. Large-file memory is high (468 MB at 10 MB) and was not optimised.
 3. Crash recovery relies on NSDocument; it was not simulated end-to-end.
 4. Drag-and-drop, the external-change activation sheet, the unsaved-changes sheet and
