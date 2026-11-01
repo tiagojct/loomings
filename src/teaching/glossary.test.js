@@ -5,7 +5,8 @@ import { join } from 'node:path';
 import { EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { ensureSyntaxTree } from '@codemirror/language';
-import { explain, markerAt, KINDS } from './glossary.js';
+import { explain, markerAt, frontmatterRange, KINDS } from './glossary.js';
+import { Text } from '@codemirror/state';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const cases = JSON.parse(readFileSync(join(root, 'macos/Tests/LoomingsTeachingTests/Fixtures/glossary-cases.json'), 'utf8'));
@@ -75,5 +76,15 @@ describe('marker under a position', () => {
   it('finds nothing in plain text or code', () => {
     expect(at('Plain words.\n', 3)).toBeNull();
     expect(at('```\n**x**\n```\n', 5)).toBeNull();
+  });
+});
+
+describe('frontmatter range', () => {
+  it('reads --- on line 1 and --- by line 50, as the native app', () => {
+    expect(frontmatterRange(Text.of(['---', 'title: x', '---', '', 'Text']))).toEqual({ from: 0, to: 16 });
+    expect(frontmatterRange(Text.of(['# No', '---']))).toBeNull();
+    expect(frontmatterRange(Text.of(['---', 'never closed']))).toBeNull();
+    expect(frontmatterRange(Text.of(['---', ...Array(49).fill('x'), '---']))).toBeNull();
+    expect(frontmatterRange(Text.of(['---', ...Array(48).fill('x'), '---']))?.from).toBe(0);
   });
 });

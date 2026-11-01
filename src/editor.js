@@ -12,9 +12,10 @@ import { tags as t } from '@lezer/highlight';
 import { renderMarkdown, renderPreview } from './markdown.js';
 import { blockForLine, previewBlocks } from './pairing.js';
 import { lint } from './teaching/lint.js';
-import { explain, markerAt } from './teaching/glossary.js';
+import { explain, markerAt, frontmatterRange } from './teaching/glossary.js';
 import { evaluate } from './teaching/exercises.js';
 import { parseCheck } from './teaching/directives.js';
+import { outline, sections, limitsIn, sectionAt } from './teaching/sections.js';
 import lessonChecks from '../lessons/checks.json';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
@@ -830,6 +831,7 @@ function updateCursorPos() {
   const head = view.state.selection.main.head;
   const line = view.state.doc.lineAt(head);
   cursorPosEl.textContent = `Ln ${line.number}, Col ${head - line.from + 1}`;
+  if (limitedSections.length) updateSectionStatus();
 }
 
 // ==========================
@@ -841,11 +843,16 @@ const paletteInput = /** @type {HTMLInputElement} */ (el('palette-input'));
 const paletteList  = el('palette-list');
 let paletteHeadings = [];
 let paletteIdx      = 0;
+/** @type {Map<number, {count: string, over: boolean}>} section words by heading line start */
+let paletteCounts = new Map();
 
 function extractHeadings(state) {
   const out = [];
+  // CommonMark reads frontmatter as a setext heading; it is metadata.
+  const frontmatterEnd = frontmatterRange(state.doc)?.to ?? -1;
   syntaxTree(state).iterate({
     enter(node) {
+      if (node.from <= frontmatterEnd) return;
       const m = node.name.match(/^ATXHeading(\d)$/);
       if (m) {
         const level = parseInt(m[1], 10);
@@ -882,6 +889,7 @@ function renderPalette() {
          id="palette-option-${i}" role="option" aria-selected="${i === paletteIdx}">
        <span class="palette-level">H${h.level}</span>
        <span class="palette-text">${escapeHtml(h.text || '(empty)')}</span>
+       ${paletteCounts.has(h.from) ? `<span class="palette-count ${paletteCounts.get(h.from)?.over ? 'over' : ''}">${paletteCounts.get(h.from)?.count}</span>` : ''}
      </li>`
   ).join('');
   // The input keeps focus and points at the highlighted option, which is what
@@ -896,6 +904,12 @@ let paletteModal = null;
 
 function openPalette() {
   paletteHeadings = extractHeadings(view.state);
+  // Each section's words, and its limit where the frontmatter sets one.
+  const text = getText();
+  paletteCounts = new Map(sections(text, outline(text), limitsIn(text).limits).map((s) => [s.from, {
+    count: s.limit === null ? String(s.words) : `${s.words}/${s.limit}`,
+    over: s.limit !== null && s.words > s.limit,
+  }]));
   paletteIdx = 0;
   paletteInput.value = '';
   renderPalette();
@@ -1573,7 +1587,11 @@ function runTeaching() {
   const text = getText();
   const issues = lint(text);
   teaching = { revision: teachingRevision, issues };
-  updateExercise(evaluate(text, attachedChecks));
+  const report = evaluate(text, attachedChecks);
+  const { limits, notes: limitNotes } = limitsIn(text);
+  limitedSections = limits.length ? sections(text, outline(text), limits, { onlyLimited: true }) : [];
+  updateExercise({ results: report.results, notes: [...report.notes, ...limitNotes].sort((a, b) => a.line - b.line) });
+  updateSectionStatus();
   view.dispatch({ effects: notesEffect.of(issues) });
   notesWrap.classList.toggle('hidden', issues.length === 0);
   notesButton.textContent = issues.length === 1 ? '1 note' : `${issues.length} notes`;
@@ -1676,6 +1694,29 @@ function renderExerciseMenu() {
 }
 
 attachMenu(exerciseButton, exerciseMenu, { onOpen: renderExerciseMenu });
+
+// ==========================
+//  Teaching: section word limits
+// ==========================
+// `limit: <heading> <max>` in the frontmatter. The status bar shows the
+// caret's innermost limited section; between an edit and the next analysis
+// it keeps its last value rather than blink while the writer types.
+
+const sectionEl = el('status-section');
+/** @type {import('./teaching/sections.js').SectionCount[]} */
+let limitedSections = [];
+
+function updateSectionStatus() {
+  if (teaching.revision !== teachingRevision) return;
+  const section = sectionAt(limitedSections, view.state.selection.main.head);
+  sectionEl.classList.toggle('hidden', !section);
+  if (!section || section.limit === null) return;
+  const text = `${section.heading.title} ${section.words.toLocaleString()} of ${section.limit.toLocaleString()} words`;
+  const over = section.words > section.limit;
+  sectionEl.textContent = text;
+  sectionEl.classList.toggle('over', over);
+  sectionEl.setAttribute('aria-label', over ? `${text}, over the limit` : text);
+}
 
 // ==========================
 //  Teaching: explain this marker

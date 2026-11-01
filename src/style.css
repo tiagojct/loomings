@@ -444,6 +444,13 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   font-size: 12px;
 }
 
+/* The caret's section against its word limit. */
+#status-section { color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+#status-section.over { color: var(--accent-light); }
+.palette-count { margin-left: auto; padding-left: 12px; color: var(--fg-ghost); font-size: 11px; font-variant-numeric: tabular-nums; }
+.palette-count.over { color: var(--accent-light); }
+.palette-item.sel .palette-count { color: var(--bg-deep); opacity: 0.8; }
+
 /* The exercise checklist: each check with a tick or an open circle. */
 #status-exercise.done { color: var(--accent-light); }
 #statusbar .check-row {

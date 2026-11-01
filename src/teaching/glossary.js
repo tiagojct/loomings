@@ -87,6 +87,22 @@ export function explain(kind, marker) {
   }
 }
 
+/**
+ * The frontmatter, as the native app reads it: a first line of exactly ---
+ * and a closing line of exactly --- by line 50. `to` is the closing line's end.
+ *
+ * @param {import('@codemirror/state').Text} doc
+ * @returns {{from: number, to: number}|null}
+ */
+export function frontmatterRange(doc) {
+  if (doc.lines < 2 || doc.line(1).text !== '---') return null;
+  for (let n = 2; n <= Math.min(doc.lines, 50); n++) {
+    const line = doc.line(n);
+    if (line.text === '---') return { from: 0, to: line.to };
+  }
+  return null;
+}
+
 const HTML_NODES = new Set(['HTMLTag', 'HTMLBlock', 'Comment', 'CommentBlock', 'ProcessingInstruction', 'ProcessingInstructionBlock']);
 const CODE_NODES = new Set(['InlineCode', 'FencedCode', 'CodeBlock', 'CodeText']);
 const TASK_BOX = /^(\s*(?:[-*+]|\d{1,9}[.)])[ \t]+)(\[[ xX]\])(?=\s|$)/;
@@ -103,16 +119,8 @@ export function markerAt(state, pos) {
   const doc = state.doc;
   const tree = syntaxTree(state);
 
-  // Frontmatter, as the native app reads it: --- on line 1, --- by line 50.
-  if (doc.lines >= 2 && doc.line(1).text === '---') {
-    for (let n = 2; n <= Math.min(doc.lines, 50); n++) {
-      const line = doc.line(n);
-      if (line.text === '---') {
-        if (pos <= line.to) return { kind: 'frontmatter', marker: '---', from: 0, to: line.to };
-        break;
-      }
-    }
-  }
+  const frontmatter = frontmatterRange(doc);
+  if (frontmatter && pos <= frontmatter.to) return { kind: 'frontmatter', marker: '---', ...frontmatter };
 
   const insideCode = (/** @type {number} */ at) => {
     for (let node = /** @type {import('@lezer/common').SyntaxNode|null} */ (tree.resolve(at, 1)); node; node = node.parent) {
