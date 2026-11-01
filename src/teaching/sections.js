@@ -22,10 +22,11 @@ import { countWords } from '../stats.js';
  * of a setext heading.
  *
  * @param {string} source
+ * @param {ReturnType<typeof parseSource>} [parsed] a parse of `source` to reuse
  * @returns {Heading[]}
  */
-export function outline(source) {
-  const doc = parseSource(source);
+export function outline(source, parsed) {
+  const doc = parsed || parseSource(source);
   /** @type {Heading[]} */
   const headings = [];
   for (const token of doc.tokens) {

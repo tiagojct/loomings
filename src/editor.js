@@ -11,9 +11,8 @@ import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { renderMarkdown, renderPreview } from './markdown.js';
 import { blockForLine, previewBlocks } from './pairing.js';
-import { lint } from './teaching/lint.js';
+import { analyse } from './teaching/report.js';
 import { explain, markerAt, frontmatterRange } from './teaching/glossary.js';
-import { evaluate } from './teaching/exercises.js';
 import { parseCheck } from './teaching/directives.js';
 import { outline, sections, limitsIn, sectionAt } from './teaching/sections.js';
 import lessonChecks from '../lessons/checks.json';
@@ -1737,15 +1736,44 @@ function scheduleTeaching() {
   teachingTimer = setTimeout(runTeaching, 400);
 }
 
+// The analysis runs in a worker, so typing never waits for it; where a
+// worker cannot start, it runs here after the same pause. An answer counts
+// only while the document is still the text it read.
+/** @type {Worker|null|undefined} */ let teachingWorker;
+
+function startTeachingWorker() {
+  try {
+    const worker = new Worker(new URL('./teaching/worker.js', import.meta.url), { type: 'module' });
+    worker.onmessage = (event) => {
+      if (event.data.id === teachingRevision) applyTeaching(event.data.id, event.data.report);
+    };
+    worker.onerror = () => { worker.terminate(); teachingWorker = null; runTeaching(); };
+    return worker;
+  } catch (_) {
+    return null;
+  }
+}
+
 function runTeaching() {
   teachingTimer = null;
+  if (teachingWorker === undefined) teachingWorker = startTeachingWorker();
   const text = getText();
-  const issues = lint(text);
-  teaching = { revision: teachingRevision, issues };
-  const report = evaluate(text, attachedChecks);
-  const { limits, notes: limitNotes } = limitsIn(text);
-  limitedSections = limits.length ? sections(text, outline(text), limits, { onlyLimited: true }) : [];
-  updateExercise({ results: report.results, notes: [...report.notes, ...limitNotes].sort((a, b) => a.line - b.line) });
+  if (teachingWorker) {
+    teachingWorker.postMessage({ id: teachingRevision, text, attached: attachedChecks });
+  } else {
+    applyTeaching(teachingRevision, analyse(text, attachedChecks));
+  }
+}
+
+/**
+ * @param {number} revision the teachingRevision the report was made for
+ * @param {import('./teaching/report.js').TeachingReport} report
+ */
+function applyTeaching(revision, report) {
+  const issues = report.issues;
+  teaching = { revision, issues };
+  limitedSections = report.sections;
+  updateExercise({ results: report.results, notes: report.notes });
   updateSectionStatus();
   view.dispatch({ effects: notesEffect.of(issues) });
   notesWrap.classList.toggle('hidden', issues.length === 0);
@@ -1809,7 +1837,7 @@ const exerciseButton = el('status-exercise');
 const exerciseMenu   = el('exercise-menu');
 /** @type {import('./teaching/exercises.js').AttachedChecks|null} */
 let attachedChecks = null;
-/** @type {ReturnType<typeof evaluate>} */
+/** @type {{results: import('./teaching/exercises.js').CheckResult[], notes: import('./teaching/directives.js').DirectiveNote[]}} */
 let exercise = { results: [], notes: [] };
 
 /** @param {{file: string, content: string}} lesson */
@@ -1820,7 +1848,7 @@ function checksForLesson(lesson) {
   return checks.length ? { checks, after: lesson.content } : null;
 }
 
-/** @param {ReturnType<typeof evaluate>} report */
+/** @param {{results: import('./teaching/exercises.js').CheckResult[], notes: import('./teaching/directives.js').DirectiveNote[]}} report */
 function updateExercise(report) {
   exercise = report;
   const total = report.results.length;

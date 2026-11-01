@@ -21,9 +21,10 @@ import { addedText } from './linediff.js';
 /**
  * @param {string} source
  * @param {AttachedChecks|null} [attached]
+ * @param {ReturnType<typeof parseSource>} [parsed] a parse of `source` to reuse
  * @returns {{results: CheckResult[], notes: DirectiveNote[]}}
  */
-export function evaluate(source, attached = null) {
+export function evaluate(source, attached = null, parsed) {
   /** @type {Check[]} */
   const checks = [];
   /** @type {DirectiveNote[]} */
@@ -36,7 +37,7 @@ export function evaluate(source, attached = null) {
   /** @type {CheckResult[]} */
   const results = [];
   if (checks.length) {
-    const found = census(source);
+    const found = census(source, parsed);
     results.push(...checks.map((c) => result(found, c)));
   }
   if (attached && attached.checks.length) {
@@ -77,9 +78,10 @@ export function scope(source, anchor) {
  * What a document contains, counted once.
  *
  * @param {string} source
+ * @param {ReturnType<typeof parseSource>} [parsed]
  */
-function census(source) {
-  const doc = parseSource(source);
+function census(source, parsed) {
+  const doc = parsed || parseSource(source);
   const found = {
     /** @type {number[]} */ headings: [],
     /** @type {number[]} */ bulletLists: [],

@@ -29,11 +29,12 @@ const SPACED_LINK = /\[[^\]\n]+\]\(([^)\s<>"']+(?:[ \t]+[^)\s<>"']+)+)\)/g;
 
 /**
  * @param {string} source
+ * @param {ReturnType<typeof parseSource>} [parsed] a parse of `source` to reuse
  * @returns {LintIssue[]}
  */
-export function lint(source) {
+export function lint(source, parsed) {
   if (!source) return [];
-  const doc = parseSource(source);
+  const doc = parsed || parseSource(source);
   const { lines, tokens, lineEnding: nl } = doc;
   /** @type {LintIssue[]} */
   const issues = [];
