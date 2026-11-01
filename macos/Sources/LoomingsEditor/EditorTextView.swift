@@ -53,6 +53,40 @@ public final class EditorTextView: NSTextView {
         layers[owner] ?? []
     }
 
+    /// The decorations that can touch `rect`: its character range is found
+    /// from the layout fragments at its top and bottom, then decorations are
+    /// filtered by range before any frame is asked of TextKit.
+    public func decorations(intersecting rect: NSRect) -> [EditorDecoration] {
+        let all = layers.values.joined()
+        guard !all.isEmpty, let visible = characterRange(of: rect) else { return [] }
+        return all.filter { decoration in
+            decoration.range.location <= NSMaxRange(visible)
+                && NSMaxRange(decoration.range) >= visible.location
+        }
+    }
+
+    /// The characters laid out within `rect` (view coordinates), or nil when
+    /// that part of the text has no layout yet.
+    private func characterRange(of rect: NSRect) -> NSRange? {
+        guard let layoutManager = textLayoutManager,
+              let contentManager = layoutManager.textContentManager else { return nil }
+        let origin = textContainerOrigin
+        let documentStart = contentManager.documentRange.location
+        let top = CGPoint(x: 0, y: max(0, rect.minY - origin.y))
+        let bottom = CGPoint(x: 0, y: max(0, rect.maxY - origin.y))
+        guard let first = layoutManager.textLayoutFragment(for: top)
+                ?? layoutManager.textViewportLayoutController.viewportRange.flatMap({ layoutManager.textLayoutFragment(for: $0.location) }) else {
+            return nil
+        }
+        let last = layoutManager.textLayoutFragment(for: bottom)
+        let start = contentManager.offset(from: documentStart, to: first.rangeInElement.location)
+        let endLocation = last?.rangeInElement.endLocation
+            ?? layoutManager.textViewportLayoutController.viewportRange?.endLocation
+            ?? contentManager.documentRange.endLocation
+        let end = contentManager.offset(from: documentStart, to: endLocation)
+        return NSRange(location: start, length: max(0, end - start))
+    }
+
     /// Frames of `range` in view coordinates, one per line segment.
     public func segmentFrames(for range: NSRange) -> [NSRect] {
         guard let layoutManager = textLayoutManager,
@@ -74,7 +108,7 @@ public final class EditorTextView: NSTextView {
     /// Line fills sit behind the text.
     public override func drawBackground(in rect: NSRect) {
         super.drawBackground(in: rect)
-        for decoration in layers.values.joined() {
+        for decoration in decorations(intersecting: rect) {
             guard case .lineFill(let color) = decoration.style else { continue }
             color.setFill()
             for line in lineRects(for: decoration.range) where line.intersects(rect) {
@@ -86,7 +120,7 @@ public final class EditorTextView: NSTextView {
     /// Squiggles sit under the characters, drawn after them.
     public override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        for decoration in layers.values.joined() {
+        for decoration in decorations(intersecting: dirtyRect) {
             guard case .squiggle(let color) = decoration.style else { continue }
             for frame in segmentFrames(for: decoration.range) where frame.insetBy(dx: 0, dy: -3).intersects(dirtyRect) {
                 drawSquiggle(under: frame, color: color)

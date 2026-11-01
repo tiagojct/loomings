@@ -176,4 +176,33 @@ struct EditorControllerTests {
         // One in-flight run plus the last one, not twenty queued runs.
         #expect(catchUp < 1.0, "caught up \(catchUp) s after typing stopped")
     }
+
+    @Test("Drawing looks only at decorations on screen")
+    func decorationsAreLimitedToTheVisibleText() throws {
+        let editor = EditorController()
+        let view = editor.textView
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+        scroll.documentView = view
+        view.frame = NSRect(x: 0, y: 0, width: 600, height: 400)
+        let window = NSWindow(contentRect: scroll.frame, styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = scroll
+        editor.setText((0..<20_000).map { "line \($0)" }.joined(separator: "\n"))
+        let text = view.string as NSString
+        var marks: [EditorDecoration] = []
+        var location = 0
+        for index in 0..<20_000 {
+            let line = text.lineRange(for: NSRange(location: location, length: 0))
+            if index % 4 == 0 { marks.append(EditorDecoration(range: line, style: .lineFill(.red))) }
+            location = NSMaxRange(line)
+        }
+        view.setDecorations(marks, for: "test")
+        let start = Date()
+        let visible = view.decorations(intersecting: NSRect(x: 0, y: 0, width: 600, height: 400))
+        let elapsed = Date().timeIntervalSince(start)
+        #expect(!visible.isEmpty)
+        #expect(visible.count < 60, "\(visible.count) of \(marks.count) treated as visible")
+        #expect(elapsed < 0.1, "took \(elapsed) s")
+        window.close()
+    }
 }
