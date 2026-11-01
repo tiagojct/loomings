@@ -211,5 +211,173 @@
       "unpaired-emphasis"
     ],
     "fixed": "A \\** star and **bold.\n"
+  },
+  {
+    "name": "setext in a list item",
+    "source": "- Text.\n  ---\n",
+    "rules": [
+      "accidental-setext"
+    ],
+    "fixed": "- Text.\n\n  ---\n"
+  },
+  {
+    "name": "setext in a quotation",
+    "source": "> Title.\n> ---\n",
+    "rules": [],
+    "fixed": "> Title.\n> ---\n"
+  },
+  {
+    "name": "fence under a paragraph, unclosed",
+    "source": "Text\n```\ncode\n",
+    "rules": [
+      "unclosed-fence"
+    ],
+    "fixed": "Text\n```\ncode\n```\n"
+  },
+  {
+    "name": "fence in a list item, unclosed",
+    "source": "- ```\n  code\n",
+    "rules": [],
+    "fixed": "- ```\n  code\n"
+  },
+  {
+    "name": "paired then unpaired strong",
+    "source": "**a** and **b\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "**a** and **b\n"
+  },
+  {
+    "name": "double underscore inside a word",
+    "source": "snake__case_name\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "snake__case_name\n"
+  },
+  {
+    "name": "spaced strong marks",
+    "source": "a ** b\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "a ** b\n"
+  },
+  {
+    "name": "leftover marks after emphasis",
+    "source": "***x*\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "***x*\n"
+  },
+  {
+    "name": "numbered from 10 with a bracket",
+    "source": "Steps:\n10) Mix\n",
+    "rules": [
+      "ordered-list-interrupt"
+    ],
+    "fixed": "Steps:\n\n10) Mix\n"
+  },
+  {
+    "name": "one-column table without separator",
+    "source": "| a |\n| b |\n",
+    "rules": [
+      "table-separator"
+    ],
+    "fixed": "| a |\n| --- |\n| b |\n"
+  },
+  {
+    "name": "hash in a setext heading",
+    "source": "#Title\n===\n",
+    "rules": [],
+    "fixed": "#Title\n===\n"
+  },
+  {
+    "name": "indented hyphens continue the paragraph",
+    "source": "A line\n    ---\n",
+    "rules": [],
+    "fixed": "A line\n    ---\n"
+  },
+  {
+    "name": "link with a space beside code",
+    "source": "[a](b c) and `x`\n",
+    "rules": [
+      "link-space"
+    ],
+    "fixed": "[a](<b c>) and `x`\n"
+  },
+  {
+    "name": "image whose alt is only emphasis",
+    "source": "![*emph*](x.png)\n",
+    "rules": [
+      "image-alt"
+    ],
+    "fixed": "![*emph*](x.png)\n"
+  },
+  {
+    "name": "image whose alt is an escaped mark",
+    "source": "![\\*](x.png)\n",
+    "rules": [],
+    "fixed": "![\\*](x.png)\n"
+  },
+  {
+    "name": "marks between HTML tags",
+    "source": "<b>**</b>\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "<b>**</b>\n"
+  },
+  {
+    "name": "unclosed tilde fence with a backtick line",
+    "source": "~~~\n```\n",
+    "rules": [
+      "unclosed-fence"
+    ],
+    "fixed": "~~~\n```\n~~~\n"
+  },
+  {
+    "name": "unmatched backtick",
+    "source": "`code\n",
+    "rules": [],
+    "fixed": "`code\n"
+  },
+  {
+    "name": "closed heading",
+    "source": "## Title ##\n",
+    "rules": [],
+    "fixed": "## Title ##\n"
+  },
+  {
+    "name": "numbered from 2 after a list",
+    "source": "1. a\n\nText\n2. b\n",
+    "rules": [
+      "ordered-list-interrupt"
+    ],
+    "fixed": "1. a\n\nText\n\n2. b\n"
+  },
+  {
+    "name": "indented hash line in a paragraph",
+    "source": "Text\n  #Tag\n",
+    "rules": [
+      "heading-space"
+    ],
+    "fixed": "Text\n  # Tag\n"
+  },
+  {
+    "name": "tab-indented hash is code",
+    "source": "\t#Title\n",
+    "rules": [],
+    "fixed": "\t#Title\n"
+  },
+  {
+    "name": "strong then leftover marks",
+    "source": "**bold**text**\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "**bold**text**\n"
   }
 ]

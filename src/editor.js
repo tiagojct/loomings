@@ -11,6 +11,7 @@ import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
 import { renderMarkdown, renderPreview } from './markdown.js';
 import { blockForLine, previewBlocks } from './pairing.js';
+import { lint } from './teaching/lint.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -375,6 +376,39 @@ const pairedLinesPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations });
 
+// Checker notes: wavy marks under the current notes, built for the visible
+// range only. They rest while the writer types (dropped on any edit) and
+// come back with the next analysis (see runTeaching).
+/** @type {import('@codemirror/state').StateEffectType<import('./teaching/lint.js').LintIssue[]>} */
+const notesEffect = /** @type {any} */ (StateEffect.define());
+
+const notesPlugin = ViewPlugin.fromClass(class {
+  constructor() {
+    /** @type {import('./teaching/lint.js').LintIssue[]} */ this.issues = [];
+    this.decorations = Decoration.none;
+  }
+  update(update) {
+    let changed = false;
+    for (const tr of update.transactions) {
+      for (const e of tr.effects) if (e.is(notesEffect)) { this.issues = e.value; changed = true; }
+    }
+    if (update.docChanged && this.issues.length) { this.issues = []; changed = true; }
+    if (changed || (this.issues.length && update.viewportChanged)) this.decorations = this.build(update.view);
+  }
+  build(view) {
+    if (!this.issues.length) return Decoration.none;
+    const length = view.state.doc.length;
+    const ranges = view.visibleRanges;
+    const builder = /** @type {RangeSetBuilder<Decoration>} */ (new RangeSetBuilder());
+    for (const issue of this.issues) {
+      const to = Math.min(issue.to, length);
+      if (issue.from >= to || !ranges.some((r) => issue.from < r.to && r.from < to)) continue;
+      builder.add(issue.from, to, Decoration.mark({ class: 'cm-note', attributes: { title: issue.message } }));
+    }
+    return builder.finish();
+  }
+}, { decorations: v => v.decorations });
+
 const smartTypographyHandler = EditorView.inputHandler.of((view, from, to, text) => {
   if (!smartTypo) return false;
   if (text === '"') {
@@ -503,6 +537,7 @@ function buildState(doc = '') {
       sentenceFocusPlugin,
       frontmatterPlugin,
       pairedLinesPlugin,
+      notesPlugin,
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
@@ -985,6 +1020,7 @@ function markDirty() {
   session.markEdited();
   scheduleStats();
   schedulePreview();
+  scheduleTeaching();
 }
 
 function markClean() { session.markClean(); }
@@ -1488,6 +1524,81 @@ document.addEventListener('keydown', (e) => {
   if (mod && e.shiftKey && k === 'T') { e.preventDefault(); cycleTheme();      return; }
   if (mod && e.shiftKey && k === 'G') { e.preventDefault(); cycleWordGoal();   return; }
   if (mod && !e.shiftKey && k === 'P') { e.preventDefault(); openPalette();    return; }
+});
+
+// ==========================
+//  Teaching: checker notes
+// ==========================
+// The checker runs a short pause after the last edit, never per keystroke.
+// Its offsets belong to the text it read; a fix applies only while that text
+// is still the document (teachingRevision).
+
+const notesWrap   = el('notes-wrap');
+const notesButton = el('status-notes');
+const notesMenu   = el('notes-menu');
+let teachingRevision = 0;
+/** @type {{revision: number, issues: import('./teaching/lint.js').LintIssue[]}} */
+let teaching = { revision: -1, issues: [] };
+/** @type {ReturnType<typeof setTimeout>|null} */ let teachingTimer = null;
+
+function scheduleTeaching() {
+  teachingRevision++;
+  if (teachingTimer) clearTimeout(teachingTimer);
+  teachingTimer = setTimeout(runTeaching, 400);
+}
+
+function runTeaching() {
+  teachingTimer = null;
+  const issues = lint(getText());
+  teaching = { revision: teachingRevision, issues };
+  view.dispatch({ effects: notesEffect.of(issues) });
+  notesWrap.classList.toggle('hidden', issues.length === 0);
+  notesButton.textContent = issues.length === 1 ? '1 note' : `${issues.length} notes`;
+  notesButton.setAttribute('aria-label', issues.length === 1 ? '1 Markdown note' : `${issues.length} Markdown notes`);
+}
+
+function renderNotesMenu() {
+  const doc = view.state.doc;
+  notesMenu.innerHTML = teaching.issues.map((issue, i) => {
+    const line = doc.lineAt(Math.min(issue.from, doc.length)).number;
+    const fix = issue.fix
+      ? `<button type="button" class="tb-menu-item" role="menuitem" data-fix="${i}" aria-describedby="note-${i}">${escapeHtml(issue.fix.title)}</button>`
+      : '';
+    return `<div class="note-row" role="none">
+        <p class="note-message" id="note-${i}">${escapeHtml(issue.message)}</p>
+        <div class="note-actions" role="none">${fix}<button type="button" class="tb-menu-item" role="menuitem" data-go="${i}" aria-describedby="note-${i}">Go to line ${line}</button></div>
+      </div>`;
+  }).join('');
+}
+
+/** @param {import('./teaching/lint.js').LintIssue} issue */
+function applyFix(issue) {
+  const fix = issue.fix;
+  if (!fix || teaching.revision !== teachingRevision || fix.to > view.state.doc.length) return;
+  view.dispatch({
+    changes: { from: fix.from, to: fix.to, insert: fix.insert },
+    selection: { anchor: fix.from + fix.insert.length },
+    scrollIntoView: true,
+    userEvent: 'input.fix',
+  });
+  view.focus();
+}
+
+/** @param {number} pos */
+function goToPosition(pos) {
+  const at = Math.min(pos, view.state.doc.length);
+  view.dispatch({ selection: { anchor: at }, effects: EditorView.scrollIntoView(at, { y: 'center' }) });
+  view.focus();
+}
+
+attachMenu(notesButton, notesMenu, {
+  onOpen: renderNotesMenu,
+  onPick: (item) => {
+    const issue = teaching.issues[Number(item.dataset.fix ?? item.dataset.go)];
+    if (!issue) return;
+    if (item.dataset.fix !== undefined) applyFix(issue);
+    else goToPosition(issue.from);
+  },
 });
 
 // ==========================

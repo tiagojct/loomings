@@ -141,7 +141,8 @@ body { display: flex; flex-direction: column; }
   text-transform: uppercase;
   color: var(--fg-ghost);
 }
-#web-toolbar .tb-menu-item {
+#web-toolbar .tb-menu-item,
+#statusbar .tb-menu-item {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -155,7 +156,8 @@ body { display: flex; flex-direction: column; }
   text-align: left;
   cursor: pointer;
 }
-#web-toolbar .tb-menu-item:hover { background: var(--bg-deep); color: var(--fg); border-color: transparent; }
+#web-toolbar .tb-menu-item:hover,
+#statusbar .tb-menu-item:hover { background: var(--bg-deep); color: var(--fg); border-color: transparent; }
 #web-toolbar .tb-menu-item.on { color: var(--accent-light); }
 #web-toolbar .tb-menu-item.on .tb-menu-label::after { content: ' ✓'; }
 .tb-menu-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -407,6 +409,48 @@ body.view-split #preview { border-left: 1px solid var(--border); }
 }
 #status-right  { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
 #cursor-pos    { color: var(--fg-ghost); font-variant-numeric: tabular-nums; }
+
+/* Teaching items in the status bar: checker notes, exercise, section. */
+#statusbar .status-item {
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  line-height: 18px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+#statusbar .status-item:hover,
+#statusbar .status-item[aria-expanded="true"] { border-color: var(--accent); color: var(--accent-light); }
+#status-notes { color: var(--accent-light); }
+.status-menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  left: auto;
+  right: 0;
+  min-width: 280px;
+  max-width: min(380px, calc(100vw - 20px));
+}
+.note-row { padding: 8px 10px; }
+.note-row + .note-row { border-top: 1px solid var(--border); }
+.note-message { margin: 0 0 6px; color: var(--fg); font-size: 12px; line-height: 1.45; white-space: normal; }
+.note-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+#statusbar .note-actions .tb-menu-item {
+  width: auto;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+}
+
+/* Checker notes in the editor: a light wavy underline, as a spelling mark. */
+.cm-note {
+  text-decoration: underline wavy var(--accent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-skip-ink: none;
+}
 #stats         { display: none; gap: 12px; flex-shrink: 0; }
 #stats.visible { display: flex; }
 #stats span    { color: var(--fg-ghost); font-variant-numeric: tabular-nums; }
