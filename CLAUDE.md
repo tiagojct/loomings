@@ -198,7 +198,8 @@ Stage 2 decisions worth preserving:
   takes the whole left margin so the numbers sit next to the centred column.
 - Title bar (`ToolbarControls.swift`): a custom `ModeSwitch` (Write/Split/
   Preview) centred with `centeredItemIdentifiers`, then Outline, Theme and
-  Copy Share Link as `ToolbarIconButton`s: one symbol size and weight in
+  Share (a menu: Copy Share Link, Show QR Code, Send with AirDrop) as
+  `ToolbarIconButton`s: one symbol size and weight in
   equal 28 pt cells, so the row lines up whatever each glyph's shape. New,
   Open and Save were removed from the bar; they stay in the File menu. The
   window minimum is 640 pt wide so nothing overflows into the chevron.
