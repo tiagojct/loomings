@@ -973,6 +973,23 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         }
     }
 
+    /// The syntax span at `location`, counting the position just past its
+    /// last character (a click on a marker's right half lands there). A span
+    /// that strictly contains the location wins over one that ends at it.
+    public func span(at location: Int) -> MarkdownSyntaxSpan? {
+        var index = firstSpanIndex(startingBefore: location + 1)
+        var touching: MarkdownSyntaxSpan?
+        while index > 0 {
+            index -= 1
+            let span = spans[index]
+            let end = span.range.location + span.range.length
+            if location >= span.range.location, location < end { return span }
+            if location == end, touching == nil { touching = span }
+            if end < location, span.kind != .frontmatter, span.kind != .codeBlockContent { break }
+        }
+        return touching
+    }
+
     /// Starts reporting the character under the pointer through
     /// `onPointerLocation`. Idempotent.
     public func trackPointer() {

@@ -331,7 +331,29 @@ final class EditorWindowController: NSWindowController,
     private func explain(at location: Int) {
         if let issue = currentReport?.lintIssues.first(where: { NSLocationInRange(location, $0.range) || NSMaxRange($0.range) == location }) {
             showNotes([issue])
+            return
         }
+        guard let (span, explanation) = explanation(at: location) else { return }
+        let lesson = explanation.lesson
+        let content = TeachingPopovers.explanation(explanation, onLesson: lesson.map { file in
+            { (NSApp.delegate as? AppDelegate)?.openLesson(named: file) }
+        })
+        let rect = editor.textView.segmentFrames(for: span.range).first
+            ?? NSRect(x: 0, y: 0, width: 1, height: 1)
+        TeachingPopovers.show(content, relativeTo: rect, of: editor.textView, palette: ThemeManager.shared.resolved())
+    }
+
+    private func explanation(at location: Int) -> (MarkdownSyntaxSpan, MarkerExplanation)? {
+        guard let span = editor.span(at: location) else { return nil }
+        let text = editor.source as NSString
+        guard NSMaxRange(span.range) <= text.length else { return nil }
+        let marker = text.substring(with: span.range)
+        guard let explanation = MarkerGlossary.explain(kind: span.kind, marker: marker) else { return nil }
+        return (span, explanation)
+    }
+
+    func explanationTitleForTesting(at location: Int) -> String? {
+        explanation(at: location)?.1.title
     }
 
     var notesForTesting: [String] { currentReport?.lintIssues.map(\.rule) ?? [] }

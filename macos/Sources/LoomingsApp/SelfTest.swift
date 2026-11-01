@@ -437,6 +437,14 @@ enum SelfTest {
         _ = pump(timeout: 2) { controller.notesForTesting.isEmpty && controller.statusNotesTitleForTesting == nil }
         check(controller.statusNotesTitleForTesting == nil, "a clean document shows no notes")
 
+        // 13a-2. Option-click explains a marker.
+        editor.setText("## A\n\n- item\n")
+        _ = pump(timeout: 2) { editor.span(at: 0) != nil }
+        check(editor.span(at: 0)?.kind == .headingMarker, "the marker under a click is found")
+        check(controller.explanationTitleForTesting(at: 1) == "Level-2 heading", "option-click explains a heading marker")
+        check(controller.explanationTitleForTesting(at: 6) == "Bullet list item", "option-click explains a list marker")
+        check(controller.explanationTitleForTesting(at: 9) == nil, "plain text has no explanation")
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

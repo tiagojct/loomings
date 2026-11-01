@@ -89,6 +89,21 @@ enum TeachingPopovers {
     }
 }
 
+extension TeachingPopovers {
+    /// What a marker means, with a way to the lesson that teaches it.
+    static func explanation(_ explanation: MarkerExplanation, onLesson: (() -> Void)?) -> NSView {
+        var rows: [NSView] = [
+            label(explanation.title, size: 14, weight: .semibold),
+            label(explanation.body),
+        ]
+        if let onLesson {
+            rows.append(button("Open the lesson", action: onLesson))
+        }
+        let content = column(rows)
+        return content
+    }
+}
+
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }

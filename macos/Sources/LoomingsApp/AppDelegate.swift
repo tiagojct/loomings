@@ -299,6 +299,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private struct LearnItem {
         let title: String
         let content: String
+        var file: String? = nil
+    }
+
+    /// Opens a bundled lesson in Split view, by file name ("02-lists-quotes.md").
+    func openLesson(named file: String) {
+        guard let item = learnItems.first(where: { $0.file == file }) else { return }
+        openLearnContent(item)
     }
 
     private func loadLearnItems() {
@@ -315,7 +322,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
                 .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
             for file in sorted {
                 guard let content = try? String(contentsOf: file, encoding: .utf8) else { continue }
-                items.append(LearnItem(title: lessonTitle(content) ?? file.deletingPathExtension().lastPathComponent, content: content))
+                items.append(LearnItem(
+                    title: lessonTitle(content) ?? file.deletingPathExtension().lastPathComponent,
+                    content: content,
+                    file: file.lastPathComponent
+                ))
             }
         }
 
