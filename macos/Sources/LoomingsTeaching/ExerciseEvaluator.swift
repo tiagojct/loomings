@@ -63,7 +63,8 @@ public enum ExerciseEvaluator {
 
     /// The part of `source` that follows the anchor text: everything after it
     /// when the document still starts with it, else after its last line,
-    /// else the whole document.
+    /// else after the point where the document stops matching it. Never the
+    /// whole document: the lesson's own examples must not pass for an answer.
     static func scope(of source: String, after anchor: String?) -> String {
         guard let anchor else { return source }
         let trimmed = anchor.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -71,13 +72,18 @@ public enum ExerciseEvaluator {
         if source.hasPrefix(trimmed) {
             return String(source.dropFirst(trimmed.count))
         }
-        let lastLine = trimmed.split(separator: "\n").last.map(String.init) ?? trimmed
         let text = source as NSString
+        let lastLine = trimmed.split(separator: "\n").last.map(String.init) ?? trimmed
         let found = text.range(of: lastLine, options: .backwards)
         if found.location != NSNotFound {
             return text.substring(from: NSMaxRange(found))
         }
-        return source
+        let a = Array(source.utf16)
+        let b = Array(trimmed.utf16)
+        var common = 0
+        while common < a.count, common < b.count, a[common] == b[common] { common += 1 }
+        while common > 0, common < a.count, (0xDC00...0xDFFF).contains(a[common]) { common -= 1 }
+        return text.substring(from: common)
     }
 }
 

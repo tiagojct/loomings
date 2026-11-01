@@ -76,7 +76,13 @@ struct ExerciseEvaluatorTests {
             let attached = AttachedChecks(checks: checks, after: lesson)
             let untouched = ExerciseEvaluator.evaluate(lesson, attached: attached).results
             #expect(untouched.allSatisfy { !$0.passed }, "\(file): an untouched lesson passes nothing")
+            let trimmed = String(lesson.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
+            let edited = ExerciseEvaluator.evaluate(trimmed, attached: attached).results
+            #expect(edited.allSatisfy { !$0.passed }, "\(file): deleting the lesson's last character passes nothing")
             let answer = try #require(answers[file])
+            let editedAnswered = ExerciseEvaluator.evaluate(trimmed + "\n" + answer, attached: attached).results
+            let editedFailing = editedAnswered.filter { !$0.passed }.map(\.label)
+            #expect(editedFailing.isEmpty, "\(file): an answer after an edited last line still counts: \(editedFailing)")
             let answered = ExerciseEvaluator.evaluate(lesson + answer, attached: attached).results
             let failing = answered.filter { !$0.passed }.map(\.label)
             #expect(failing.isEmpty, "\(file): \(failing)")
