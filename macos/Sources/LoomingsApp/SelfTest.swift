@@ -528,6 +528,23 @@ enum SelfTest {
         check(controller.isStatusBarHiddenForTesting == !EditorPreferences.showStats, "turning it off restores the status bar")
         check(controller.areLineNumbersVisibleForTesting == EditorPreferences.showLineNumbers, "turning it off restores line numbers")
         check(!editor.highlightsCurrentLine, "turning it off clears the line mark")
+
+        // 13a-6. The editor column follows its pane: Split lays it out for
+        // half the window, Write for the whole of it again, and dragging the
+        // divider lays it out for the new width.
+        controller.setViewMode(.write)
+        controller.layoutNowForTesting()
+        let writeColumn = controller.editorColumnForTesting
+        controller.setViewMode(.split)
+        _ = pump(timeout: 2) { controller.editorColumnForTesting != writeColumn }
+        let splitColumn = controller.editorColumnForTesting
+        check(splitColumn != writeColumn, "split view lays the editor column out for its pane")
+        controller.moveDividerForTesting(toFraction: 0.35)
+        _ = pump(timeout: 2) { controller.editorColumnForTesting != splitColumn }
+        check(controller.editorColumnForTesting != splitColumn, "dragging the divider lays the column out again")
+        controller.setViewMode(.write)
+        _ = pump(timeout: 2) { controller.editorColumnForTesting == writeColumn }
+        check(controller.editorColumnForTesting == writeColumn, "leaving split view gives the column the whole window again")
         check(loomingsDefaults() == defaultsBefore, "projector mode writes no preference")
 
         // 13a-6. The handout is paginated, numbered and carries the link.

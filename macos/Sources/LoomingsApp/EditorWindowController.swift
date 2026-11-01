@@ -12,6 +12,7 @@ import UniformTypeIdentifiers
 final class EditorWindowController: NSWindowController,
     NSToolbarDelegate,
     NSWindowDelegate,
+    NSSplitViewDelegate,
     NSMenuItemValidation
 {
     let editor = EditorController()
@@ -184,6 +185,7 @@ final class EditorWindowController: NSWindowController,
 
         splitView.isVertical = true
         splitView.dividerStyle = .thin
+        splitView.delegate = self
         splitView.translatesAutoresizingMaskIntoConstraints = false
         splitView.addArrangedSubview(scrollView)
         splitView.addArrangedSubview(previewScrollView)
@@ -565,12 +567,35 @@ final class EditorWindowController: NSWindowController,
     }
 
     var isStatusBarHiddenForTesting: Bool { statusBar.isHidden }
+    /// The editor column's left inset and width.
+    var editorColumnForTesting: NSSize {
+        NSSize(
+            width: editor.textView.textContainerInset.width,
+            height: editor.textView.textLayoutManager?.textContainer?.containerSize.width ?? 0
+        )
+    }
+    func layoutNowForTesting() {
+        containerView.layoutSubtreeIfNeeded()
+        applyColumnWidth()
+    }
+    func moveDividerForTesting(toFraction fraction: CGFloat) {
+        splitView.setPosition((splitView.bounds.width * fraction).rounded(), ofDividerAt: 0)
+    }
     var areLineNumbersVisibleForTesting: Bool { scrollView.rulersVisible }
     var overlayTextForTesting: String? { markupOverlay.text }
     func showOverlayForSnapshot(_ text: String) { markupOverlay.show(text) }
     var previewBodyFontSizeForTesting: CGFloat? {
         guard let storage = previewTextView.textStorage, storage.length > 0 else { return nil }
         return (storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize
+    }
+
+    // MARK: - Split divider
+
+    /// Dragging the divider resizes both panes; lay both columns out again.
+    func splitViewDidResizeSubviews(_ notification: Notification) {
+        guard window != nil, viewMode == .split else { return }
+        applyColumnWidth()
+        layoutPreview()
     }
 
     // MARK: - Paired lines
@@ -630,13 +655,17 @@ final class EditorWindowController: NSWindowController,
 
         if showPreview {
             refreshPreview()
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                if self.viewMode == .split {
-                    self.splitView.setPosition(self.splitView.bounds.width / 2, ofDividerAt: 0)
-                }
-                self.splitView.layoutSubtreeIfNeeded()
-                self.applyColumnWidth()
+        }
+        // Every mode lays the editor column out for its pane once the split
+        // view has settled; leaving Split must give it the whole width back.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if self.viewMode == .split {
+                self.splitView.setPosition(self.splitView.bounds.width / 2, ofDividerAt: 0)
+            }
+            self.splitView.layoutSubtreeIfNeeded()
+            self.applyColumnWidth()
+            if self.viewMode != .write {
                 self.layoutPreview()
             }
         }
