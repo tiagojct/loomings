@@ -163,6 +163,26 @@ At 1 MB the report (62 ms) finishes before the parse (91 ms), so it adds no
 waiting time; at 10 MB likewise (663 ms against 930 ms). Measured with
 `LoomingsBench --teaching` and the full bench, release build.
 
+## Teaching features (2026-11-01)
+
+| Feature | Status | Evidence |
+|---|---|---|
+| Paired lines in Split view | Yes | Pairing unit tests; self-test samples real pixels for the editor mark |
+| Learner's checker (8 rules, 6 fixes) | Yes | 28 shared cases in `lint-cases.json`; bundled material raises no notes; fix and undo in self-test |
+| Explain a marker (option-click) | Yes | Glossary tests; self-test explanations |
+| Exercises that check themselves | Yes | 17 shared cases in `check-cases.json`; every lesson fails untouched and passes with an answer |
+| Section word limits | Yes | Section tests; status bar and outline in self-test |
+| Projector mode | Yes | Self-test: sizes, hidden chrome, caption, preview size, no preference written |
+| Handout PDF and QR code | Yes | Self-test: pages, numbering, A4/Letter, the printed code decodes to the share link |
+| Writing history and replay | Yes | Delta round trip with emoji; survives rename and save; throttle and flush in self-test |
+| Compare With | Yes | Diff tests incl. 20,000 lines; aligned rows in self-test |
+| Send with AirDrop | Partial | File contents and availability in self-test; a real AirDrop transfer was not automated |
+
+Not automated: an AirDrop transfer to another Mac, the option-click popovers
+and menus as clicked by a person, projector mode on a real projector or a
+second display, and scanning the printed QR code with a phone (the self-test
+decodes it from the rendered page instead).
+
 ## Accessibility and OS matrix
 
 - VoiceOver: app launched with VoiceOver on and quit cleanly; editor/preview labels and

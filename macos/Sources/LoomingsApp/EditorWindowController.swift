@@ -434,6 +434,7 @@ final class EditorWindowController: NSWindowController,
     func windowWillClose(_ notification: Notification) {
         history.flush()
         replayController?.close()
+        removeSentFiles()
     }
 
     @objc func toggleWritingHistory(_ sender: Any?) {
@@ -1204,8 +1205,53 @@ final class EditorWindowController: NSWindowController,
         let qr = NSMenuItem(title: "Show QR Code\u{2026}", action: #selector(showQRCode(_:)), keyEquivalent: "")
         qr.target = self
         menu.addItem(qr)
+        let airDrop = NSMenuItem(title: "Send with AirDrop\u{2026}", action: #selector(sendWithAirDrop(_:)), keyEquivalent: "")
+        airDrop.target = self
+        airDrop.isEnabled = airDropAvailable
+        if !airDropAvailable { airDrop.toolTip = "AirDrop is not available on this Mac right now." }
+        menu.addItem(airDrop)
+        menu.autoenablesItems = false
         return menu
     }
+
+    // MARK: - AirDrop
+
+    private var sentFiles: [URL] = []
+
+    private var airDropAvailable: Bool {
+        NSSharingService(named: .sendViaAirDrop)?.canPerform(withItems: [URL(fileURLWithPath: "/tmp/x.md")]) ?? false
+    }
+
+    /// The current text, saved or not, as a Markdown file named after the
+    /// document. Removed when the window closes.
+    private func fileToSend() -> URL? {
+        let folder = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Loomings Send", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let name = exportTitle.replacingOccurrences(of: "/", with: "-")
+        let url = folder.appendingPathComponent(name.isEmpty ? "Untitled" : name).appendingPathExtension("md")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try Data(editor.source.utf8).write(to: url, options: .atomic)
+            sentFiles.append(folder)
+            return url
+        } catch {
+            return nil
+        }
+    }
+
+    @objc func sendWithAirDrop(_ sender: Any?) {
+        guard let service = NSSharingService(named: .sendViaAirDrop), let url = fileToSend() else { return }
+        service.perform(withItems: [url])
+    }
+
+    private func removeSentFiles() {
+        for folder in sentFiles { try? FileManager.default.removeItem(at: folder) }
+        sentFiles = []
+    }
+
+    func airDropFileForTesting() -> URL? { fileToSend() }
+    var airDropAvailableForTesting: Bool { airDropAvailable }
 
     @objc private func showShareMenu(_ sender: NSButton) {
         makeShareMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)

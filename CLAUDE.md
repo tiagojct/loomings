@@ -98,6 +98,15 @@ release numbers.
   saving, the save-generation gate, formatting commands, smart typography,
   focus dimming, the line ruler and typewriter scrolling without a human at
   the keyboard.
+- `Sources/LoomingsTeaching` — the teaching features' rules, pure and
+  tested: the learner's checker (`MarkdownLint`), frontmatter directives
+  (`check:` and `limit:`), exercise checks (`ExerciseEvaluator`, with
+  `AttachedChecks` for bundled lessons that look only after the lesson's
+  text), section counts, the marker glossary, the line diff and the writing
+  history (`HistoryLog`, `HistoryStore`). `TeachingReport` bundles what one
+  snapshot yields. `Tests/LoomingsTeachingTests/Fixtures/*.json` are the
+  contract the web port must pass too. Lesson checks live in
+  `lessons/checks.json` (exported with the lessons).
 - `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
   app-owned handler, snapshot, visible-region styling, footprint) over
   10 KB–10 MB corpora.
@@ -194,6 +203,20 @@ Stage 2 decisions worth preserving:
   Open and Save were removed from the bar; they stay in the File menu. The
   window minimum is 640 pt wide so nothing overflows into the chevron.
   `ThemedScroller` paints legacy scroller tracks with the document ground.
+- The teaching report runs as the editor's companion analysis
+  (`EditorController.companionAnalysis`): on its own queue beside the parse,
+  joined before delivery, never on the edit path. Its notes rest while the
+  writer types and return with the next parse.
+- Transient editor marks (paired lines, checker squiggles, projector's line)
+  are drawn by `EditorTextView` decorations from TextKit 2 text segments.
+  Do not use rendering attributes for state that changes after layout:
+  TextKit 2 does not re-run the validator for laid-out fragments.
+- Projector mode is a set of effective values read by the window; it never
+  writes a preference. Writing history is opt-in per document; an
+  unrecorded file is never touched (its id is an extended attribute written
+  only when recording starts). Snapshot flags: `-LoomingsSnapshotPairLocation`,
+  `-LoomingsSnapshotProjector`, `-LoomingsSnapshotCompareWith`; snapshot mode
+  also writes `handout.pdf` and its first and last pages.
 - Preview code blocks and tables are framed `NSTextBlock`s. Each code line is
   its own paragraph, so space around a frame comes from an empty spacer
   paragraph after it (`blockSpacer`), not from paragraph spacing (it lands

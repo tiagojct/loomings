@@ -550,7 +550,15 @@ enum SelfTest {
         }
 
         // 13a-7. The share tool offers its actions as a menu.
-        check(controller.shareMenuTitlesForTesting == ["Copy Share Link", "Show QR Code\u{2026}"], "the share tool lists its actions")
+        check(controller.shareMenuTitlesForTesting == ["Copy Share Link", "Show QR Code\u{2026}", "Send with AirDrop\u{2026}"], "the share tool lists its actions")
+        editor.setText("# Sent\n\nUnsaved words.\n")
+        if let sendable = controller.airDropFileForTesting() {
+            check(sendable.pathExtension == "md", "AirDrop sends a Markdown file")
+            check((try? String(contentsOf: sendable, encoding: .utf8)) == "# Sent\n\nUnsaved words.\n", "AirDrop sends the current text, saved or not")
+        } else {
+            check(false, "AirDrop prepares a file")
+        }
+        check(controller.airDropAvailableForTesting == (NSSharingService(named: .sendViaAirDrop)?.canPerform(withItems: [URL(fileURLWithPath: "/tmp/x.md")]) ?? false), "the AirDrop item follows the system's answer")
         editor.setText("# Short\n")
         check(controller.qrCaptionForTesting == "Scan to open this document in Loomings.", "a short document gets a QR code")
         editor.setText((0..<200).map { _ in "A line that does not compress to nothing: \(UUID().uuidString)\n" }.joined())
