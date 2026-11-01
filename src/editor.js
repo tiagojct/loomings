@@ -1618,6 +1618,9 @@ async function printPreview() {
   preview.innerHTML = renderPreview(text) + qr;
   pairedBlockEl = null;
   invalidatePreviewBlocks();
+  // Some mobile browsers never fire afterprint; a new print replaces the
+  // last one's page style rather than piling up.
+  document.getElementById('handout-page')?.remove();
   const page = document.createElement('style');
   page.id = 'handout-page';
   page.textContent = handoutCss({
