@@ -229,7 +229,10 @@ final class EditorWindowController: NSWindowController,
         previewTextView.onScroll = { [weak self] in
             self?.syncEditorToPreview()
         }
-        editor.companionAnalysis = { source in TeachingReport.make(source: source) }
+        refreshCompanion()
+        statusBar.onExerciseClick = { [weak self] in
+            self?.showChecklist()
+        }
         editor.onOptionClick = { [weak self] location in
             self?.explain(at: location)
         }
@@ -286,7 +289,29 @@ final class EditorWindowController: NSWindowController,
         editor.lastAppliedRevision == editor.revision ? report : nil
     }
 
+    /// Rebuilds the teaching companion with the document's attached checks.
+    func refreshCompanion() {
+        let attached = loomingsDocument?.attachedChecks
+        editor.companionAnalysis = { source in TeachingReport.make(source: source, attached: attached) }
+        editor.reanalyze()
+    }
+
+    private func showChecklist() {
+        guard let report = currentReport, !(report.checkResults.isEmpty && report.directiveNotes.isEmpty) else { return }
+        let content = TeachingPopovers.checklist(report.checkResults, notes: report.directiveNotes)
+        TeachingPopovers.show(content, relativeTo: statusBar.bounds, of: statusBar, palette: ThemeManager.shared.resolved())
+    }
+
+    var exerciseTitleForTesting: String? { statusBar.exerciseTitle }
+
     private func applyTeachingReport() {
+        if let report = currentReport {
+            statusBar.setExercise(
+                passed: report.checkResults.filter(\.passed).count,
+                total: report.checkResults.count,
+                notes: report.directiveNotes.count
+            )
+        }
         let issues = currentReport?.lintIssues ?? []
         let tint = ThemeManager.shared.resolved()?.colors.accentColor ?? .systemOrange
         editor.textView.setDecorations(

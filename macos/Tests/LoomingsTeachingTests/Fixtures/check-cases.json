@@ -1,0 +1,202 @@
+[
+  {
+    "name": "heading level and count",
+    "source": "# A\n\n## B\n\n## C\n",
+    "checks": [
+      "heading 2 2",
+      "heading 1",
+      "heading 3"
+    ],
+    "passed": [
+      true,
+      true,
+      false
+    ]
+  },
+  {
+    "name": "bulleted list length",
+    "source": "- a\n- b\n- c\n",
+    "checks": [
+      "bullet-list 3",
+      "bullet-list 4"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "numbered list length",
+    "source": "1. a\n2. b\n",
+    "checks": [
+      "ordered-list 2",
+      "ordered-list 3",
+      "bullet-list 1"
+    ],
+    "passed": [
+      true,
+      false,
+      false
+    ]
+  },
+  {
+    "name": "nested list",
+    "source": "- a\n  - b\n",
+    "checks": [
+      "nested-list"
+    ],
+    "passed": [
+      true
+    ]
+  },
+  {
+    "name": "flat list is not nested",
+    "source": "- a\n- b\n",
+    "checks": [
+      "nested-list"
+    ],
+    "passed": [
+      false
+    ]
+  },
+  {
+    "name": "quotation",
+    "source": "> said\n",
+    "checks": [
+      "quote"
+    ],
+    "passed": [
+      true
+    ]
+  },
+  {
+    "name": "code blocks and languages",
+    "source": "```python\nx = 1\n```\n",
+    "checks": [
+      "code-block",
+      "code-block python",
+      "code-block r",
+      "code-language"
+    ],
+    "passed": [
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  {
+    "name": "indented code has no language",
+    "source": "    x = 1\n",
+    "checks": [
+      "code-block",
+      "code-language"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "inline code count",
+    "source": "Press `Ctrl+S` in `a.txt`.\n",
+    "checks": [
+      "inline-code 2",
+      "inline-code 3"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "links",
+    "source": "[a](https://a.example) and [b](https://b.example)\n",
+    "checks": [
+      "link 2",
+      "reference-link"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "reference link needs its definition",
+    "source": "[school][s]\n\n[s]: https://s.example\n",
+    "checks": [
+      "reference-link",
+      "link"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "reference link without definition",
+    "source": "[school][s]\n",
+    "checks": [
+      "reference-link"
+    ],
+    "passed": [
+      false
+    ]
+  },
+  {
+    "name": "image alternative text",
+    "source": "![A red boat](boat.png) ![](x.png)\n",
+    "checks": [
+      "image-alt"
+    ],
+    "passed": [
+      true
+    ]
+  },
+  {
+    "name": "image without alt fails",
+    "source": "![](x.png)\n",
+    "checks": [
+      "image-alt"
+    ],
+    "passed": [
+      false
+    ]
+  },
+  {
+    "name": "table rows",
+    "source": "| a | b |\n| --- | --- |\n| 1 | 2 |\n| 3 | 4 |\n",
+    "checks": [
+      "table 2",
+      "table 3"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "emphasis and strong",
+    "source": "*one* and **two**\n",
+    "checks": [
+      "emphasis",
+      "strong"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "words",
+    "source": "one two three four five\n",
+    "checks": [
+      "words 5",
+      "words 6"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  }
+]

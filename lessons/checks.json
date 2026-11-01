@@ -1,0 +1,8 @@
+{
+  "01-basics.md": ["heading 2", "words 20", "emphasis", "strong"],
+  "02-lists-quotes.md": ["bullet-list 5", "ordered-list 3", "quote"],
+  "03-links-images.md": ["link", "reference-link", "image-alt"],
+  "04-code.md": ["inline-code 2", "code-block", "code-language"],
+  "05-tables-rules.md": ["table 3"],
+  "06-frontmatter.md": ["heading 2 2", "bullet-list 1", "quote", "link", "table 1"]
+}

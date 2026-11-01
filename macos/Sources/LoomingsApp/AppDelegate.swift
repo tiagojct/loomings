@@ -2,6 +2,7 @@ import AppKit
 import LoomingsDocuments
 import LoomingsEditor
 import LoomingsShare
+import LoomingsTeaching
 import LoomingsTheme
 import UniformTypeIdentifiers
 
@@ -384,6 +385,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let document = LoomingsDocument()
         document.pendingText = item.content
         document.displayName = item.title
+        if let file = item.file {
+            let checks = LessonChecks.checks(for: file)
+            if !checks.isEmpty {
+                document.attachedChecks = AttachedChecks(checks: checks, after: item.content)
+            }
+        }
         NSDocumentController.shared.addDocument(document)
         document.makeWindowControllers()
         document.showWindows()

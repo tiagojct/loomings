@@ -61,6 +61,8 @@ public enum ExerciseCheck: Equatable, Sendable {
     case nestedList
     case quote
     case codeBlock(language: String?)
+    /// A fenced code block with any language name after the fence.
+    case codeLanguage
     case inlineCode(min: Int)
     case link(min: Int)
     case referenceLink
@@ -118,6 +120,7 @@ public enum ExerciseCheck: Equatable, Sendable {
                 return .failure(note(directive, "\"code-block\" takes one language name at most."))
             }
             return .success(.codeBlock(language: arguments.first))
+        case "code-language": return noArguments(.codeLanguage)
         case "nested-list": return noArguments(.nestedList)
         case "quote": return noArguments(.quote)
         case "reference-link": return noArguments(.referenceLink)

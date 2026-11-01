@@ -4,6 +4,7 @@ import LoomingsDocuments
 import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsShare
+import LoomingsTeaching
 
 /// Exercises the real window, text view and parse pipeline without a human
 /// at the keyboard. Run with `Loomings --self-test`; exit status 0 is proof.
@@ -444,6 +445,34 @@ enum SelfTest {
         check(controller.explanationTitleForTesting(at: 1) == "Level-2 heading", "option-click explains a heading marker")
         check(controller.explanationTitleForTesting(at: 6) == "Bullet list item", "option-click explains a list marker")
         check(controller.explanationTitleForTesting(at: 9) == nil, "plain text has no explanation")
+
+        // 13a-3. A bundled lesson's exercises check themselves.
+        let lessonFile = "02-lists-quotes.md"
+        if let lessonURL = Bundle.main.resourceURL?.appendingPathComponent("lessons/\(lessonFile)"),
+           let lessonText = try? String(contentsOf: lessonURL, encoding: .utf8) {
+            let lessonChecks = LessonChecks.checks(for: lessonFile)
+            check(lessonChecks.count == 3, "the lesson's checks load from the bundle")
+            let lessonDocument = LoomingsDocument()
+            lessonDocument.pendingText = lessonText
+            lessonDocument.attachedChecks = AttachedChecks(checks: lessonChecks, after: lessonText)
+            NSDocumentController.shared.addDocument(lessonDocument)
+            lessonDocument.makeWindowControllers()
+            if let lessonController = lessonDocument.windowControllers.first as? EditorWindowController {
+                lessonController.showWindow(nil)
+                _ = pump(timeout: 2) { lessonController.exerciseTitleForTesting != nil }
+                check(lessonController.exerciseTitleForTesting == "Exercise 0 of 3", "an untouched lesson has no exercise done")
+                lessonController.editor.setText(lessonText + "\n- Milk\n- Bread\n- Eggs\n- Rice\n- Tea\n")
+                _ = pump(timeout: 2) { lessonController.exerciseTitleForTesting == "Exercise 1 of 3" }
+                check(lessonController.exerciseTitleForTesting == "Exercise 1 of 3", "a five-item list passes the first check")
+                lessonController.editor.setText(lessonText + "\n- Milk\n- Bread\n- Eggs\n- Rice\n- Tea\n\n1. Boil.\n2. Pour.\n3. Wait.\n\n> A line.\n")
+                _ = pump(timeout: 2) { lessonController.exerciseTitleForTesting == "Exercise done" }
+                check(lessonController.exerciseTitleForTesting == "Exercise done", "all checks passing says so")
+            }
+            lessonDocument.updateChangeCount(.changeCleared)
+            lessonDocument.close()
+        } else {
+            check(false, "lesson 02 is bundled")
+        }
 
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")

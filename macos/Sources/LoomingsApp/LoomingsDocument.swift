@@ -1,4 +1,5 @@
 import AppKit
+import LoomingsTeaching
 import LoomingsDocuments
 import LoomingsEditor
 
@@ -44,6 +45,18 @@ final class LoomingsDocument: NSDocument {
     }
 
     // MARK: - Windows
+
+    /// Exercise checks that came with the document (a bundled lesson). Not
+    /// saved with the file.
+    var attachedChecks: AttachedChecks? {
+        didSet {
+            MainActor.assumeIsolated {
+                for controller in windowControllers {
+                    (controller as? EditorWindowController)?.refreshCompanion()
+                }
+            }
+        }
+    }
 
     override func makeWindowControllers() {
         if lastKnownStamp == nil, let fileURL {

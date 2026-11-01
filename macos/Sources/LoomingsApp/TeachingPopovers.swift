@@ -104,6 +104,35 @@ extension TeachingPopovers {
     }
 }
 
+extension TeachingPopovers {
+    /// The exercise checklist: each check with a tick or an open circle,
+    /// then any directive that could not be understood.
+    static func checklist(_ results: [CheckResult], notes: [DirectiveNote]) -> NSView {
+        var rows: [NSView] = []
+        for result in results {
+            let symbol = NSImage(
+                systemSymbolName: result.passed ? "checkmark.circle.fill" : "circle",
+                accessibilityDescription: result.passed ? "Done" : "Not yet"
+            )
+            let mark = NSImageView(image: symbol ?? NSImage())
+            mark.contentTintColor = result.passed ? .controlAccentColor : .tertiaryLabelColor
+            mark.setContentHuggingPriority(.required, for: .horizontal)
+            let text = NSStackView(views: [label(result.label, weight: .medium), label(result.detail, size: 11, secondary: true)])
+            text.orientation = .vertical
+            text.alignment = .leading
+            text.spacing = 2
+            let row = NSStackView(views: [mark, text])
+            row.alignment = .top
+            row.spacing = 10
+            rows.append(row)
+        }
+        for note in notes {
+            rows.append(label("Line \(note.line + 1): \(note.message)", size: 12, secondary: true))
+        }
+        return column(rows)
+    }
+}
+
 final class FlippedView: NSView {
     override var isFlipped: Bool { true }
 }

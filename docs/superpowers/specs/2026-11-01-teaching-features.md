@@ -44,9 +44,12 @@ app first (`macos/`), then ported to the web app (features 1, 2, 3, 4, 6, 8,
    unchanged. Directive syntax, one per line inside the frontmatter:
    `check: <kind> [arguments]`. Kinds: `heading [level] [min]`,
    `bullet-list [items]`, `ordered-list [items]`, `nested-list`, `quote`,
-   `code-block [language]`, `inline-code [min]`, `link [min]`,
+   `code-block [language]`, `code-language` (a fenced block with any
+   language name), `inline-code [min]`, `link [min]`,
    `reference-link`, `image-alt`, `table [rows]`, `emphasis`, `strong`,
-   `words [min]`.
+   `words [min]`. Checks attached to a bundled lesson look only at what
+   follows the lesson's original text, so the lesson's own examples never
+   count as the answer; they are not saved with the file.
 5. Hand-in and compare. File > Compare With... opens a window with the front
    document beside another open document, line differences marked, word
    differences marked inside changed lines.

@@ -25,6 +25,28 @@ final class StatusBarView: NSView {
 
     var notesTitle: String? { notesButton.isHidden ? nil : notesButton.title }
 
+    private let exerciseButton = StatusBarView.makeItemButton()
+    var onExerciseClick: (() -> Void)?
+    var exerciseTitle: String? { exerciseButton.isHidden ? nil : exerciseButton.title }
+    private var exerciseDone = false
+
+    /// "Exercise 2 of 4", or "Exercise done"; hidden when there are no checks.
+    func setExercise(passed: Int, total: Int, notes: Int) {
+        exerciseButton.isHidden = total == 0 && notes == 0
+        exerciseDone = total > 0 && passed == total
+        if total == 0 {
+            exerciseButton.title = notes == 1 ? "1 check not understood" : "\(notes) checks not understood"
+        } else {
+            exerciseButton.title = exerciseDone ? "Exercise done" : "Exercise \(passed) of \(total)"
+        }
+        exerciseButton.setAccessibilityLabel(exerciseButton.title)
+        styleItems()
+    }
+
+    @objc private func exerciseClicked(_ sender: Any?) {
+        onExerciseClick?()
+    }
+
     func setNotes(count: Int) {
         notesButton.isHidden = count == 0
         notesButton.title = count == 1 ? "1 note" : "\(count) notes"
@@ -34,7 +56,10 @@ final class StatusBarView: NSView {
 
     private func styleItems() {
         let color = palette?.colors.linkColor ?? .linkColor
-        for button in [notesButton] {
+        for button in [notesButton, exerciseButton] {
+            let color = button === exerciseButton && exerciseDone
+                ? (palette?.colors.accentColor ?? .controlAccentColor)
+                : color
             button.contentTintColor = color
             button.attributedTitle = NSAttributedString(string: button.title, attributes: [
                 .font: button.font ?? NSFont.systemFont(ofSize: 11),
@@ -70,7 +95,9 @@ final class StatusBarView: NSView {
 
         notesButton.target = self
         notesButton.action = #selector(notesClicked(_:))
-        let left = NSStackView(views: [positionLabel, notesButton])
+        exerciseButton.target = self
+        exerciseButton.action = #selector(exerciseClicked(_:))
+        let left = NSStackView(views: [positionLabel, notesButton, exerciseButton])
         left.orientation = .horizontal
         left.spacing = 12
 
