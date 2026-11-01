@@ -12,6 +12,7 @@ import { tags as t } from '@lezer/highlight';
 import { renderMarkdown, renderPreview } from './markdown.js';
 import { blockForLine, previewBlocks } from './pairing.js';
 import { lint } from './teaching/lint.js';
+import { explain, markerAt } from './teaching/glossary.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -564,9 +565,24 @@ function buildState(doc = '') {
         { key: 'Mod-i',       run: wrapSelection('*', '*') },
         { key: 'Mod-`',       run: wrapSelection('`', '`') },
         { key: 'Mod-k',       run: insertLink },
+        { key: 'Mod-Alt-/',   run: (v) => {
+          if (!explainAt(v.state.selection.main.head, true)) flashStatus('No Markdown marker at the cursor');
+          return true;
+        } },
       ]),
+      // Option-click (Alt-click) explains the marker under the pointer.
+      EditorView.domEventHandlers({
+        mousedown: (e, v) => {
+          if (!e.altKey || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey) return false;
+          const pos = v.posAtCoords({ x: e.clientX, y: e.clientY });
+          if (pos === null || !explainAt(pos, false)) return false;
+          explainOpenedByClick = true;
+          e.preventDefault();
+          return true;
+        },
+      }),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) markDirty();
+        if (update.docChanged) { markDirty(); closeExplanation(false); }
         if (update.selectionSet || update.docChanged) {
           updateCursorPos();
           // Selection stats (word count of selection) track the selection —
@@ -1496,6 +1512,7 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
+    if (!explainEl.classList.contains('hidden')) { closeExplanation(true); return; }
     if (hasOpenMenus()) { closeAllMenus(); return; }
     if (!cheatsheetEl.classList.contains('hidden')) { toggleCheatsheet(false); return; }
     if (!aboutEl.classList.contains('hidden'))   { closeAbout();      return; }
@@ -1600,6 +1617,95 @@ attachMenu(notesButton, notesMenu, {
     else goToPosition(issue.from);
   },
 });
+
+// ==========================
+//  Teaching: explain this marker
+// ==========================
+// Alt-click or Mod-Alt-/ shows what the marker under the pointer or cursor
+// does, and the lesson that teaches it. A checker note there comes first.
+
+const explainEl     = el('explain');
+const explainTitle  = el('explain-title');
+const explainBody   = el('explain-body');
+const explainFix    = /** @type {HTMLButtonElement} */ (el('explain-fix'));
+const explainLesson = /** @type {HTMLButtonElement} */ (el('explain-lesson'));
+/** @type {{issue?: import('./teaching/lint.js').LintIssue, lesson?: string|null}} */
+let explaining = {};
+// The Alt-click that opens the card reaches the document listener below too.
+let explainOpenedByClick = false;
+
+/**
+ * @param {number} pos
+ * @param {boolean} fromKeyboard move focus to the card's first button
+ * @returns {boolean} whether there was anything to explain
+ */
+function explainAt(pos, fromKeyboard) {
+  const issue = teaching.revision === teachingRevision
+    ? teaching.issues.find((i) => i.from <= pos && pos <= i.to)
+    : undefined;
+  let title, body, anchor;
+  /** @type {string|null} */ let lesson = null;
+  if (issue) {
+    title = 'Markdown note';
+    body = issue.message;
+    anchor = issue.from;
+  } else {
+    const marker = markerAt(view.state, pos);
+    const explanation = marker && explain(marker.kind, marker.marker);
+    if (!marker || !explanation) return false;
+    ({ title, body, lesson } = explanation);
+    anchor = marker.from;
+  }
+  explaining = { issue, lesson };
+  explainTitle.textContent = title;
+  explainBody.textContent = body;
+  explainFix.textContent = issue?.fix?.title || '';
+  explainFix.classList.toggle('hidden', !issue?.fix);
+  explainLesson.classList.toggle('hidden', !lesson || !lessonBySlug(lessonSlug(lesson)));
+  explainEl.classList.remove('hidden');
+  placeExplanation(anchor);
+  if (fromKeyboard) /** @type {HTMLElement|null} */ (explainEl.querySelector('button:not(.hidden)'))?.focus();
+  return true;
+}
+
+/** "01-basics.md" -> "basics" */
+function lessonSlug(file) { return file.replace(/\.md$/, '').replace(/^\d+-/, ''); }
+
+function placeExplanation(pos) {
+  const coords = view.coordsAtPos(pos) || view.coordsAtPos(view.state.selection.main.head);
+  const width = explainEl.offsetWidth;
+  const height = explainEl.offsetHeight;
+  const left = Math.max(10, Math.min((coords?.left ?? 40), window.innerWidth - width - 10));
+  let top = (coords?.bottom ?? 80) + 6;
+  if (top + height > window.innerHeight - 10) top = Math.max(10, (coords?.top ?? 80) - height - 6);
+  explainEl.style.left = left + 'px';
+  explainEl.style.top = top + 'px';
+}
+
+/** @param {boolean} refocus */
+function closeExplanation(refocus) {
+  if (explainEl.classList.contains('hidden')) return;
+  explainEl.classList.add('hidden');
+  explaining = {};
+  if (refocus) view.focus();
+}
+
+explainFix.addEventListener('click', () => {
+  const issue = explaining.issue;
+  closeExplanation(true);
+  if (issue) applyFix(issue);
+});
+explainLesson.addEventListener('click', () => {
+  const lesson = explaining.lesson;
+  closeExplanation(false);
+  if (lesson) openLesson(lessonSlug(lesson));
+});
+document.addEventListener('mousedown', (e) => {
+  if (explainOpenedByClick) { explainOpenedByClick = false; return; }
+  if (!explainEl.contains(/** @type {Node} */ (e.target))) closeExplanation(false);
+});
+view.scrollDOM.addEventListener('scroll', () => closeExplanation(false), { passive: true });
+window.addEventListener('resize', () => closeExplanation(false), { passive: true });
 
 // ==========================
 //  Loading documents

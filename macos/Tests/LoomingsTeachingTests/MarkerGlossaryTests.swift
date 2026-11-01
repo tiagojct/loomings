@@ -48,6 +48,26 @@ struct MarkerGlossaryTests {
         #expect(MarkerGlossary.explain(kind: .codeBlockContent, marker: "x") == nil)
     }
 
+    struct Case: Decodable {
+        let kind: String
+        let marker: String
+        let title: String
+        let body: String
+        let lesson: String?
+    }
+
+    @Test("The shared glossary cases match, word for word")
+    func casesFromFixture() throws {
+        let url = try #require(Bundle.module.url(forResource: "glossary-cases", withExtension: "json", subdirectory: "Fixtures"))
+        let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
+        #expect(cases.count >= 20)
+        for item in cases {
+            let kind = try #require(MarkdownSyntaxKind(rawValue: item.kind), "\(item.kind)")
+            let explanation = MarkerGlossary.explain(kind: kind, marker: item.marker)
+            #expect(explanation == MarkerExplanation(title: item.title, body: item.body, lesson: item.lesson), "\(item.kind) \(item.marker)")
+        }
+    }
+
     @Test("Lessons named by the glossary exist")
     func lessonsExist() throws {
         let lessons = URL(fileURLWithPath: #filePath)

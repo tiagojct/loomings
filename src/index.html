@@ -143,6 +143,7 @@
         <tr><td><kbd>⌘B</kbd> <kbd>⌘I</kbd> <kbd>⌘`</kbd> <kbd>⌘K</kbd></td><td>Bold, italic, code, link</td></tr>
         <tr><td><kbd>⌘\</kbd> <kbd>⌘⇧P</kbd></td><td>Split, preview</td></tr>
         <tr><td><kbd>⌘P</kbd> <kbd>⌘F</kbd></td><td>Jump to heading, find</td></tr>
+        <tr><td><kbd>⌥</kbd>-click, <kbd>⌘⌥/</kbd></td><td>Explain a marker</td></tr>
         <tr><td><kbd>⌘⇧D</kbd></td><td>Focus mode (dim other sentences)</td></tr>
         <tr><td><kbd>⌘⇧Y</kbd></td><td>Typewriter scrolling (keep cursor centred)</td></tr>
         <tr><td><kbd>⌘⇧F</kbd></td><td>Full screen</td></tr>
@@ -150,6 +151,15 @@
     </table>
     <p class="cheatsheet-foot">⌘ is Ctrl on Windows and Linux.</p>
   </aside>
+
+  <div id="explain" class="hidden" role="dialog" aria-labelledby="explain-title" aria-live="polite">
+    <h2 id="explain-title"></h2>
+    <p id="explain-body"></p>
+    <div id="explain-actions">
+      <button type="button" id="explain-fix" class="hidden"></button>
+      <button type="button" id="explain-lesson" class="hidden">Open the lesson</button>
+    </div>
+  </div>
 
   <div id="palette" class="hidden" role="dialog" aria-modal="true" aria-label="Jump to heading">
     <div id="palette-inner">

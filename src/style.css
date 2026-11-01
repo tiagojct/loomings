@@ -444,6 +444,37 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   font-size: 12px;
 }
 
+/* Explain this marker: a small card under the marker. */
+#explain {
+  position: fixed;
+  z-index: 90;
+  width: min(320px, calc(100vw - 20px));
+  padding: 12px 14px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+}
+#explain-title { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--heading); }
+#explain-body { margin: 0; color: var(--fg); }
+#explain-actions { display: flex; gap: 6px; margin-top: 10px; }
+#explain-actions:not(:has(button:not(.hidden))) { display: none; }
+#explain-actions button {
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#explain-actions button:hover { border-color: var(--accent); color: var(--accent-light); }
+
 /* Checker notes in the editor: a light wavy underline, as a spelling mark. */
 .cm-note {
   text-decoration: underline wavy var(--accent);
@@ -742,7 +773,7 @@ body.view-split #preview { border-left: 1px solid var(--border); }
    ======================================== */
 @media print {
   html, body { height: auto; overflow: visible; background: #fff; color: #000; }
-  #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu { display: none !important; }
+  #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu, #explain { display: none !important; }
   #editor-container { display: block; overflow: visible; background: #fff; }
   #content-area { display: block; max-width: none; overflow: visible; }
   #preview {
