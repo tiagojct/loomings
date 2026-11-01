@@ -22,6 +22,42 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   sidecar on each autosave, and ignores a sidecar that names a file outside the
   shelf.
 
+## [2.4.0] — 2026-11-01
+
+Loomings becomes a teaching editor in the browser too: the features the
+native app gained, with the same rules, words and fixtures.
+
+### Added
+
+- **Paired lines.** In Split view the pointer over a source line lights the
+  preview block made from it, and the pointer over a block lights its lines.
+- **The learner's checker.** Wavy marks under common Markdown mistakes, a
+  status-bar list of notes with the reason, Go to line, and a one-click Fix
+  where it is safe (one undoable change). Eight rules, shared with the
+  native app through `lint-cases.json`.
+- **Explain a marker.** Alt-click a marker, or press Mod-Alt-/ at the cursor,
+  for what it does and the lesson that teaches it.
+- **Exercises that check themselves.** `check:` lines in the frontmatter,
+  and checks for every bundled lesson (`lessons/checks.json`) that look only
+  at what follows the lesson's own text. The status bar shows
+  "Exercise 2 of 4" or "Exercise done", with the checklist.
+- **Section word limits.** `limit: Introduction 200` in the frontmatter; the
+  status bar shows the caret's section against its limit and the heading
+  palette shows every section's words.
+- **Projector mode.** Ctrl-Cmd-P (Ctrl-Alt-P elsewhere) or Focus > Projector
+  mode: large type, chrome out of the way, the current line marked, and a
+  caption naming the markup just typed. It changes no stored preference.
+- **Handout print and QR code.** Print adds the share link as a QR code, the
+  family's light colours, A4 or Letter by region, and page numbers where the
+  browser supports them (not Safari). Export > Show QR code shows it on
+  screen. The encoder is the app's own; the native test suite decodes what
+  it draws.
+
+### Fixed
+
+- The heading palette no longer lists the frontmatter as a heading.
+- The masthead no longer prints on every page.
+
 ## [2.3.0] — 2026-10-22
 
 The ten families become usable from the site, and the editor's selection
@@ -736,6 +772,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.4.0]: https://github.com/tiagojct/loomings/releases/tag/v2.4.0
 [2.3.0]: https://github.com/tiagojct/loomings/releases/tag/v2.3.0
 [2.2.0]: https://github.com/tiagojct/loomings/releases/tag/v2.2.0
 [2.1.0]: https://github.com/tiagojct/loomings/releases/tag/v2.1.0

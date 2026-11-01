@@ -32,7 +32,26 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
 - `src/share.js` — document ⇄ URL fragment. Pure, tested.
-- `src/lessons.js` — index of `lessons/NN-slug.md` via `import.meta.glob`.
+- `src/lessons.js` — index of `lessons/NN-slug.md` via `import.meta.glob`;
+  each entry carries its `file`, the key in `lessons/checks.json`.
+- `src/teaching/` — the teaching features' rules, pure and tested, matching
+  the native `LoomingsTeaching`: `lint.js` (learner's checker), `glossary.js`
+  (explain a marker; `markerAt` reads the editor's lezer tree),
+  `directives.js` (`check:`/`limit:`), `exercises.js` (checks, with lesson
+  checks scoped after the lesson's text), `sections.js` (word limits).
+  `parse.js` is their one markdown-it parse: html on, linkify and
+  typographer off, `text_join` and `fragments_join` off, every inline rule
+  wrapped to stamp source offsets, the frontmatter blanked (the native rule:
+  `---` on line 1, `---` by line 50). The JSON in
+  `macos/Tests/LoomingsTeachingTests/Fixtures/` is the contract: both test
+  suites read it, so a rule change goes into a fixture first.
+- `src/pairing.js` (paired lines; the live preview uses `renderPreview`,
+  which adds `data-line-end` to top-level blocks — export keeps
+  `renderMarkdown`, whose output the native HTML fixtures are made from),
+  `src/projector.js` (projector mode: effective values only, never a stored
+  preference), `src/qr.js` (QR encoder; `macos/scripts/render-qr-fixtures.mjs`
+  writes matrices the Swift tests decode with CoreImage), `src/handout.js`
+  (print page size, footer and light palette, written at print time).
 - `src/sw-template.js` + the plugin in `vite.config.js` — the service worker,
   emitted as `sw.js` with the build's asset list.
 
