@@ -443,20 +443,41 @@ final class EditorWindowController: NSWindowController,
     private func applyLineNumbersVisibility() {
         scrollView.rulersVisible = EditorPreferences.showLineNumbers
         lineRuler?.needsDisplay = true
+        applyColumnWidth()
     }
 
     private func applyColumnWidth() {
         guard let window, window.contentView != nil else { return }
         containerView.layoutSubtreeIfNeeded()
 
-        let available = scrollView.contentView.frame.width > 0
-            ? scrollView.contentView.frame.width
-            : scrollView.contentSize.width
-        guard available > 0 else { return }
+        let rulers = scrollView.rulersVisible && lineRuler != nil
+        // Measured from the scroll view's frame: contentSize lags behind a
+        // ruler-thickness change until the next tile.
+        let scroller = scrollView.scrollerStyle == .legacy && scrollView.hasVerticalScroller
+            ? NSScroller.scrollerWidth(for: .regular, scrollerStyle: .legacy)
+            : 0
+        let full = scrollView.frame.width - scroller
+        guard full > 0 else { return }
 
         let maximum = EditorPreferences.columnWidth.maxWidth
-        let inset = max(24, (available - maximum) / 2)
-        let containerWidth = max(120, min(maximum, available - inset * 2))
+        let inset: CGFloat
+        let containerWidth: CGFloat
+        if rulers {
+            // The ruler takes the whole left margin, so the numbers sit a
+            // gutter away from the text and the column stays centred.
+            let gutter: CGFloat = 14
+            let thickness = max(44, ((full - maximum) / 2 - gutter).rounded(.down))
+            if lineRuler.ruleThickness != thickness {
+                lineRuler.ruleThickness = thickness
+                scrollView.tile()
+            }
+            let available = full - thickness
+            inset = thickness > 44 ? gutter : max(gutter, (available - maximum) / 2)
+            containerWidth = max(120, min(maximum, available - inset * 2))
+        } else {
+            inset = max(24, (full - maximum) / 2)
+            containerWidth = max(120, min(maximum, full - inset * 2))
+        }
 
         editor.textView.textContainerInset = NSSize(width: inset, height: 24)
         if let container = editor.textView.textLayoutManager?.textContainer {

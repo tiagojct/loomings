@@ -185,7 +185,14 @@ Stage 2 decisions worth preserving:
   -Loomings.Native.themeMode dark`. Use it for design review.
 - Window chrome, status bar, split divider and scrollers take the palette:
   the title bar is transparent over the document ground. The preview keeps a
-  reading measure of 0.9 x the column width.
+  reading measure of 0.9 x the column width. With line numbers on, the ruler
+  takes the whole left margin so the numbers sit next to the centred column.
+- Preview code blocks and tables are framed `NSTextBlock`s. Each code line is
+  its own paragraph, so space around a frame comes from an empty spacer
+  paragraph after it (`blockSpacer`), not from paragraph spacing (it lands
+  inside the frame) or block margins (they take the fill). Quotes use the
+  bundled Source Serif 4 italic; strong text inside them falls back to bold
+  roman because no bold italic is bundled.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).

@@ -410,7 +410,7 @@ public final class PreviewRenderer {
                 content.append(inline(
                     paragraph.children,
                     base: [
-                        .font: theme.bodyFont,
+                        .font: italicBodyFont(),
                         .foregroundColor: theme.secondaryTextColor,
                     ],
                     allowLinkify: true,
@@ -458,11 +458,6 @@ public final class PreviewRenderer {
             value: style,
             range: NSRange(location: 0, length: content.length)
         )
-        content.addAttribute(
-            .obliqueness,
-            value: 0.12,
-            range: NSRange(location: 0, length: content.length)
-        )
         return content
     }
 
@@ -472,18 +467,18 @@ public final class PreviewRenderer {
         map: SourceMap,
         source: String
     ) -> NSAttributedString {
+        // Every source line is its own paragraph here, so the space around
+        // the block lives on the block (margin, padding), not on each line.
         let style = NSMutableParagraphStyle()
-        style.firstLineHeadIndent = 12
-        style.headIndent = 12
-        style.paragraphSpacing = 12
-        style.paragraphSpacingBefore = 8
-        style.lineHeightMultiple = 1.35
+        style.firstLineHeadIndent = 4
+        style.headIndent = 4
+        style.lineHeightMultiple = 1.2
 
         let block = NSTextBlock()
         block.setContentWidth(100, type: .percentageValueType)
         block.setWidth(1, type: .absoluteValueType, for: .border)
         block.setBorderColor(theme.borderColor)
-        block.setWidth(10, type: .absoluteValueType, for: .padding)
+        block.setWidth(12, type: .absoluteValueType, for: .padding)
         block.backgroundColor = theme.codeBackground
         style.textBlocks = [block]
 
@@ -496,6 +491,7 @@ public final class PreviewRenderer {
                 .paragraphStyle: style,
             ]
         )
+        content.append(blockSpacer())
         return content
     }
 
@@ -611,6 +607,7 @@ public final class PreviewRenderer {
         }
 
         html += "</table>\n"
+        result.append(blockSpacer())
         return (result, producesHTML ? html : "")
     }
 
@@ -795,6 +792,19 @@ public final class PreviewRenderer {
         return converted(current, adding: trait)
     }
 
+    /// An empty paragraph after a framed block (code, table). Space set on
+    /// the block's own lines would fall inside its frame, and NSTextBlock
+    /// margins take the block's fill.
+    private func blockSpacer() -> NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.minimumLineHeight = 10
+        style.maximumLineHeight = 10
+        return NSAttributedString(string: "\n", attributes: [
+            .font: theme.bodyFont.withSize(4),
+            .paragraphStyle: style,
+        ])
+    }
+
     /// Font conversion goes through Core Text matching and costs more than
     /// the rest of an inline run, so each result is kept for the theme.
     private struct FontKey: Hashable {
@@ -808,9 +818,25 @@ public final class PreviewRenderer {
     private func converted(_ font: NSFont, adding trait: NSFontTraitMask) -> NSFont {
         let key = FontKey(name: font.fontName, size: font.pointSize, trait: trait.rawValue)
         if let known = fonts[key] { return known }
-        let result = NSFontManager.shared.convert(font, toHaveTrait: trait)
+        let manager = NSFontManager.shared
+        var result = manager.convert(font, toHaveTrait: trait)
+        // No bold italic is bundled: strong text inside an italic quote
+        // becomes bold roman rather than losing its weight.
+        if trait.contains(.boldFontMask), !manager.traits(of: result).contains(.boldFontMask) {
+            result = manager.convert(manager.convert(font, toNotHaveTrait: .italicFontMask), toHaveTrait: .boldFontMask)
+        }
         fonts[key] = result
         return result
+    }
+
+    /// The bundled Source Serif 4 italic, not a slanted roman.
+    private func italicBodyFont() -> NSFont {
+        let size = theme.bodyFont.pointSize
+        if theme.bodyFont.fontName.hasPrefix("SourceSerif4"),
+           let italic = NSFont(name: "SourceSerif4-It", size: size) {
+            return italic
+        }
+        return converted(theme.bodyFont, adding: .italicFontMask)
     }
 
     private func headingFont(_ level: Int) -> NSFont {

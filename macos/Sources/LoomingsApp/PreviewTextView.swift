@@ -61,8 +61,11 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
         }
     }
 
+    private var placeholderTheme = PreviewTheme.standard
+
     func applyTheme(_ theme: PreviewTheme) {
         renderer.theme = theme
+        placeholderTheme = theme
         backgroundColor = theme.background
         textColor = theme.textColor
         insertionPointColor = theme.linkColor
@@ -403,15 +406,63 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
                 effectiveRange: nil
             ) as? String ?? ""
             let label = alt.isEmpty ? (blocked ? "Remote image" : "Missing image") : alt
-            attachment.image = NSImage(
-                systemSymbolName: blocked ? "network.slash" : "photo.badge.exclamationmark",
-                accessibilityDescription: blocked ? "\(label) (remote images are not loaded)" : label
+            let note = blocked ? "not loaded: remote images stay off" : "not found"
+            let image = placeholderImage(
+                symbol: blocked ? "network.slash" : "photo.badge.exclamationmark",
+                label: label,
+                note: note
             )
+            image.accessibilityDescription = "\(label), \(note)"
+            attachment.image = image
+            attachment.bounds = NSRect(origin: NSPoint(x: 0, y: -6), size: image.size)
         }
         layoutManager?.invalidateDisplay(forCharacterRange: full)
         resizeToFit()
         restoreScroll(to: top)
         needsDisplay = true
+    }
+
+    /// A framed slip that names the image by its alt text, so a reader knows
+    /// what is missing instead of seeing a lone glyph.
+    private func placeholderImage(symbol: String, label: String, note: String) -> NSImage {
+        let theme = placeholderTheme
+        let size = theme.bodyFont.pointSize * 0.82
+        let labelFont = NSFontManager.shared.convert(
+            theme.bodyFont.withSize(size), toHaveTrait: .italicFontMask
+        )
+        let text = NSMutableAttributedString(string: label, attributes: [
+            .font: labelFont, .foregroundColor: theme.textColor,
+        ])
+        text.append(NSAttributedString(string: "  \(note)", attributes: [
+            .font: theme.bodyFont.withSize(size * 0.92), .foregroundColor: theme.secondaryTextColor,
+        ]))
+        let configuration = NSImage.SymbolConfiguration(pointSize: size, weight: .regular)
+            .applying(.init(paletteColors: [theme.secondaryTextColor]))
+        let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration)
+        let glyphSize = glyph?.size ?? .zero
+        let textSize = text.size()
+        let padding = NSSize(width: 10, height: 6)
+        let maxWidth = max(160, (textContainer?.size.width ?? 600) - 4)
+        let width = min(maxWidth, padding.width * 3 + glyphSize.width + textSize.width)
+        let height = max(glyphSize.height, textSize.height) + padding.height * 2
+        let border = theme.borderColor
+        let fill = theme.codeBackground
+        return NSImage(size: NSSize(width: width.rounded(.up), height: height.rounded(.up)), flipped: false) { rect in
+            let frame = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 3, yRadius: 3)
+            fill.setFill()
+            frame.fill()
+            border.setStroke()
+            frame.lineWidth = 1
+            frame.stroke()
+            glyph?.draw(at: NSPoint(x: padding.width, y: (rect.height - glyphSize.height) / 2),
+                        from: .zero, operation: .sourceOver, fraction: 1)
+            let textX = padding.width * 2 + glyphSize.width
+            text.draw(with: NSRect(x: textX, y: (rect.height - textSize.height) / 2,
+                                   width: rect.width - textX - padding.width, height: textSize.height),
+                      options: [.usesLineFragmentOrigin, .truncatesLastVisibleLine])
+            return true
+        }
     }
 
     // MARK: - Links
