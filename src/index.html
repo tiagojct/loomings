@@ -75,6 +75,7 @@
         <div class="tb-menu-section">Reference</div>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="cheatsheet"><span class="tb-menu-label">Cheatsheet</span><span class="tb-menu-hint">⌘?</span></button>
         <button type="button" class="tb-menu-item" role="menuitem" data-action="example"><span class="tb-menu-label">Moby-Dick, chapter 1</span></button>
+        <button type="button" class="tb-menu-item" role="menuitem" data-action="explain"><span class="tb-menu-label">Explain the marker at the cursor</span><span class="tb-menu-hint">⌘⌥/</span></button>
       </div>
     </div>
     <div class="tb-menu-wrap">
@@ -160,9 +161,10 @@
     <p class="cheatsheet-foot">⌘ is Ctrl on Windows and Linux.</p>
   </aside>
 
-  <div id="projector-caption" class="hidden" role="status" aria-live="polite"></div>
+  <div id="projector-caption" class="hidden" aria-hidden="true"></div>
+  <div id="live" class="sr-only" aria-live="polite"></div>
 
-  <div id="explain" class="hidden" role="dialog" aria-labelledby="explain-title" aria-live="polite">
+  <div id="explain" class="hidden" role="dialog" aria-labelledby="explain-title" aria-describedby="explain-body" tabindex="-1">
     <h2 id="explain-title"></h2>
     <p id="explain-body"></p>
     <div id="explain-actions">

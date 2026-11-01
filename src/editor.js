@@ -679,6 +679,13 @@ function applyWidth() {
 // ==========================
 
 const captionEl = el('projector-caption');
+const liveEl = el('live');
+
+/** Says `text` to screen readers, once, without moving focus. */
+function announce(text) {
+  liveEl.textContent = '';
+  requestAnimationFrame(() => { liveEl.textContent = text; });
+}
 /** @type {ReturnType<typeof setTimeout>|null} */ let captionTimer = null;
 
 /** @param {boolean} on */
@@ -712,6 +719,7 @@ function showCaption(text) {
   if (captionTimer) clearTimeout(captionTimer);
   captionEl.textContent = text;
   captionEl.classList.remove('hidden', 'fading');
+  announce(text);
   captionTimer = setTimeout(() => {
     captionEl.classList.add('fading');
     captionTimer = setTimeout(hideCaption, 400);
@@ -1947,7 +1955,14 @@ function explainAt(pos, fromKeyboard) {
   explainLesson.classList.toggle('hidden', !lesson || !lessonBySlug(lessonSlug(lesson)));
   explainEl.classList.remove('hidden');
   placeExplanation(anchor);
-  if (fromKeyboard) /** @type {HTMLElement|null} */ (explainEl.querySelector('button:not(.hidden)'))?.focus();
+  if (fromKeyboard) {
+    // The first button, or the card itself when it has none, so the card
+    // is read and Escape brings the writer back to the text.
+    const target = /** @type {HTMLElement|null} */ (explainEl.querySelector('button:not(.hidden)')) || explainEl;
+    target.focus();
+  } else {
+    announce(`${title}. ${body}`);
+  }
   return true;
 }
 
@@ -2228,6 +2243,9 @@ attachMenu(el('tb-learn'), learnMenuEl, {
   onPick: (item) => {
     if (item.dataset.lesson) openLesson(item.dataset.lesson);
     if (item.dataset.action === 'cheatsheet') toggleCheatsheet();
+    if (item.dataset.action === 'explain' && !explainAt(view.state.selection.main.head, true)) {
+      flashStatus('No Markdown marker at the cursor');
+    }
     if (item.dataset.action === 'example') openExample().then((p) => { if (p) loadFile({ ...p, title: 'Moby-Dick' }); });
   },
 });
