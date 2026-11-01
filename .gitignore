@@ -10,3 +10,8 @@ social/instagram/images/
 .impeccable/review/
 .impeccable/mocks/
 .impeccable/build/
+
+# native macOS build products (Package.resolved stays tracked)
+macos/.build/
+macos/.swiftpm/
+macos/dist/
