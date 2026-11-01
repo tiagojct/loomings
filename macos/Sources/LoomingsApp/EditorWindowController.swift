@@ -3,6 +3,7 @@ import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsPreview
 import LoomingsShare
+import LoomingsTeaching
 import LoomingsTheme
 import UniformTypeIdentifiers
 
@@ -203,10 +204,14 @@ final class EditorWindowController: NSWindowController,
 
     private func wireEditorCallbacks() {
         editor.onEdit = { [weak self] in
-            self?.schedulePreviewUpdate()
+            guard let self else { return }
+            // Notes rest while the writer types and come back with the parse.
+            self.editor.textView.setDecorations([], for: "notes")
+            self.schedulePreviewUpdate()
         }
         editor.onAnalysis = { [weak self] _ in
             guard let self else { return }
+            self.applyTeachingReport()
             self.scheduleStatusUpdate()
             self.lineRuler.needsDisplay = true
             if self.viewMode != .write {
@@ -223,6 +228,13 @@ final class EditorWindowController: NSWindowController,
         }
         previewTextView.onScroll = { [weak self] in
             self?.syncEditorToPreview()
+        }
+        editor.companionAnalysis = { source in TeachingReport.make(source: source) }
+        editor.onOptionClick = { [weak self] location in
+            self?.explain(at: location)
+        }
+        statusBar.onNotesClick = { [weak self] in
+            self?.showNotes()
         }
         editor.trackPointer()
         editor.onPointerLocation = { [weak self] location in
@@ -263,6 +275,70 @@ final class EditorWindowController: NSWindowController,
         guard mode != viewMode else { return }
         viewMode = mode
         applyViewMode()
+    }
+
+    // MARK: - Teaching: checker notes
+
+    private var report: TeachingReport? { editor.companionResult as? TeachingReport }
+
+    /// The report matches the text only when the last parse is current.
+    private var currentReport: TeachingReport? {
+        editor.lastAppliedRevision == editor.revision ? report : nil
+    }
+
+    private func applyTeachingReport() {
+        let issues = currentReport?.lintIssues ?? []
+        let tint = ThemeManager.shared.resolved()?.colors.accentColor ?? .systemOrange
+        editor.textView.setDecorations(
+            issues.map { EditorDecoration(range: $0.range, style: .squiggle(tint)) },
+            for: "notes"
+        )
+        statusBar.setNotes(count: issues.count)
+    }
+
+    private func lineNumber(of issue: LintIssue) -> Int {
+        editor.lineNumber(at: issue.range.location)
+    }
+
+    private func showNotes(_ only: [LintIssue]? = nil) {
+        guard let issues = only ?? currentReport?.lintIssues, !issues.isEmpty else { return }
+        let content = TeachingPopovers.notes(
+            issues,
+            line: { [weak self] in self?.lineNumber(of: $0) ?? 1 },
+            onFix: { [weak self] in self?.apply(fixOf: $0) },
+            onGo: { [weak self] in self?.reveal($0.range) }
+        )
+        if let only, let first = only.first,
+           let rect = editor.textView.segmentFrames(for: first.range).first {
+            TeachingPopovers.show(content, relativeTo: rect, of: editor.textView, palette: ThemeManager.shared.resolved())
+        } else {
+            TeachingPopovers.show(content, relativeTo: statusBar.bounds, of: statusBar, palette: ThemeManager.shared.resolved())
+        }
+    }
+
+    private func apply(fixOf issue: LintIssue) {
+        guard let fix = issue.fix, currentReport?.lintIssues.contains(issue) == true else { return }
+        editor.replace(range: fix.range, with: fix.replacement)
+    }
+
+    private func reveal(_ range: NSRange) {
+        window?.makeFirstResponder(editor.textView)
+        editor.textView.setSelectedRange(NSRange(location: range.location, length: 0))
+        editor.textView.scrollRangeToVisible(range)
+    }
+
+    /// Option-click: a note under the pointer first, else what the marker means.
+    private func explain(at location: Int) {
+        if let issue = currentReport?.lintIssues.first(where: { NSLocationInRange(location, $0.range) || NSMaxRange($0.range) == location }) {
+            showNotes([issue])
+        }
+    }
+
+    var notesForTesting: [String] { currentReport?.lintIssues.map(\.rule) ?? [] }
+    var statusNotesTitleForTesting: String? { statusBar.notesTitle }
+    func applyNoteFixForTesting(_ index: Int) {
+        guard let issues = currentReport?.lintIssues, issues.indices.contains(index) else { return }
+        apply(fixOf: issues[index])
     }
 
     // MARK: - Paired lines

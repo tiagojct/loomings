@@ -59,7 +59,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "LoomingsBench",
-            dependencies: ["LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview"]
+            dependencies: ["LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTeaching"]
         ),
         .testTarget(
             name: "LoomingsMarkdownTests",

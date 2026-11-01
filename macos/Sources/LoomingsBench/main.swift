@@ -4,6 +4,7 @@ import Foundation
 import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsPreview
+import LoomingsTeaching
 import LoomingsTheme
 
 // Stage 1 measurements. Run in a release build:
@@ -205,7 +206,27 @@ private final class EditorHost {
 
 @MainActor
 private func makeEditor(palette: ResolvedPalette?) -> EditorHost {
-    EditorHost(palette: palette)
+    let host = EditorHost(palette: palette)
+    // As in the app: the teaching report runs with every parse.
+    host.controller.companionAnalysis = { source in TeachingReport.make(source: source) }
+    return host
+}
+
+/// The teaching report alone (checker and, later, checks and limits).
+@MainActor
+private func printTeachingTable(sizes: [Int]) {
+    print("teaching report, ms (best of 3)")
+    for size in sizes {
+        let corpus = makeCorpus(bytes: size, shape: "mixed")
+        var best = Double.infinity
+        var notes = 0
+        for _ in 0..<3 {
+            let start = DispatchTime.now().uptimeNanoseconds
+            notes = TeachingReport.make(source: corpus).lintIssues.count
+            best = min(best, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+        }
+        print("\(size)\t\(format(best))\tnotes \(notes)")
+    }
 }
 
 private func benchPalette() -> ResolvedPalette? {
@@ -469,7 +490,9 @@ private func architecture() -> String {
 
 MainActor.assumeIsolated {
     NSApplication.shared.setActivationPolicy(.accessory)
-    if CommandLine.arguments.contains("--preview") {
+    if CommandLine.arguments.contains("--teaching") {
+        printTeachingTable(sizes: [10 * 1024, 100 * 1024, 1024 * 1024, 10 * 1024 * 1024])
+    } else if CommandLine.arguments.contains("--preview") {
         // Just the preview table, without the 10 MB editor runs.
         printPreviewTable(palette: benchPalette(), sizes: [10 * 1024, 100 * 1024, 1024 * 1024])
     } else {

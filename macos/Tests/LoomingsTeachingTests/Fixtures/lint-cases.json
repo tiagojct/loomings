@@ -1,0 +1,201 @@
+[
+  {
+    "name": "heading space",
+    "source": "#Title\n\nText.\n",
+    "rules": [
+      "heading-space"
+    ],
+    "fixed": "# Title\n\nText.\n"
+  },
+  {
+    "name": "heading space, level 3",
+    "source": "###Notes\n",
+    "rules": [
+      "heading-space"
+    ],
+    "fixed": "### Notes\n"
+  },
+  {
+    "name": "heading space under a paragraph line",
+    "source": "Intro line\n##Part\n",
+    "rules": [
+      "heading-space"
+    ],
+    "fixed": "Intro line\n## Part\n"
+  },
+  {
+    "name": "hashtag inside a sentence",
+    "source": "I like #markdown a lot.\n",
+    "rules": [],
+    "fixed": "I like #markdown a lot.\n"
+  },
+  {
+    "name": "a proper heading",
+    "source": "# Title\n",
+    "rules": [],
+    "fixed": "# Title\n"
+  },
+  {
+    "name": "seven hashes are never a heading",
+    "source": "#######x\n",
+    "rules": [],
+    "fixed": "#######x\n"
+  },
+  {
+    "name": "hyphens under a sentence",
+    "source": "This is a sentence.\n---\n",
+    "rules": [
+      "accidental-setext"
+    ],
+    "fixed": "This is a sentence.\n\n---\n"
+  },
+  {
+    "name": "hyphens under two lines",
+    "source": "First line\nsecond line\n---\n",
+    "rules": [
+      "accidental-setext"
+    ],
+    "fixed": "First line\nsecond line\n\n---\n"
+  },
+  {
+    "name": "a deliberate setext heading",
+    "source": "Title\n---\n",
+    "rules": [],
+    "fixed": "Title\n---\n"
+  },
+  {
+    "name": "equals underline is deliberate",
+    "source": "A sentence.\n===\n",
+    "rules": [],
+    "fixed": "A sentence.\n===\n"
+  },
+  {
+    "name": "unclosed fence",
+    "source": "Text\n\n```python\nprint(1)\n",
+    "rules": [
+      "unclosed-fence"
+    ],
+    "fixed": "Text\n\n```python\nprint(1)\n```\n"
+  },
+  {
+    "name": "unclosed fence without a final newline",
+    "source": "```\ncode",
+    "rules": [
+      "unclosed-fence"
+    ],
+    "fixed": "```\ncode\n```\n"
+  },
+  {
+    "name": "closed fence",
+    "source": "```\ncode\n```\n",
+    "rules": [],
+    "fixed": "```\ncode\n```\n"
+  },
+  {
+    "name": "unclosed tilde fence",
+    "source": "~~~~\nx\n",
+    "rules": [
+      "unclosed-fence"
+    ],
+    "fixed": "~~~~\nx\n~~~~\n"
+  },
+  {
+    "name": "numbered list from 2 under a paragraph",
+    "source": "Steps:\n2. Mix\n3. Bake\n",
+    "rules": [
+      "ordered-list-interrupt"
+    ],
+    "fixed": "Steps:\n\n2. Mix\n3. Bake\n"
+  },
+  {
+    "name": "numbered list from 1 interrupts",
+    "source": "Steps:\n1. Mix\n2. Bake\n",
+    "rules": [],
+    "fixed": "Steps:\n1. Mix\n2. Bake\n"
+  },
+  {
+    "name": "link with a space",
+    "source": "See [the docs](my file.md).\n",
+    "rules": [
+      "link-space"
+    ],
+    "fixed": "See [the docs](<my file.md>).\n"
+  },
+  {
+    "name": "link already in angle brackets",
+    "source": "See [the docs](<my file.md>).\n",
+    "rules": [],
+    "fixed": "See [the docs](<my file.md>).\n"
+  },
+  {
+    "name": "link with a title",
+    "source": "[a](b.md \"Title\")\n",
+    "rules": [],
+    "fixed": "[a](b.md \"Title\")\n"
+  },
+  {
+    "name": "image without alt text",
+    "source": "![](cat.png)\n",
+    "rules": [
+      "image-alt"
+    ],
+    "fixed": "![](cat.png)\n"
+  },
+  {
+    "name": "image with alt text",
+    "source": "![A cat](cat.png)\n",
+    "rules": [],
+    "fixed": "![A cat](cat.png)\n"
+  },
+  {
+    "name": "unpaired strong marks",
+    "source": "This is **bold.\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "This is **bold.\n"
+  },
+  {
+    "name": "paired strong marks",
+    "source": "This is **bold**.\n",
+    "rules": [],
+    "fixed": "This is **bold**.\n"
+  },
+  {
+    "name": "table without a separator",
+    "source": "| a | b |\n| 1 | 2 |\n",
+    "rules": [
+      "table-separator"
+    ],
+    "fixed": "| a | b |\n| --- | --- |\n| 1 | 2 |\n"
+  },
+  {
+    "name": "a real table",
+    "source": "| a | b |\n| --- | --- |\n| 1 | 2 |\n",
+    "rules": [],
+    "fixed": "| a | b |\n| --- | --- |\n| 1 | 2 |\n"
+  },
+  {
+    "name": "code is exempt",
+    "source": "```\n#Title\n```\n\n`#Title` here\n",
+    "rules": [],
+    "fixed": "```\n#Title\n```\n\n`#Title` here\n"
+  },
+  {
+    "name": "two notes in order",
+    "source": "#Title\n\n![](x.png)\n",
+    "rules": [
+      "heading-space",
+      "image-alt"
+    ],
+    "fixed": "# Title\n\n![](x.png)\n"
+  },
+  {
+    "name": "frontmatter is never checked",
+    "source": "---\ntitle: A sentence.\nauthor: me\n---\n\n#Title\n",
+    "rules": [
+      "heading-space"
+    ],
+    "fixed": "---\ntitle: A sentence.\nauthor: me\n---\n\n# Title\n"
+  }
+]

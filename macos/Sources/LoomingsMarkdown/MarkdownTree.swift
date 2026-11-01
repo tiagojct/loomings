@@ -229,6 +229,12 @@ public struct MarkdownNode {
         cmark_node_get_literal(pointer).map { String(cString: $0) } ?? ""
     }
 
+    /// Whether the literal contains `needle`, without copying it.
+    public func literalContains(_ needle: String) -> Bool {
+        guard let literal = cmark_node_get_literal(pointer) else { return false }
+        return needle.withCString { strstr(literal, $0) != nil }
+    }
+
     public var headingLevel: Int { Int(cmark_node_get_heading_level(pointer)) }
 
     public var isOrderedList: Bool { cmark_node_get_list_type(pointer) == CMARK_ORDERED_LIST }

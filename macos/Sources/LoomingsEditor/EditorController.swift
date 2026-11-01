@@ -68,6 +68,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     public private(set) var lastEditHandlerNanoseconds: UInt64 = 0
     public private(set) var lastSnapshotNanoseconds: UInt64 = 0
     public private(set) var lastParseNanoseconds: UInt64 = 0
+    /// Uptime (ns) at which the last applied background parse finished.
+    public private(set) var lastParseFinishedAt: UInt64 = 0
     public private(set) var lastApplyNanoseconds: UInt64 = 0
     public private(set) var parseRequests: UInt64 = 0
     public private(set) var appliedParses: UInt64 = 0
@@ -100,6 +102,35 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         (palette?.colors.selectionColor ?? .selectedTextBackgroundColor).withAlphaComponent(0.45)
     }
 
+    /// Extra work run with every parse, on the same snapshot and off the main
+    /// thread (the synchronous reparse runs it inline). Its result is stored
+    /// in `companionResult` just before `onAnalysis`, and only for the current
+    /// revision. The app uses it for the teaching checks.
+    public var companionAnalysis: (@Sendable (String) -> any Sendable)?
+    public private(set) var companionResult: (any Sendable)?
+
+    /// Called with the character index of an option-click in the text.
+    public var onOptionClick: ((Int) -> Void)? {
+        didSet { textView.onOptionClick = onOptionClick }
+    }
+
+    /// Replaces `range` as an undoable edit, like typing would. Returns false
+    /// when the range is outside the text or the edit is refused.
+    @discardableResult
+    public func replace(range: NSRange, with replacement: String) -> Bool {
+        let length = (textView.string as NSString).length
+        guard range.location >= 0, NSMaxRange(range) <= length,
+              textView.shouldChangeText(in: range, replacementString: replacement) else { return false }
+        textView.textStorage?.replaceCharacters(in: range, with: replacement)
+        textView.didChangeText()
+        return true
+    }
+
+    /// Parses again now, for example after the companion's inputs changed.
+    public func reanalyze() {
+        scheduleParse(after: 0)
+    }
+
     /// The UTF-16 location under the pointer, or nil when it leaves the text.
     public var onPointerLocation: ((Int?) -> Void)?
     private var pointerTracker: PointerTracker?
@@ -119,6 +150,10 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
     private let parseQueue = DispatchQueue(
         label: "eu.tiagojacinto.loomings.parse",
+        qos: .userInitiated
+    )
+    private let companionQueue = DispatchQueue(
+        label: "eu.tiagojacinto.loomings.companion",
         qos: .userInitiated
     )
 
@@ -163,6 +198,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         editGeneration = 0
         lastAppliedRevision = 0
         analysis = .empty
+        companionResult = nil
         onAnalysis?(analysis)
         scheduleParse(after: 0)
     }
@@ -179,6 +215,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         let start = DispatchTime.now().uptimeNanoseconds
         let output = MarkdownParser.parse(textView.string)
         lastParseNanoseconds = DispatchTime.now().uptimeNanoseconds - start
+        let extra = companionAnalysis?(textView.string)
 
         guard revision == self.revision else {
             discardedParses &+= 1
@@ -191,6 +228,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         lastSpanCount = output.spans.count
         lastNodeCount = output.nodeCount
         needsAttributeRefresh = true
+        companionResult = extra
         applyFrontmatterAttribute(output.spans)
         applyAnalysis(output)
         applyVisibleStyling()
@@ -442,15 +480,31 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         parseToken &+= 1
         let token = parseToken
 
+        let companion = companionAnalysis
+        let companionBox = CompanionBox()
+        let companionDone = DispatchGroup()
+        if let companion {
+            // Side by side with the parse, so it adds no waiting time.
+            companionDone.enter()
+            companionQueue.async {
+                companionBox.value = companion(source)
+                companionDone.leave()
+            }
+        }
         parseQueue.async { [weak self] in
             let parseStart = DispatchTime.now().uptimeNanoseconds
             let output = MarkdownParser.parse(source)
-            let duration = DispatchTime.now().uptimeNanoseconds - parseStart
+            let finished = DispatchTime.now().uptimeNanoseconds
+            let duration = finished - parseStart
+            companionDone.wait()
+            let extra = companionBox.value
 
             DispatchQueue.main.async {
                 guard let self else { return }
+                self.lastParseFinishedAt = finished
                 self.completeParse(
                     output,
+                    extra: extra,
                     duration: duration,
                     revision: revision,
                     token: token
@@ -461,6 +515,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
     private func completeParse(
         _ output: MarkdownParseOutput,
+        extra: (any Sendable)?,
         duration: UInt64,
         revision: UInt64,
         token: UInt64
@@ -478,6 +533,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         appliedParses &+= 1
         lastAppliedRevision = revision
         needsAttributeRefresh = true
+        companionResult = extra
         applyFrontmatterAttribute(output.spans)
         applyAnalysis(output)
         applyVisibleStyling()
@@ -1096,4 +1152,10 @@ private final class PointerTracker: NSResponder {
     override func mouseExited(with event: NSEvent) {
         report(nil)
     }
+}
+
+/// Carries a companion result from its queue to the parse queue; the group
+/// wait orders the write before the read.
+private final class CompanionBox: @unchecked Sendable {
+    var value: (any Sendable)?
 }

@@ -146,6 +146,23 @@ converted fonts are cached per theme. Same machine, release build, Pequod dark.
 - Remote images are not fetched. The preview shows a placeholder, as the web CSP does.
   Local images and `data:` URIs are size-capped and decoded at preview width.
 
+## Teaching report (2026-11-01)
+
+The learner's checker (and, later, exercise checks and section limits) runs
+as the editor's companion analysis: on its own queue, side by side with the
+parse, joined before the result is delivered. It never runs on the edit path.
+
+| Corpus | Teaching report | Editor insert p95 with it |
+|---:|---:|---:|
+| 10 KB | 1.0 ms | 0.78 ms |
+| 100 KB | 9.5 ms | 0.90 ms |
+| 1 MB | 62 ms | 0.79 ms |
+| 10 MB | 663 ms | 0.78 ms |
+
+At 1 MB the report (62 ms) finishes before the parse (91 ms), so it adds no
+waiting time; at 10 MB likewise (663 ms against 930 ms). Measured with
+`LoomingsBench --teaching` and the full bench, release build.
+
 ## Accessibility and OS matrix
 
 - VoiceOver: app launched with VoiceOver on and quit cleanly; editor/preview labels and

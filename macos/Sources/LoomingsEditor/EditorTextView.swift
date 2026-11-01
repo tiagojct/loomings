@@ -22,6 +22,23 @@ public struct EditorDecoration: Equatable {
 }
 
 public final class EditorTextView: NSTextView {
+    /// Option-click asks what is under the pointer instead of placing the
+    /// caret (an option-drag still makes a rectangular selection).
+    var onOptionClick: ((Int) -> Void)?
+
+    public override func mouseDown(with event: NSEvent) {
+        if let onOptionClick, event.modifierFlags.contains(.option), event.clickCount == 1,
+           !event.modifierFlags.contains(.command), !event.modifierFlags.contains(.shift) {
+            let point = convert(event.locationInWindow, from: nil)
+            let next = window?.nextEvent(matching: [.leftMouseUp, .leftMouseDragged], until: .distantFuture, inMode: .eventTracking, dequeue: false)
+            if next?.type == .leftMouseUp {
+                onOptionClick(characterIndexForInsertion(at: point))
+                return
+            }
+        }
+        super.mouseDown(with: event)
+    }
+
     /// Decorations by owner ("pair", "notes", "line"), so each feature
     /// replaces only its own.
     private var layers: [String: [EditorDecoration]] = [:]

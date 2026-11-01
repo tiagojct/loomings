@@ -56,4 +56,56 @@ struct EditorControllerTests {
         #expect(editor.parseRequests == 0, "no snapshot happens on the edit path")
         #expect(editor.source == "x")
     }
+
+    @Test("Companion analysis runs with each parse and arrives with the analysis")
+    func companionArrivesWithAnalysis() {
+        let editor = EditorController()
+        editor.companionAnalysis = { source in source.count }
+        editor.setText("abc")
+        editor.reparseSynchronously()
+        #expect(editor.companionResult as? Int == 3)
+
+        editor.setText("abcdef")
+        editor.reparseSynchronously()
+        #expect(editor.companionResult as? Int == 6)
+    }
+
+    @Test("Companion analysis runs off the main thread on the debounced parse")
+    func companionRunsOffMain() async throws {
+        let editor = EditorController()
+        editor.companionAnalysis = { _ in Thread.isMainThread }
+        editor.setText("hello")
+        #expect(editor.companionResult == nil, "a new text starts without a companion result")
+        for _ in 0..<100 where editor.companionResult == nil {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        #expect(editor.companionResult as? Bool == false)
+    }
+
+    @Test("A new text drops the previous companion result")
+    func newTextDropsCompanionResult() {
+        let editor = EditorController()
+        editor.companionAnalysis = { source in source.count }
+        editor.setText("abc")
+        editor.reparseSynchronously()
+        editor.setText("xy")
+        #expect(editor.companionResult == nil)
+    }
+
+    @Test("Companion analysis runs alongside the parse, not after it")
+    func companionRunsInParallel() async throws {
+        let editor = EditorController()
+        editor.companionAnalysis = { _ in
+            let started = DispatchTime.now().uptimeNanoseconds
+            Thread.sleep(forTimeInterval: 0.3)
+            return started
+        }
+        editor.setText(String(repeating: "# Heading\n\nA paragraph with *emphasis*.\n\n", count: 4_000))
+        for _ in 0..<500 where editor.companionResult == nil {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        let companionStarted = try #require(editor.companionResult as? UInt64)
+        // Run after the parse, it would start only once the parse finished.
+        #expect(companionStarted < editor.lastParseFinishedAt)
+    }
 }

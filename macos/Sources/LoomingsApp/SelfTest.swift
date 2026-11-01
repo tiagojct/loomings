@@ -421,6 +421,22 @@ enum SelfTest {
         shelfDocument.close()
         try? FileManager.default.removeItem(at: shelfRoot)
 
+        // 13a-1. The learner's checker finds a mistake, fixes it, and undo
+        // brings the mistake back.
+        editor.setText("Intro.\n\n#Title\n")
+        _ = pump(timeout: 2) { !controller.notesForTesting.isEmpty }
+        check(controller.notesForTesting == ["heading-space"], "the checker notes a heading without a space")
+        check(controller.statusNotesTitleForTesting == "1 note", "the status bar shows the note count")
+        controller.applyNoteFixForTesting(0)
+        check(editor.source == "Intro.\n\n# Title\n", "a note's fix repairs the text")
+        editor.textView.undoManager?.undo()
+        check(editor.source == "Intro.\n\n#Title\n", "undo brings the mistake back")
+        _ = pump(timeout: 2) { controller.notesForTesting == ["heading-space"] }
+        check(editor.textView.decorations(for: "notes").count == 1, "the note is marked in the text")
+        editor.setText("# Clean\n\nNothing to say.\n")
+        _ = pump(timeout: 2) { controller.notesForTesting.isEmpty && controller.statusNotesTitleForTesting == nil }
+        check(controller.statusNotesTitleForTesting == nil, "a clean document shows no notes")
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

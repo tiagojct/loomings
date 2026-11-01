@@ -10,6 +10,42 @@ final class StatusBarView: NSView {
     private let linesLabel = NSTextField(labelWithString: "0 lines")
     private let readingLabel = NSTextField(labelWithString: "")
     private var palette: ResolvedPalette?
+    /// Teaching items (notes, exercise, section), shown only when they apply.
+    private let notesButton = StatusBarView.makeItemButton()
+    var onNotesClick: (() -> Void)?
+
+    private static func makeItemButton() -> NSButton {
+        let button = NSButton(title: "", target: nil, action: nil)
+        button.isBordered = false
+        button.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium)
+        button.isHidden = true
+        button.setButtonType(.momentaryChange)
+        return button
+    }
+
+    var notesTitle: String? { notesButton.isHidden ? nil : notesButton.title }
+
+    func setNotes(count: Int) {
+        notesButton.isHidden = count == 0
+        notesButton.title = count == 1 ? "1 note" : "\(count) notes"
+        notesButton.setAccessibilityLabel(count == 1 ? "1 Markdown note" : "\(count) Markdown notes")
+        styleItems()
+    }
+
+    private func styleItems() {
+        let color = palette?.colors.linkColor ?? .linkColor
+        for button in [notesButton] {
+            button.contentTintColor = color
+            button.attributedTitle = NSAttributedString(string: button.title, attributes: [
+                .font: button.font ?? NSFont.systemFont(ofSize: 11),
+                .foregroundColor: color,
+            ])
+        }
+    }
+
+    @objc private func notesClicked(_ sender: Any?) {
+        onNotesClick?()
+    }
 
     private static let number: NumberFormatter = {
         let formatter = NumberFormatter()
@@ -32,7 +68,9 @@ final class StatusBarView: NSView {
             label.lineBreakMode = .byTruncatingTail
         }
 
-        let left = NSStackView(views: [positionLabel])
+        notesButton.target = self
+        notesButton.action = #selector(notesClicked(_:))
+        let left = NSStackView(views: [positionLabel, notesButton])
         left.orientation = .horizontal
         left.spacing = 12
 
@@ -77,6 +115,7 @@ final class StatusBarView: NSView {
         for label in [positionLabel, wordsLabel, charactersLabel, linesLabel, readingLabel] {
             label.textColor = color
         }
+        styleItems()
         needsDisplay = true
     }
 
