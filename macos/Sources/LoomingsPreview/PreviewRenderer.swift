@@ -398,7 +398,7 @@ public final class PreviewRenderer {
             NSTextTab(textAlignment: .left, location: indent + markerWidth),
         ]
         style.paragraphSpacing = 4
-        style.lineHeightMultiple = 1.35
+        style.lineHeightMultiple = 1.15
         return style
     }
 
@@ -445,7 +445,7 @@ public final class PreviewRenderer {
         style.firstLineHeadIndent = 16
         style.headIndent = 16
         style.paragraphSpacing = 10
-        style.lineHeightMultiple = 1.4
+        style.lineHeightMultiple = 1.2
         let block = NSTextBlock()
         block.setContentWidth(100, type: .percentageValueType)
         block.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
@@ -1067,8 +1067,10 @@ public final class PreviewRenderer {
 
     private func bodyStyle() -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
-        style.lineHeightMultiple = 1.55
-        style.paragraphSpacing = 12
+        // Source Serif's own line box is about 1.3 em, so 1.2 sets prose near
+        // 1.55 em; more than that reads as double spacing on screen.
+        style.lineHeightMultiple = 1.2
+        style.paragraphSpacing = 14
         return style
     }
 

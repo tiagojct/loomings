@@ -5,6 +5,10 @@ MainActor.assumeIsolated {
         NSApplication.shared.setActivationPolicy(.accessory)
         exit(SelfTest.run())
     }
+    if CommandLine.arguments.contains("--snapshot") {
+        NSApplication.shared.setActivationPolicy(.accessory)
+        exit(Snapshot.run(arguments: CommandLine.arguments))
+    }
 
     let application = NSApplication.shared
     let delegate = AppDelegate()

@@ -25,7 +25,7 @@ final class EditorWindowController: NSWindowController,
     private let scrollView = DocumentScrollView()
     private let previewScrollView = NSScrollView()
     private let previewTextView = PreviewTextView()
-    private let splitView = NSSplitView()
+    private let splitView = ThemedSplitView()
     private let statusBar = StatusBarView()
     private var statusHeightConstraint: NSLayoutConstraint!
     private var lineRuler: LineNumberRulerView!
@@ -292,10 +292,18 @@ final class EditorWindowController: NSWindowController,
             origin: .zero,
             size: NSSize(width: width, height: previewTextView.frame.height)
         )
+        // The preview keeps a reading measure (about 75 characters of the
+        // serif) instead of running prose across a wide window.
+        let measure = EditorPreferences.columnWidth.maxWidth * 0.9
+        let containerWidth = max(120, min(measure, width - 48))
+        previewTextView.textContainerInset = NSSize(
+            width: max(24, ((width - containerWidth) / 2).rounded(.down)),
+            height: 28
+        )
         if let container = previewTextView.textContainer {
             container.widthTracksTextView = false
             container.containerSize = NSSize(
-                width: max(120, width - 48),
+                width: containerWidth,
                 height: CGFloat.greatestFiniteMagnitude
             )
         }
@@ -400,10 +408,29 @@ final class EditorWindowController: NSWindowController,
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
         previewScrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
-        statusBar.refreshAppearance()
+        let knobs: NSScroller.KnobStyle = resolved.map { $0.isDark ? .light : .dark } ?? .default
+        scrollView.scrollerKnobStyle = knobs
+        previewScrollView.scrollerKnobStyle = knobs
+        splitView.themedDividerColor = resolved?.colors.borderColor
+        statusBar.applyPalette(resolved)
+        applyChrome(resolved)
         if viewMode != .write {
             refreshPreview()
         }
+    }
+
+    /// The title bar and toolbar sit on the document's own ground, divided
+    /// from it by a hairline, so a parchment page does not wear grey chrome.
+    private func applyChrome(_ resolved: ResolvedPalette?) {
+        guard let window else { return }
+        if let resolved {
+            window.titlebarAppearsTransparent = true
+            window.backgroundColor = resolved.colors.background
+        } else {
+            window.titlebarAppearsTransparent = false
+            window.backgroundColor = .windowBackgroundColor
+        }
+        window.titlebarSeparatorStyle = .line
     }
 
     private func applyStatusVisibility() {
@@ -441,6 +468,7 @@ final class EditorWindowController: NSWindowController,
         }
         editor.textView.needsLayout = true
         editor.requestVisibleStyling()
+        if viewMode != .write { layoutPreview() }
     }
 
     var previewText: String { previewTextView.string }
@@ -806,5 +834,21 @@ private final class PreviewPipeline: @unchecked Sendable {
             themed = true
         }
         return renderer.render(source: source, documentURL: documentURL)
+    }
+}
+
+/// A split view whose divider takes the palette's border role.
+final class ThemedSplitView: NSSplitView {
+    var themedDividerColor: NSColor? {
+        didSet { needsDisplay = true }
+    }
+
+    override var dividerColor: NSColor {
+        themedDividerColor ?? super.dividerColor
+    }
+
+    /// With one pane hidden there is nothing to divide; no line at the edge.
+    override var dividerThickness: CGFloat {
+        arrangedSubviews.contains(where: \.isHidden) ? 0 : super.dividerThickness
     }
 }

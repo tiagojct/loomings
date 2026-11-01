@@ -179,6 +179,13 @@ Stage 2 decisions worth preserving:
   preview renderer is `PreviewRenderer(producesHTML: false)`; export builds a
   fresh renderer with HTML. Keep the Typographer/Linkifier fast paths exact:
   a test checks they skip only text that cannot change.
+- `Loomings --snapshot <dir> <file.md>` writes write/split/preview PNGs of the
+  real window without screen-recording access. Override preferences for one
+  run with argument defaults, e.g. `-Loomings.Native.themeFamily pequod
+  -Loomings.Native.themeMode dark`. Use it for design review.
+- Window chrome, status bar, split divider and scrollers take the palette:
+  the title bar is transparent over the document ground. The preview keeps a
+  reading measure of 0.9 x the column width.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).
