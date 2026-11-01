@@ -65,6 +65,7 @@ final class EditorWindowController: NSWindowController,
 
         configureContent()
         installOverlay()
+        history.load(fileURL: document.fileURL)
         configureToolbar()
         wireEditorCallbacks()
 
@@ -213,6 +214,9 @@ final class EditorWindowController: NSWindowController,
         editor.onAnalysis = { [weak self] _ in
             guard let self else { return }
             self.applyTeachingReport()
+            if self.editor.lastAppliedRevision == self.editor.revision, self.editor.revision > 0 {
+                self.history.textChanged(self.editor.source)
+            }
             self.scheduleStatusUpdate()
             self.lineRuler.needsDisplay = true
             if self.viewMode != .write {
@@ -419,6 +423,46 @@ final class EditorWindowController: NSWindowController,
     func applyNoteFixForTesting(_ index: Int) {
         guard let issues = currentReport?.lintIssues, issues.indices.contains(index) else { return }
         apply(fixOf: issues[index])
+    }
+
+    // MARK: - Writing history
+
+    let history = HistoryRecorder()
+    private var replayController: ReplayWindowController?
+
+    func windowWillClose(_ notification: Notification) {
+        history.flush()
+        replayController?.close()
+    }
+
+    @objc func toggleWritingHistory(_ sender: Any?) {
+        guard let url = loomingsDocument?.fileURL else { return }
+        history.setRecording(!history.isRecording, fileURL: url, text: editor.source)
+    }
+
+    @objc func replayWritingHistory(_ sender: Any?) {
+        history.flush()
+        let entries = history.entries(fileURL: loomingsDocument?.fileURL)
+        guard !entries.isEmpty else { return }
+        replayController?.close()
+        let controller = ReplayWindowController(entries: entries, title: exportTitle, palette: ThemeManager.shared.resolved())
+        replayController = controller
+        controller.showWindow(nil)
+    }
+
+    @objc func deleteWritingHistory(_ sender: Any?) {
+        guard let window else { return }
+        let alert = NSAlert()
+        alert.messageText = "Delete the writing history of \u{201C}\(exportTitle)\u{201D}?"
+        alert.informativeText = "The replay can no longer be shown, and recording stops. The document itself is not changed."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        alert.buttons.first?.hasDestructiveAction = true
+        alert.beginSheetModal(for: window) { [weak self] response in
+            guard response == .alertFirstButtonReturn, let self else { return }
+            self.replayController?.close()
+            self.history.deleteHistory(fileURL: self.loomingsDocument?.fileURL)
+        }
     }
 
     // MARK: - Projector mode
@@ -956,6 +1000,13 @@ final class EditorWindowController: NSWindowController,
             menuItem.state = viewMode == .preview ? .on : .off
         case #selector(toggleProjectorMode(_:)):
             menuItem.state = isProjectorMode ? .on : .off
+        case #selector(toggleWritingHistory(_:)):
+            menuItem.state = history.isRecording ? .on : .off
+            let saved = loomingsDocument?.fileURL != nil
+            menuItem.toolTip = saved ? nil : "Save the document to record its history."
+            return saved
+        case #selector(replayWritingHistory(_:)), #selector(deleteWritingHistory(_:)):
+            return history.hasHistory(fileURL: loomingsDocument?.fileURL)
         default:
             return true
         }

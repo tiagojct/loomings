@@ -556,6 +556,50 @@ enum SelfTest {
         editor.setText((0..<200).map { _ in "A line that does not compress to nothing: \(UUID().uuidString)\n" }.joined())
         check(controller.qrCaptionForTesting?.contains("too long") == true, "a long document is told it is too long for a QR code")
 
+        // 13a-8. Writing history: opt-in, throttled, survives a save, deletable.
+        do {
+            let historyRoot = FileManager.default.temporaryDirectory.appendingPathComponent("loomings-selftest-history-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: historyRoot, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: historyRoot) }
+            let file = historyRoot.appendingPathComponent("essay.md")
+            try "one".write(to: file, atomically: true, encoding: .utf8)
+            var now: TimeInterval = 0
+            let store = HistoryStore(root: historyRoot.appendingPathComponent("History"))
+            let recorder = HistoryRecorder(store: store, clock: { now })
+            recorder.load(fileURL: file)
+            check(!recorder.isRecording, "a document is not recorded until asked")
+            check(store.existingIdentifier(for: file) == nil, "an unrecorded file is never marked")
+            recorder.setRecording(true, fileURL: file, text: "one")
+            now = 0.5; recorder.textChanged("one two")
+            now = 3; recorder.textChanged("one two three")
+            now = 3.5; recorder.textChanged("four")
+            recorder.flush()
+            let id = try store.identifier(for: file)
+            let entries = try store.entries(for: id)
+            check(entries.count == 3, "edits are recorded at most every two seconds, and the last is flushed")
+            check(HistoryLog.reconstruct(entries, upTo: entries.count - 1) == "four", "the history rebuilds the last text")
+
+            let historyDocument = try LoomingsDocument(contentsOf: file, ofType: "net.daringfireball.markdown")
+            NSDocumentController.shared.addDocument(historyDocument)
+            historyDocument.makeWindowControllers()
+            var saved = false
+            historyDocument.save(to: file, ofType: historyDocument.fileType ?? "net.daringfireball.markdown", for: .saveOperation) { _ in saved = true }
+            _ = pump(timeout: 2) { saved }
+            check(store.existingIdentifier(for: file) == id, "the history survives a save")
+
+            let replay = ReplayWindowController(entries: entries, title: "essay", palette: ThemeManager.shared.resolved())
+            check(replay.stepCount == 3 && replay.shownText == "four", "the replay opens at the last step")
+            replay.show(step: 0)
+            check(replay.shownText == "one", "the replay rebuilds the first step")
+            replay.close()
+
+            recorder.deleteHistory()
+            check((try? store.entries(for: id))?.isEmpty == true && !recorder.isRecording, "deleting the history removes it and stops recording")
+            historyDocument.close()
+        } catch {
+            check(false, "writing history: \(error.localizedDescription)")
+        }
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

@@ -244,6 +244,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             action: #selector(NSDocument.browseVersions(_:)),
             keyEquivalent: ""
         )
+        menu.addItem(.separator())
+
+        let history = NSMenu(title: "Writing History")
+        history.addItem(withTitle: "Record Writing History", action: #selector(EditorWindowController.toggleWritingHistory(_:)), keyEquivalent: "")
+        history.addItem(withTitle: "Replay Writing History\u{2026}", action: #selector(EditorWindowController.replayWritingHistory(_:)), keyEquivalent: "")
+        history.addItem(.separator())
+        history.addItem(withTitle: "Delete Writing History\u{2026}", action: #selector(EditorWindowController.deleteWritingHistory(_:)), keyEquivalent: "")
+        let historyItem = NSMenuItem(title: "Writing History", action: nil, keyEquivalent: "")
+        historyItem.submenu = history
+        menu.addItem(historyItem)
 
         return menu
     }
