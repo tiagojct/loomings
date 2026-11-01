@@ -5,6 +5,7 @@ import Foundation
 /// design review: `Loomings --snapshot <out-dir> <file.md>`. Theme and other
 /// preferences can be overridden for one run with argument-domain defaults,
 /// for example `-Loomings.Native.themeFamily pequod -Loomings.Native.themeMode dark`.
+/// `-LoomingsSnapshotWidth 640` sets the window width.
 /// Writes write.png, split.png and preview.png, then exits.
 @MainActor
 enum Snapshot {
@@ -31,7 +32,8 @@ enum Snapshot {
             print("could not create the editor window")
             return 1
         }
-        window.setContentSize(NSSize(width: 1180, height: 760))
+        let width = UserDefaults.standard.double(forKey: "LoomingsSnapshotWidth")
+        window.setContentSize(NSSize(width: width > 0 ? width : 1180, height: 760))
         controller.showWindow(nil)
         controller.applyPreferences()
         controller.editor.setText(text)

@@ -31,7 +31,6 @@ final class EditorWindowController: NSWindowController,
     private var lineRuler: LineNumberRulerView!
     private var statusWorkItem: DispatchWorkItem?
     private var previewWorkItem: DispatchWorkItem?
-    private var viewModeControl: NSSegmentedControl?
     private(set) var viewMode: ViewMode = .write
     private var syncSource: String?
     private var syncUntil = Date.distantPast
@@ -51,7 +50,8 @@ final class EditorWindowController: NSWindowController,
             backing: .buffered,
             defer: false
         )
-        window.minSize = NSSize(width: 480, height: 320)
+        // The title, the centred mode switch and three tools fit from 640 pt.
+        window.minSize = NSSize(width: 640, height: 360)
         window.tabbingMode = .preferred
         window.isRestorable = false
         window.center()
@@ -141,6 +141,7 @@ final class EditorWindowController: NSWindowController,
         guard let window else { return }
 
         scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.verticalScroller = ThemedScroller()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
@@ -158,6 +159,7 @@ final class EditorWindowController: NSWindowController,
         editor.observeScrolling(in: scrollView)
 
         previewScrollView.translatesAutoresizingMaskIntoConstraints = false
+        previewScrollView.verticalScroller = ThemedScroller()
         previewScrollView.hasVerticalScroller = true
         previewScrollView.hasHorizontalScroller = false
         previewScrollView.autohidesScrollers = true
@@ -262,7 +264,7 @@ final class EditorWindowController: NSWindowController,
 
         scrollView.isHidden = !showEditor
         previewScrollView.isHidden = !showPreview
-        viewModeControl?.selectedSegment = viewMode.rawValue
+        modeSwitch?.selectedIndex = viewMode.rawValue
         splitView.adjustSubviews()
 
         if showPreview {
@@ -411,9 +413,13 @@ final class EditorWindowController: NSWindowController,
         let knobs: NSScroller.KnobStyle = resolved.map { $0.isDark ? .light : .dark } ?? .default
         scrollView.scrollerKnobStyle = knobs
         previewScrollView.scrollerKnobStyle = knobs
+        for scroller in [scrollView.verticalScroller, previewScrollView.verticalScroller] {
+            (scroller as? ThemedScroller)?.trackColor = resolved?.colors.background
+        }
         splitView.themedDividerColor = resolved?.colors.borderColor
         statusBar.applyPalette(resolved)
         applyChrome(resolved)
+        applyToolbarPalette(resolved)
         if viewMode != .write {
             refreshPreview()
         }
@@ -733,41 +739,42 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func configureToolbar() {
-        let toolbar = NSToolbar(identifier: "eu.tiagojacinto.loomings.toolbar")
+        let toolbar = NSToolbar(identifier: "eu.tiagojacinto.loomings.toolbar.v2")
         toolbar.delegate = self
         toolbar.displayMode = .iconOnly
         toolbar.allowsUserCustomization = false
+        toolbar.centeredItemIdentifiers = [ToolbarItem.viewMode]
         window?.toolbar = toolbar
         window?.toolbarStyle = .unified
     }
 
     // MARK: - Toolbar
 
+    /// The mode switch is centred; the right holds tools the menus otherwise
+    /// hide. New, Open and Save live in the File menu and on their shortcuts.
     private enum ToolbarItem {
-        static let newDocument = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.new")
-        static let openDocument = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.open")
-        static let saveDocument = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.save")
         static let viewMode = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.viewMode")
+        static let outline = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.outline")
+        static let theme = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.theme")
+        static let share = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.share")
     }
 
+    private var modeSwitch: ModeSwitch?
+    private var toolButtons: [ToolbarIconButton] = []
+    private var shareButton: ToolbarIconButton?
+
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [
-            ToolbarItem.newDocument,
-            ToolbarItem.openDocument,
-            ToolbarItem.saveDocument,
-            .flexibleSpace,
-            .space,
-            ToolbarItem.viewMode,
-        ]
+        toolbarDefaultItemIdentifiers(toolbar)
     }
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         [
-            ToolbarItem.newDocument,
-            ToolbarItem.openDocument,
-            ToolbarItem.saveDocument,
             .flexibleSpace,
             ToolbarItem.viewMode,
+            .flexibleSpace,
+            ToolbarItem.outline,
+            ToolbarItem.theme,
+            ToolbarItem.share,
         ]
     }
 
@@ -777,61 +784,95 @@ final class EditorWindowController: NSWindowController,
         willBeInsertedIntoToolbar flag: Bool
     ) -> NSToolbarItem? {
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        item.isBordered = true
+        item.isBordered = false
 
         switch itemIdentifier {
-        case ToolbarItem.newDocument:
-            item.label = "New"
-            item.paletteLabel = "New Document"
-            item.toolTip = "New Document"
-            item.image = NSImage(
-                systemSymbolName: "square.and.pencil",
-                accessibilityDescription: "New Document"
-            )
-            item.action = #selector(AppDelegate.newDocument(_:))
-            item.target = nil
-
-        case ToolbarItem.openDocument:
-            item.label = "Open"
-            item.paletteLabel = "Open Document"
-            item.toolTip = "Open Document"
-            item.image = NSImage(
-                systemSymbolName: "folder",
-                accessibilityDescription: "Open Document"
-            )
-            item.action = #selector(NSDocumentController.openDocument(_:))
-            item.target = nil
-
-        case ToolbarItem.saveDocument:
-            item.label = "Save"
-            item.paletteLabel = "Save Document"
-            item.toolTip = "Save Document"
-            item.image = NSImage(
-                systemSymbolName: "square.and.arrow.down",
-                accessibilityDescription: "Save Document"
-            )
-            item.action = #selector(NSDocument.save(_:))
-            item.target = nil
-
         case ToolbarItem.viewMode:
-            let control = NSSegmentedControl(
-                labels: ["Write", "Split", "Preview"],
-                trackingMode: .selectOne,
-                target: self,
-                action: #selector(changeViewMode(_:))
-            )
-            control.selectedSegment = viewMode.rawValue
-            control.segmentStyle = .texturedRounded
-            control.setAccessibilityLabel("View mode")
-            viewModeControl = control
+            let control = ModeSwitch(labels: ["Write", "Split", "Preview"])
+            control.selectedIndex = viewMode.rawValue
+            control.onSelect = { [weak self] index in
+                self?.setViewMode(ViewMode(rawValue: index) ?? .write)
+            }
+            control.applyPalette(ThemeManager.shared.resolved())
+            modeSwitch = control
             item.label = "View"
             item.view = control
+
+        case ToolbarItem.outline:
+            item.label = "Outline"
+            item.view = makeTool(symbol: "list.bullet.indent", label: "Go to Heading", action: #selector(showOutlineMenu(_:)))
+
+        case ToolbarItem.theme:
+            item.label = "Theme"
+            item.view = makeTool(symbol: "circle.lefthalf.filled", label: "Theme", action: #selector(showThemeMenu(_:)))
+
+        case ToolbarItem.share:
+            item.label = "Share"
+            let button = makeTool(symbol: "link", label: "Copy Share Link", action: #selector(copyShareLinkFromToolbar(_:)))
+            shareButton = button
+            item.view = button
 
         default:
             return nil
         }
 
         return item
+    }
+
+    private func makeTool(symbol: String, label: String, action: Selector) -> ToolbarIconButton {
+        let button = ToolbarIconButton(symbol: symbol, label: label)
+        button.target = self
+        button.action = action
+        button.applyPalette(ThemeManager.shared.resolved())
+        toolButtons.append(button)
+        return button
+    }
+
+    private func applyToolbarPalette(_ resolved: ResolvedPalette?) {
+        modeSwitch?.applyPalette(resolved)
+        for button in toolButtons {
+            button.applyPalette(resolved)
+        }
+    }
+
+    @objc private func showOutlineMenu(_ sender: NSButton) {
+        let menu = NSMenu(title: "Go to Heading")
+        let headings = editor.outline
+        if headings.isEmpty {
+            let empty = NSMenuItem(title: "No Headings", action: nil, keyEquivalent: "")
+            empty.isEnabled = false
+            menu.addItem(empty)
+        }
+        for (index, heading) in headings.enumerated() {
+            let item = NSMenuItem(
+                title: heading.title.isEmpty ? "(empty heading)" : heading.title,
+                action: #selector(jumpToOutlineItem(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.tag = index
+            item.indentationLevel = min(4, max(0, heading.level - 1))
+            menu.addItem(item)
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    }
+
+    @objc private func jumpToOutlineItem(_ sender: NSMenuItem) {
+        guard editor.outline.indices.contains(sender.tag) else { return }
+        jump(to: editor.outline[sender.tag])
+    }
+
+    @objc private func showThemeMenu(_ sender: NSButton) {
+        guard let themeMenu = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == "Theme" })?.submenu,
+              let menu = themeMenu.copy() as? NSMenu else {
+            return
+        }
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    }
+
+    @objc private func copyShareLinkFromToolbar(_ sender: Any?) {
+        copyShareLink(sender)
+        shareButton?.confirm()
     }
 }
 

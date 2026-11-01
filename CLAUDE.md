@@ -187,6 +187,13 @@ Stage 2 decisions worth preserving:
   the title bar is transparent over the document ground. The preview keeps a
   reading measure of 0.9 x the column width. With line numbers on, the ruler
   takes the whole left margin so the numbers sit next to the centred column.
+- Title bar (`ToolbarControls.swift`): a custom `ModeSwitch` (Write/Split/
+  Preview) centred with `centeredItemIdentifiers`, then Outline, Theme and
+  Copy Share Link as `ToolbarIconButton`s: one symbol size and weight in
+  equal 28 pt cells, so the row lines up whatever each glyph's shape. New,
+  Open and Save were removed from the bar; they stay in the File menu. The
+  window minimum is 640 pt wide so nothing overflows into the chevron.
+  `ThemedScroller` paints legacy scroller tracks with the document ground.
 - Preview code blocks and tables are framed `NSTextBlock`s. Each code line is
   its own paragraph, so space around a frame comes from an empty spacer
   paragraph after it (`blockSpacer`), not from paragraph spacing (it lands
