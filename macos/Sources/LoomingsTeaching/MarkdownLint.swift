@@ -192,12 +192,24 @@ private struct Context {
 
     // MARK: Inline
 
+    /// Leftover `**` or `__` in a text node. Only a pair written as such in
+    /// the source counts: escaped marks (`\*\*`) are meant to show.
     mutating func checkUnpaired(_ node: MarkdownNode, _ range: NSRange) {
         let source = text.substring(with: range) as NSString
-        var found = source.range(of: "**")
-        if found.location == NSNotFound { found = source.range(of: "__") }
-        let location = found.location == NSNotFound ? range.location : range.location + found.location
-        add("unpaired-emphasis", NSRange(location: location, length: 2))
+        for marker in ["**", "__"] {
+            var search = NSRange(location: 0, length: source.length)
+            while true {
+                let found = source.range(of: marker, options: .literal, range: search)
+                guard found.location != NSNotFound else { break }
+                let escaped = found.location > 0 && source.character(at: found.location - 1) == 0x5C // \
+                if !escaped {
+                    add("unpaired-emphasis", NSRange(location: range.location + found.location, length: 2))
+                    return
+                }
+                let next = found.location + 1
+                search = NSRange(location: next, length: source.length - next)
+            }
+        }
     }
 
     // MARK: Paragraph lines

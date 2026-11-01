@@ -197,5 +197,19 @@
       "heading-space"
     ],
     "fixed": "---\ntitle: A sentence.\nauthor: me\n---\n\n# Title\n"
+  },
+  {
+    "name": "escaped marks are not unpaired",
+    "source": "Write \\*\\*not bold\\*\\* here.\n",
+    "rules": [],
+    "fixed": "Write \\*\\*not bold\\*\\* here.\n"
+  },
+  {
+    "name": "an escaped mark next to a real one",
+    "source": "A \\** star and **bold.\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "A \\** star and **bold.\n"
   }
 ]
