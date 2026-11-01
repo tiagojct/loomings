@@ -108,4 +108,48 @@ struct EditorControllerTests {
         // Run after the parse, it would start only once the parse finished.
         #expect(companionStarted < editor.lastParseFinishedAt)
     }
+
+    @Test("Typing a marker at a line start names it")
+    func typedMarkersAreNamed() {
+        let editor = EditorController()
+        var used: [String] = []
+        editor.onMarkupUsed = { used.append($0) }
+        editor.setText("")
+        for text in ["## ", "Title\n", "- ", "item\n", "> ", "q\n", "3. ", "x\n", "```"] {
+            editor.textView.insertText(text, replacementRange: editor.textView.selectedRange())
+        }
+        #expect(used == ["Heading 2: ## ", "Bullet list: - ", "Quote: > ", "Numbered list: 3. ", "Code block: ```"])
+    }
+
+    @Test("A marker typed mid-line is not named")
+    func midLineMarkersAreQuiet() {
+        let editor = EditorController()
+        var used: [String] = []
+        editor.onMarkupUsed = { used.append($0) }
+        editor.setText("")
+        editor.textView.insertText("a - b ## c > ", replacementRange: editor.textView.selectedRange())
+        #expect(used.isEmpty)
+    }
+
+    @Test("Formatting commands name what they did")
+    func commandsAreNamed() {
+        let editor = EditorController()
+        var used: [String] = []
+        editor.onMarkupUsed = { used.append($0) }
+        editor.setText("word")
+        editor.textView.setSelectedRange(NSRange(location: 0, length: 4))
+        editor.toggleBold()
+        #expect(used == ["Bold: **text**"])
+    }
+
+    @Test("The current line can be marked")
+    func currentLineMark() {
+        let editor = EditorController()
+        editor.setText("one\ntwo\n")
+        editor.highlightsCurrentLine = true
+        editor.textView.setSelectedRange(NSRange(location: 5, length: 0))
+        #expect(editor.textView.decorations(for: "line").map(\.range) == [NSRange(location: 4, length: 4)])
+        editor.highlightsCurrentLine = false
+        #expect(editor.textView.decorations(for: "line").isEmpty)
+    }
 }

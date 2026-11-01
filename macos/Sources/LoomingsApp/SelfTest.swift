@@ -485,6 +485,40 @@ enum SelfTest {
         _ = pump(timeout: 1) { controller.sectionTitleForTesting == nil }
         check(controller.sectionTitleForTesting == nil, "a section without a limit shows nothing")
 
+        // 13a-5. Projector mode changes the view, never the preferences.
+        func loomingsDefaults() -> NSDictionary {
+            UserDefaults.standard.dictionaryRepresentation().filter { $0.key.hasPrefix("Loomings.") } as NSDictionary
+        }
+        let defaultsBefore = loomingsDefaults()
+        let fontBefore = editor.fontSize
+        controller.toggleProjectorMode(nil)
+        check(controller.isProjectorMode, "projector mode turns on")
+        check(editor.fontSize == 28, "projector mode enlarges the editor type")
+        check(controller.isStatusBarHiddenForTesting, "projector mode hides the status bar")
+        check(!controller.areLineNumbersVisibleForTesting, "projector mode hides line numbers")
+        check(editor.highlightsCurrentLine, "projector mode marks the current line")
+        editor.setText("")
+        editor.textView.insertText("## ", replacementRange: editor.textView.selectedRange())
+        check(controller.overlayTextForTesting == "Heading 2: ## ", "the overlay names the markup just typed")
+        editor.setText("Body text for the room.\n")
+        controller.setViewMode(.split)
+        _ = pump(timeout: 2) { controller.previewBodyFontSizeForTesting == 26 }
+        check(controller.previewBodyFontSizeForTesting == 26, "projector mode enlarges the preview type")
+        controller.setViewMode(.write)
+        controller.toggleProjectorMode(nil)
+        controller.setViewMode(.split)
+        _ = pump(timeout: 2) { controller.previewBodyFontSizeForTesting == 17 }
+        check(controller.previewBodyFontSizeForTesting == 17, "turning it off restores the preview type")
+        controller.setViewMode(.write)
+        controller.toggleProjectorMode(nil)
+        controller.toggleProjectorMode(nil)
+        check(!controller.isProjectorMode, "projector mode turns off")
+        check(editor.fontSize == fontBefore, "turning it off restores the type size")
+        check(controller.isStatusBarHiddenForTesting == !EditorPreferences.showStats, "turning it off restores the status bar")
+        check(controller.areLineNumbersVisibleForTesting == EditorPreferences.showLineNumbers, "turning it off restores line numbers")
+        check(!editor.highlightsCurrentLine, "turning it off clears the line mark")
+        check(loomingsDefaults() == defaultsBefore, "projector mode writes no preference")
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

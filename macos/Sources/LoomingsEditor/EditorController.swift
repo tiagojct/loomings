@@ -109,6 +109,54 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     public var companionAnalysis: (@Sendable (String) -> any Sendable)?
     public private(set) var companionResult: (any Sendable)?
 
+    /// Called with a short phrase naming markup the writer just used ("Bold:
+    /// **text**", "Heading 2: ## "), for projector mode's overlay.
+    public var onMarkupUsed: ((String) -> Void)?
+
+    /// Marks the caret's line (projector mode).
+    public var highlightsCurrentLine = false {
+        didSet { updateCurrentLineMark() }
+    }
+
+    private func updateCurrentLineMark() {
+        guard highlightsCurrentLine else {
+            textView.setDecorations([], for: "line")
+            return
+        }
+        let text = textView.string as NSString
+        let caret = min(textView.selectedRange().location, text.length)
+        let line = text.lineRange(for: NSRange(location: caret, length: 0))
+        let tint = (palette?.colors.selectionColor ?? .selectedTextBackgroundColor).withAlphaComponent(0.35)
+        textView.setDecorations([EditorDecoration(range: line, style: .lineFill(tint))], for: "line")
+    }
+
+    /// Names a block marker just typed at the start of a line.
+    private func reportTypedMarker() {
+        guard let onMarkupUsed else { return }
+        let text = textView.string as NSString
+        let caret = textView.selectedRange().location
+        guard caret <= text.length else { return }
+        let lineStart = text.lineRange(for: NSRange(location: caret, length: 0)).location
+        let length = caret - lineStart
+        guard (1...12).contains(length) else { return }
+        let prefix = text.substring(with: NSRange(location: lineStart, length: length))
+        if let name = Self.markerName(prefix) { onMarkupUsed(name) }
+    }
+
+    static func markerName(_ prefix: String) -> String? {
+        if prefix == "```" || prefix == "~~~" { return "Code block: \(prefix)" }
+        guard prefix.hasSuffix(" ") else { return nil }
+        let mark = String(prefix.dropLast())
+        if !mark.isEmpty, mark.count <= 6, mark.allSatisfy({ $0 == "#" }) { return "Heading \(mark.count): \(prefix)" }
+        if ["-", "*", "+"].contains(mark) { return "Bullet list: \(prefix)" }
+        if mark == ">" { return "Quote: \(prefix)" }
+        if let last = mark.last, last == "." || last == ")",
+           mark.dropLast().count >= 1, mark.dropLast().allSatisfy({ $0.isASCII && $0.isNumber }) {
+            return "Numbered list: \(prefix)"
+        }
+        return nil
+    }
+
     /// Called with the character index of an option-click in the text.
     public var onOptionClick: ((Int) -> Void)? {
         didSet { textView.onOptionClick = onOptionClick }
@@ -334,6 +382,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
             needsAttributeRefresh = true
         }
         scheduleVisibleStyling()
+        if highlightsCurrentLine { updateCurrentLineMark() }
         onSelectionChange?()
         if isTypewriterMode {
             DispatchQueue.main.async { [weak self] in
@@ -358,6 +407,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         scheduleParse(after: parseDebounce)
         lastEditHandlerNanoseconds = DispatchTime.now().uptimeNanoseconds - start
         onEdit?()
+        reportTypedMarker()
+        if highlightsCurrentLine { updateCurrentLineMark() }
 
         if isTypewriterMode {
             DispatchQueue.main.async { [weak self] in
@@ -581,17 +632,23 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
     @discardableResult
     public func toggleBold() -> Bool {
-        wrapSelection(left: "**", right: "**")
+        let done = wrapSelection(left: "**", right: "**")
+        if done { onMarkupUsed?("Bold: **text**") }
+        return done
     }
 
     @discardableResult
     public func toggleItalic() -> Bool {
-        wrapSelection(left: "*", right: "*")
+        let done = wrapSelection(left: "*", right: "*")
+        if done { onMarkupUsed?("Italic: *text*") }
+        return done
     }
 
     @discardableResult
     public func toggleInlineCode() -> Bool {
-        wrapSelection(left: "`", right: "`")
+        let done = wrapSelection(left: "`", right: "`")
+        if done { onMarkupUsed?("Inline code: `text`") }
+        return done
     }
 
     @discardableResult

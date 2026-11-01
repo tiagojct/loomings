@@ -674,6 +674,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         menu.addItem(smart)
         menu.addItem(.separator())
 
+        let projector = NSMenuItem(
+            title: "Projector Mode",
+            action: #selector(EditorWindowController.toggleProjectorMode(_:)),
+            keyEquivalent: "p"
+        )
+        projector.keyEquivalentModifierMask = [.control, .command]
+        menu.addItem(projector)
+
         let fullScreen = NSMenuItem(
             title: "Enter Full Screen",
             action: #selector(NSWindow.toggleFullScreen(_:)),

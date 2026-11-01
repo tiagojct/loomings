@@ -6,7 +6,8 @@ import Foundation
 /// preferences can be overridden for one run with argument-domain defaults,
 /// for example `-Loomings.Native.themeFamily pequod -Loomings.Native.themeMode dark`.
 /// `-LoomingsSnapshotWidth 640` sets the window width;
-/// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split.
+/// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split;
+/// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption.
 /// Writes write.png, split.png and preview.png, then exits.
 @MainActor
 enum Snapshot {
@@ -38,10 +39,15 @@ enum Snapshot {
         controller.showWindow(nil)
         controller.applyPreferences()
         controller.editor.setText(text)
+        if UserDefaults.standard.bool(forKey: "LoomingsSnapshotProjector") {
+            controller.toggleProjectorMode(nil)
+            controller.editor.textView.setSelectedRange(NSRange(location: 2, length: 0))
+        }
 
         for (name, mode) in [("write", EditorWindowController.ViewMode.write), ("split", .split), ("preview", .preview)] {
             controller.setViewMode(mode)
             settle(1.2)
+            if controller.isProjectorMode { controller.showOverlayForSnapshot("Heading 2: ## ") }
             let pairLocation = UserDefaults.standard.integer(forKey: "LoomingsSnapshotPairLocation")
             if mode == .split, pairLocation > 0 {
                 controller.pairBothForSnapshot(editorLocation: pairLocation)

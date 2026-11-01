@@ -64,6 +64,7 @@ final class EditorWindowController: NSWindowController,
         window.delegate = self
 
         configureContent()
+        installOverlay()
         configureToolbar()
         wireEditorCallbacks()
 
@@ -199,7 +200,7 @@ final class EditorWindowController: NSWindowController,
         scrollView.hasVerticalRuler = true
         lineRuler = LineNumberRulerView(scrollView: scrollView, editor: editor)
         scrollView.verticalRulerView = lineRuler
-        scrollView.rulersVisible = EditorPreferences.showLineNumbers
+        scrollView.rulersVisible = effectiveShowLineNumbers
     }
 
     private func wireEditorCallbacks() {
@@ -420,6 +421,46 @@ final class EditorWindowController: NSWindowController,
         apply(fixOf: issues[index])
     }
 
+    // MARK: - Projector mode
+
+    private(set) var isProjectorMode = false
+    private let markupOverlay = MarkupOverlay()
+
+    @objc func toggleProjectorMode(_ sender: Any?) {
+        isProjectorMode.toggle()
+        editor.onMarkupUsed = isProjectorMode ? { [weak self] phrase in self?.markupOverlay.show(phrase) } : nil
+        if !isProjectorMode { markupOverlay.dismiss() }
+        applyPreferences()
+        if viewMode != .write { layoutPreview() }
+    }
+
+    private var effectiveShowLineNumbers: Bool { EditorPreferences.showLineNumbers && !isProjectorMode }
+    private var effectiveColumnWidth: ColumnWidth { isProjectorMode ? ProjectorMode.columnWidth : EditorPreferences.columnWidth }
+
+    private func previewTheme(_ resolved: ResolvedPalette?) -> PreviewTheme {
+        let size: CGFloat = isProjectorMode ? ProjectorMode.previewBodySize : 17
+        return resolved.map { PreviewTheme.themed($0, bodySize: size) } ?? .standard
+    }
+
+    private func installOverlay() {
+        markupOverlay.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(markupOverlay)
+        NSLayoutConstraint.activate([
+            markupOverlay.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            markupOverlay.bottomAnchor.constraint(equalTo: statusBar.topAnchor, constant: -24),
+            markupOverlay.widthAnchor.constraint(lessThanOrEqualTo: containerView.widthAnchor, constant: -48),
+        ])
+    }
+
+    var isStatusBarHiddenForTesting: Bool { statusBar.isHidden }
+    var areLineNumbersVisibleForTesting: Bool { scrollView.rulersVisible }
+    var overlayTextForTesting: String? { markupOverlay.text }
+    func showOverlayForSnapshot(_ text: String) { markupOverlay.show(text) }
+    var previewBodyFontSizeForTesting: CGFloat? {
+        guard let storage = previewTextView.textStorage, storage.length > 0 else { return nil }
+        return (storage.attribute(.font, at: 0, effectiveRange: nil) as? NSFont)?.pointSize
+    }
+
     // MARK: - Paired lines
 
     /// Split view only: the source under the pointer lights its preview block.
@@ -504,7 +545,7 @@ final class EditorWindowController: NSWindowController,
         )
         // The preview keeps a reading measure (about 75 characters of the
         // serif) instead of running prose across a wide window.
-        let measure = EditorPreferences.columnWidth.maxWidth * 0.9
+        let measure = effectiveColumnWidth.maxWidth * 0.9
         let containerWidth = max(120, min(measure, width - 48))
         previewTextView.textContainerInset = NSSize(
             width: max(24, ((width - containerWidth) / 2).rounded(.down)),
@@ -542,7 +583,7 @@ final class EditorWindowController: NSWindowController,
         let source = editor.source
         let documentURL = loomingsDocument?.fileURL
         let resolved = ThemeManager.shared.resolved()
-        let theme = resolved.map { PreviewTheme.themed($0) } ?? .standard
+        let theme = previewTheme(resolved)
 
         let pipeline = previewPipeline
         previewQueue.async { [weak self] in
@@ -601,7 +642,8 @@ final class EditorWindowController: NSWindowController,
     // MARK: - Preferences and status
 
     func applyPreferences() {
-        editor.setFontSize(EditorPreferences.fontSize)
+        editor.setFontSize(isProjectorMode ? ProjectorMode.editorFontSize : EditorPreferences.fontSize)
+        editor.highlightsCurrentLine = isProjectorMode
         editor.setSmartTypography(EditorPreferences.smartTypography)
         editor.setTypewriterMode(EditorPreferences.typewriter)
         applyTheme()
@@ -614,7 +656,8 @@ final class EditorWindowController: NSWindowController,
     private func applyTheme() {
         let resolved = ThemeManager.shared.resolved()
         editor.applyPalette(resolved)
-        previewTextView.applyTheme(resolved.map { PreviewTheme.themed($0) } ?? .standard)
+        previewTextView.applyTheme(previewTheme(resolved))
+        markupOverlay.applyPalette(resolved)
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
         previewScrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
@@ -651,14 +694,14 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func applyStatusVisibility() {
-        let visible = EditorPreferences.showStats
+        let visible = EditorPreferences.showStats && !isProjectorMode
         statusBar.isHidden = !visible
         statusHeightConstraint?.constant = visible ? 24 : 0
         scheduleStatusUpdate()
     }
 
     private func applyLineNumbersVisibility() {
-        scrollView.rulersVisible = EditorPreferences.showLineNumbers
+        scrollView.rulersVisible = effectiveShowLineNumbers
         lineRuler?.needsDisplay = true
         applyColumnWidth()
     }
@@ -676,7 +719,7 @@ final class EditorWindowController: NSWindowController,
         let full = scrollView.frame.width - scroller
         guard full > 0 else { return }
 
-        let maximum = EditorPreferences.columnWidth.maxWidth
+        let maximum = effectiveColumnWidth.maxWidth
         let inset: CGFloat
         let containerWidth: CGFloat
         if rulers {
@@ -945,6 +988,8 @@ final class EditorWindowController: NSWindowController,
             menuItem.state = viewMode == .split ? .on : .off
         case #selector(setPreviewMode(_:)):
             menuItem.state = viewMode == .preview ? .on : .off
+        case #selector(toggleProjectorMode(_:)):
+            menuItem.state = isProjectorMode ? .on : .off
         default:
             return true
         }
@@ -1096,6 +1141,7 @@ final class EditorWindowController: NSWindowController,
 private final class PreviewPipeline: @unchecked Sendable {
     private let renderer = PreviewRenderer(producesHTML: false)
     private var palette: ResolvedPalette?
+    private var bodySize: CGFloat = 0
     private var themed = false
 
     func render(
@@ -1104,10 +1150,12 @@ private final class PreviewPipeline: @unchecked Sendable {
         palette: ResolvedPalette?,
         theme: PreviewTheme
     ) -> PreviewDocument {
-        // A new theme clears the renderer's cached blocks.
-        if !themed || self.palette != palette {
+        // A new palette or type size (projector mode) is a new theme, which
+        // clears the renderer's cached blocks.
+        if !themed || self.palette != palette || bodySize != theme.bodyFont.pointSize {
             renderer.theme = theme
             self.palette = palette
+            bodySize = theme.bodyFont.pointSize
             themed = true
         }
         return renderer.render(source: source, documentURL: documentURL)
