@@ -6,8 +6,31 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Web app
+
+- Checker marks are found inside an image's alt text, and alt text made only
+  of a non-breaking space counts as none. A setext heading note starts at its
+  text.
+- A heading inside a quotation or list item is titled without its markers,
+  so a `limit:` line matches it; the heading palette shows indented and
+  quoted headings by their titles.
+- Escape in the Find panel closes the panel only. The notes list opened just
+  after an edit checks the text again rather than offering stale fixes.
+- A print replaces the last print's page style (some browsers never say a
+  print has ended).
+
 ### Native macOS app (`macos/`)
 
+- The learner's checker agrees with the web on every shared case and on a
+  636-document corpus: setext headings with text after them or in CRLF,
+  marks and images after a tab or on a lazy line, lone CR line endings, an
+  escaped backslash before marks, one note per leftover run, a fence inside
+  the frontmatter. The outline reads indented and quoted ATX headings,
+  keeps the # of "C#", and takes setext levels from the parser.
+- Leaving Split for Write gives the editor column the whole window again,
+  and dragging the divider lays both columns out.
+- Exercise checks on a bundled lesson never count the lesson's own words
+  after its last line is edited (as on the web from 2.4.0).
 - Under version control, with its own CI job.
 - The preview no longer fetches remote images. A document or share link with
   `![](https://…)` leaked the reader's IP address when previewed; it now shows
