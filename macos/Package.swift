@@ -46,12 +46,16 @@ let package = Package(
             dependencies: ["LoomingsMarkdown", "LoomingsTheme"]
         ),
         .target(
+            name: "LoomingsTeaching",
+            dependencies: ["LoomingsMarkdown"]
+        ),
+        .target(
             name: "LoomingsPreview",
             dependencies: ["LoomingsMarkdown", "LoomingsTheme"]
         ),
         .executableTarget(
             name: "LoomingsApp",
-            dependencies: ["LoomingsDocuments", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTheme", "LoomingsShare"]
+            dependencies: ["LoomingsDocuments", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTheme", "LoomingsShare", "LoomingsTeaching"]
         ),
         .executableTarget(
             name: "LoomingsBench",
@@ -77,6 +81,11 @@ let package = Package(
         .testTarget(
             name: "LoomingsThemeTests",
             dependencies: ["LoomingsTheme"]
+        ),
+        .testTarget(
+            name: "LoomingsTeachingTests",
+            dependencies: ["LoomingsTeaching"],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "LoomingsPreviewTests",
