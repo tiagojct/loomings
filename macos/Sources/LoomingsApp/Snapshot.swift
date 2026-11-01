@@ -8,7 +8,8 @@ import PDFKit
 /// for example `-Loomings.Native.themeFamily pequod -Loomings.Native.themeMode dark`.
 /// `-LoomingsSnapshotWidth 640` sets the window width;
 /// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split;
-/// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption.
+/// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption;
+/// `-LoomingsSnapshotCompareWith <file>` also writes compare.png.
 /// Writes write.png, split.png and preview.png, then exits.
 @MainActor
 enum Snapshot {
@@ -62,6 +63,19 @@ enum Snapshot {
                 print(output.appendingPathComponent("\(name).png").path)
             }
         }
+        // Compare With, against another file.
+        if let other = UserDefaults.standard.string(forKey: "LoomingsSnapshotCompareWith"),
+           let otherText = try? String(contentsOfFile: other, encoding: .utf8) {
+            let compare = controller.compare(withText: otherText, title: "Exercise")
+            settle(0.8)
+            if let frame = compare.window?.contentView?.superview,
+               let bitmap = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) {
+                frame.cacheDisplay(in: frame.bounds, to: bitmap)
+                try? bitmap.representation(using: .png, properties: [:])?.write(to: output.appendingPathComponent("compare.png"))
+            }
+            compare.close()
+        }
+
         // The handout, and its first and last pages as images.
         let pdf = controller.renderedPDFForTesting()
         try? pdf.write(to: output.appendingPathComponent("handout.pdf"))

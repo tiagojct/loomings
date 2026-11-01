@@ -600,6 +600,14 @@ enum SelfTest {
             check(false, "writing history: \(error.localizedDescription)")
         }
 
+        // 13a-9. Compare With shows two documents side by side.
+        editor.setText("# Essay\n\nThe sea was wild today.\nGulls overhead.\n")
+        let compare = controller.compare(withText: "# Essay\n\nThe sea was calm today.\n", title: "Exercise")
+        check(compare.changedLineCount == 2, "the comparison counts changed lines")
+        check(compare.headerText.contains("Exercise") && compare.headerText.contains("2 lines changed"), "the comparison names both sides and the count")
+        check(compare.leftText.components(separatedBy: "\n").count == compare.rightText.components(separatedBy: "\n").count, "the two sides are aligned row by row")
+        compare.close()
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

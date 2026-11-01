@@ -11,6 +11,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var recentMenu: NSMenu?
     private var shelfMenu: NSMenu?
     private var outlineMenu: NSMenu?
+    private var compareMenu: NSMenu?
     private var learnItems: [LearnItem] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -245,6 +246,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             keyEquivalent: ""
         )
         menu.addItem(.separator())
+
+        let compare = NSMenu(title: "Compare With")
+        compare.delegate = self
+        compareMenu = compare
+        let compareItem = NSMenuItem(title: "Compare With", action: nil, keyEquivalent: "")
+        compareItem.submenu = compare
+        menu.addItem(compareItem)
 
         let history = NSMenu(title: "Writing History")
         history.addItem(withTitle: "Record Writing History", action: #selector(EditorWindowController.toggleWritingHistory(_:)), keyEquivalent: "")
@@ -733,7 +741,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             rebuildShelfMenu(menu)
         } else if menu === outlineMenu {
             rebuildOutlineMenu(menu)
+        } else if menu === compareMenu {
+            rebuildCompareMenu(menu)
         }
+    }
+
+    /// The other open documents, then a file from disk.
+    private func rebuildCompareMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let front = (NSApp.keyWindow?.windowController as? EditorWindowController)?.loomingsDocument
+        let others = NSDocumentController.shared.documents.compactMap { $0 as? LoomingsDocument }.filter { $0 !== front }
+        if others.isEmpty {
+            let none = NSMenuItem(title: "No Other Open Documents", action: nil, keyEquivalent: "")
+            none.isEnabled = false
+            menu.addItem(none)
+        }
+        for document in others {
+            let item = NSMenuItem(title: document.displayName, action: #selector(EditorWindowController.compareWithDocument(_:)), keyEquivalent: "")
+            item.representedObject = document
+            menu.addItem(item)
+        }
+        menu.addItem(.separator())
+        menu.addItem(withTitle: "Choose File\u{2026}", action: #selector(EditorWindowController.compareWithFile(_:)), keyEquivalent: "")
     }
 
     private func rebuildOutlineMenu(_ menu: NSMenu) {

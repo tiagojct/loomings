@@ -1,4 +1,5 @@
 import AppKit
+import LoomingsDocuments
 import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsPreview
@@ -465,6 +466,47 @@ final class EditorWindowController: NSWindowController,
         }
     }
 
+    // MARK: - Compare With
+
+    private var compareControllers: [CompareWindowController] = []
+
+    /// Opens the comparison of another text (left) with this document (right).
+    @discardableResult
+    func compare(withText text: String, title: String) -> CompareWindowController {
+        let controller = CompareWindowController(
+            leftTitle: title,
+            leftText: text,
+            rightTitle: exportTitle,
+            rightText: editor.source,
+            palette: ThemeManager.shared.resolved()
+        )
+        compareControllers.append(controller)
+        controller.showWindow(nil)
+        return controller
+    }
+
+    @objc func compareWithDocument(_ sender: NSMenuItem) {
+        guard let other = sender.representedObject as? LoomingsDocument,
+              let otherController = other.windowControllers.first as? EditorWindowController else { return }
+        compare(withText: otherController.editor.source, title: otherController.exportTitle)
+    }
+
+    @objc func compareWithFile(_ sender: Any?) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.allowsOtherFileTypes = true
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            do {
+                let file = try TextFileCodec.decode(Data(contentsOf: url))
+                self.compare(withText: file.text, title: url.deletingPathExtension().lastPathComponent)
+            } catch {
+                NSAlert(error: error).beginSheetModal(for: window)
+            }
+        }
+    }
+
     // MARK: - Projector mode
 
     private(set) var isProjectorMode = false
@@ -876,7 +918,7 @@ final class EditorWindowController: NSWindowController,
 
     // MARK: - Export and print
 
-    private var exportTitle: String {
+    var exportTitle: String {
         let name = loomingsDocument?.displayName ?? "Untitled"
         let base = (name as NSString).deletingPathExtension
         return base.isEmpty ? name : base
