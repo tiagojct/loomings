@@ -52,4 +52,11 @@ struct SectionStatisticsTests {
         #expect(limited.sections.first?.limit == 4)
         #expect(limited.directiveNotes.map(\.line) == [2])
     }
+
+    @Test("The report counts only sections that have a limit")
+    func reportKeepsOnlyLimitedSections() {
+        let report = TeachingReport.make(source: "---\nlimit: A 4\n---\n\n## A\n\none two\n\n## B\n\nthree\n")
+        #expect(report.sections.map(\.heading.title) == ["A"])
+        #expect(TeachingReport.limits(in: "---\nlimit: A 4\nlimit: nope\n---\n").limits == [SectionLimit(heading: "A", maxWords: 4)])
+    }
 }

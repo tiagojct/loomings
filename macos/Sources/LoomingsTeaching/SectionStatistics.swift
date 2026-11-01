@@ -15,10 +15,18 @@ public struct SectionCount: Equatable, Sendable {
 }
 
 public enum SectionStatistics {
-    public static func sections(_ source: String, outline: [OutlineItem], limits: [SectionLimit]) -> [SectionCount] {
+    /// Every section, or with `onlyLimited` only those a limit names (the
+    /// others are not counted at all).
+    public static func sections(
+        _ source: String,
+        outline: [OutlineItem],
+        limits: [SectionLimit],
+        onlyLimited: Bool = false
+    ) -> [SectionCount] {
         let text = source as NSString
         let wanted = Dictionary(limits.map { (normalized($0.heading), $0.maxWords) }, uniquingKeysWith: { first, _ in first })
-        return outline.enumerated().map { index, heading in
+        return outline.enumerated().compactMap { index, heading in
+            if onlyLimited, wanted[normalized(heading.title)] == nil { return nil }
             let start = min(heading.range.location, text.length)
             let next = outline[(index + 1)...].first { $0.level <= heading.level }
             let end = min(next?.range.location ?? text.length, text.length)

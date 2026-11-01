@@ -28,6 +28,15 @@ public enum ExerciseEvaluator {
         _ source: String,
         attached: AttachedChecks? = nil
     ) -> (results: [CheckResult], notes: [DirectiveNote]) {
+        evaluate(ParsedMarkdown(source), attached: attached)
+    }
+
+    /// As above, reusing a parse of the whole document for its own checks.
+    public static func evaluate(
+        _ parsed: ParsedMarkdown,
+        attached: AttachedChecks? = nil
+    ) -> (results: [CheckResult], notes: [DirectiveNote]) {
+        let source = parsed.source
         var checks: [ExerciseCheck] = []
         var notes: [DirectiveNote] = []
         for directive in Directives.read(source) where directive.key == "check" {
@@ -38,12 +47,15 @@ public enum ExerciseEvaluator {
         }
 
         var results: [CheckResult] = []
+        func needsWords(_ list: [ExerciseCheck]) -> Bool {
+            list.contains { if case .words = $0 { return true } else { return false } }
+        }
         if !checks.isEmpty {
-            let census = Census(source)
+            let census = Census(parsed, countWords: needsWords(checks))
             results += checks.map { census.result(for: $0) }
         }
         if let attached, !attached.checks.isEmpty {
-            let census = Census(scope(of: source, after: attached.after))
+            let census = Census(ParsedMarkdown(scope(of: source, after: attached.after)), countWords: needsWords(attached.checks))
             results += attached.checks.map { census.result(for: $0) }
         }
         return (results, notes)
@@ -86,21 +98,28 @@ private struct Census {
     var strong = 0
     var words = 0
 
-    init(_ source: String) {
-        let text = source as NSString
-        let frontmatter = MarkdownFrontmatter.range(in: text)
-        let body = frontmatter.map { text.substring(from: NSMaxRange($0)) } ?? source
-        words = TextStatistics.countWords(body)
+    init(_ parsed: ParsedMarkdown, countWords: Bool) {
+        let text = parsed.text
+        let frontmatter = parsed.frontmatter
+        if countWords {
+            let body = frontmatter.map { text.substring(from: NSMaxRange($0)) } ?? parsed.source
+            words = TextStatistics.countWords(body)
+        }
 
-        let map = SourceMap(source)
-        let tree = MarkdownTree(parsing: source)
+        let map = parsed.map
+        let tree = parsed.tree
         withExtendedLifetime(tree) {
-            var stack: [(MarkdownNode, Bool)] = [(tree.document, false)]
-            while let (node, insideItem) = stack.popLast() {
-                if let frontmatter, let range = map.nsRange(for: node),
-                   node.kind != .document, NSIntersectionRange(range, frontmatter).length > 0 {
+            var stack: [(MarkdownNode, Bool)] = []
+            // Frontmatter can only be a top-level block, so only those are tested.
+            for child in tree.document.children {
+                if let frontmatter, let range = map.nsRange(for: child),
+                   NSIntersectionRange(range, frontmatter).length > 0 {
                     continue
                 }
+                stack.append((child, false))
+            }
+            stack.reverse()
+            while let (node, insideItem) = stack.popLast() {
                 count(node, insideItem: insideItem, map: map, text: text)
                 let childInsideItem = insideItem || node.kind == .item
                 for child in node.children {

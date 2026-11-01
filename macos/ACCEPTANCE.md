@@ -160,7 +160,12 @@ parse, joined before the result is delivered. It never runs on the edit path.
 | 10 MB | 663 ms | 0.78 ms |
 
 At 1 MB the report (62 ms) finishes before the parse (91 ms), so it adds no
-waiting time; at 10 MB likewise (663 ms against 930 ms). Measured with
+waiting time; at 10 MB likewise (663 ms against 930 ms). With three checks
+and two section limits it is 119 ms at 1 MB and 1.27 s at 10 MB (one parse
+shared by the checker, the checks and the outline; words counted only when
+a check needs them; only limited sections counted). A run overtaken by a
+newer edit is skipped, so slow work never queues behind typing. The cost of
+section limits grows with the number of limited sections. Measured with
 `LoomingsBench --teaching` and the full bench, release build.
 
 ## Teaching features (2026-11-01)

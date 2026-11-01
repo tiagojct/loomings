@@ -215,17 +215,23 @@ private func makeEditor(palette: ResolvedPalette?) -> EditorHost {
 /// The teaching report alone (checker and, later, checks and limits).
 @MainActor
 private func printTeachingTable(sizes: [Int]) {
-    print("teaching report, ms (best of 3)")
+    print("teaching report, ms (best of 3): plain, then with checks and a limit")
+    // A realistic set: three checks and limits on two sections of the
+    // document (the corpus repeats its own headings, so none of those).
+    let directives = "---\ncheck: heading 2 3\ncheck: bullet-list 3\ncheck: words 500\nlimit: Introduction 300\nlimit: Method 500\n---\n\n# Introduction\n\nSome words.\n\n# Method\n\nMore words.\n\n"
     for size in sizes {
         let corpus = makeCorpus(bytes: size, shape: "mixed")
-        var best = Double.infinity
-        var notes = 0
-        for _ in 0..<3 {
-            let start = DispatchTime.now().uptimeNanoseconds
-            notes = TeachingReport.make(source: corpus).lintIssues.count
-            best = min(best, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+        var timings: [String] = []
+        for source in [corpus, directives + corpus] {
+            var best = Double.infinity
+            for _ in 0..<3 {
+                let start = DispatchTime.now().uptimeNanoseconds
+                _ = TeachingReport.make(source: source)
+                best = min(best, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+            }
+            timings.append(format(best))
         }
-        print("\(size)\t\(format(best))\tnotes \(notes)")
+        print("\(size)\t" + timings.joined(separator: "\t"))
     }
 }
 

@@ -152,4 +152,28 @@ struct EditorControllerTests {
         editor.highlightsCurrentLine = false
         #expect(editor.textView.decorations(for: "line").isEmpty)
     }
+
+    @Test("A slow companion never builds a backlog behind typing")
+    func slowCompanionKeepsUp() async throws {
+        let editor = EditorController()
+        editor.companionAnalysis = { _ in
+            Thread.sleep(forTimeInterval: 0.3)
+            return true
+        }
+        editor.setText("start\n")
+        // A keystroke every 150 ms for 3 s: each pause enqueues a parse.
+        for _ in 0..<20 {
+            editor.textView.setSelectedRange(NSRange(location: (editor.source as NSString).length, length: 0))
+            editor.textView.insertText("x", replacementRange: editor.textView.selectedRange())
+            try await Task.sleep(nanoseconds: 150_000_000)
+        }
+        let stopped = Date()
+        for _ in 0..<400 where editor.lastAppliedRevision != editor.revision {
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        let catchUp = Date().timeIntervalSince(stopped)
+        #expect(editor.lastAppliedRevision == editor.revision)
+        // One in-flight run plus the last one, not twenty queued runs.
+        #expect(catchUp < 1.0, "caught up \(catchUp) s after typing stopped")
+    }
 }

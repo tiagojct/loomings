@@ -187,4 +187,21 @@ struct DocumentAnalysisTests {
         let output = MarkdownParser.parse("---\ntitle: A report\ndate: today\n---\n\n# Real\n")
         #expect(output.outline.map(\.title) == ["Real"])
     }
+
+    @Test("The heading-only outline equals the full parse's outline")
+    func outlineOnlyMatchesFullParse() throws {
+        let resources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Resources")
+        var sources = [
+            "---\ntitle: x\n---\n\n# A\n\nB\n===\n\n> ## Quoted\n\n- ### In a list\n\nC\n---\n",
+            "#Not\n\n####### seven\n\n# Trailing #\n",
+        ]
+        for name in ["example.md", "cheatsheet.md", "lessons/01-basics.md", "lessons/06-frontmatter.md"] {
+            sources.append(try String(contentsOf: resources.appendingPathComponent(name), encoding: .utf8))
+        }
+        for source in sources {
+            #expect(MarkdownParser.outline(source) == MarkdownParser.parse(source).outline)
+        }
+    }
 }

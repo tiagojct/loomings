@@ -73,6 +73,16 @@ public enum MarkdownNodeKind: Equatable, Sendable {
     case other
 }
 
+extension MarkdownNodeKind {
+    /// Blocks that can hold other blocks (and so headings).
+    public var isBlockContainer: Bool {
+        switch self {
+        case .document, .blockQuote, .list, .item, .customBlock: return true
+        default: return false
+        }
+    }
+}
+
 public enum MarkdownCheckbox: Sendable {
     case checked
     case unchecked

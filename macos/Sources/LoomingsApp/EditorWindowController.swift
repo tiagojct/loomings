@@ -326,12 +326,8 @@ final class EditorWindowController: NSWindowController,
 
     /// Outline entries with each section's words, and its limit when set.
     private func outlineEntries() -> [(item: OutlineItem, title: String)] {
-        let sections: [SectionCount]
-        if let report = currentReport, !report.sections.isEmpty {
-            sections = report.sections
-        } else {
-            sections = SectionStatistics.sections(editor.source, outline: editor.outline, limits: [])
-        }
+        let source = editor.source
+        let sections = SectionStatistics.sections(source, outline: editor.outline, limits: TeachingReport.limits(in: source).limits)
         return sections.map { section in
             let name = section.heading.title.isEmpty ? "(empty heading)" : section.heading.title
             let count = section.limit.map { "\(section.words)/\($0)" } ?? "\(section.words)"

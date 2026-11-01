@@ -200,6 +200,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         label: "eu.tiagojacinto.loomings.parse",
         qos: .userInitiated
     )
+    private let latestTicket = ParseTicket()
     private let companionQueue = DispatchQueue(
         label: "eu.tiagojacinto.loomings.companion",
         qos: .userInitiated
@@ -534,20 +535,29 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         let companion = companionAnalysis
         let companionBox = CompanionBox()
         let companionDone = DispatchGroup()
+        let ticket = latestTicket
+        ticket.set(token)
         if let companion {
-            // Side by side with the parse, so it adds no waiting time.
+            // Side by side with the parse, so it adds no waiting time. A run
+            // that a newer snapshot has overtaken is skipped, so slow work
+            // never queues up behind typing.
             companionDone.enter()
             companionQueue.async {
-                companionBox.value = companion(source)
+                if ticket.isCurrent(token) { companionBox.value = companion(source) }
                 companionDone.leave()
             }
         }
         parseQueue.async { [weak self] in
+            guard ticket.isCurrent(token) else {
+                companionDone.wait()
+                return
+            }
             let parseStart = DispatchTime.now().uptimeNanoseconds
             let output = MarkdownParser.parse(source)
             let finished = DispatchTime.now().uptimeNanoseconds
             let duration = finished - parseStart
             companionDone.wait()
+            guard ticket.isCurrent(token) else { return }
             let extra = companionBox.value
 
             DispatchQueue.main.async {
@@ -1232,4 +1242,19 @@ private final class PointerTracker: NSResponder {
 /// wait orders the write before the read.
 private final class CompanionBox: @unchecked Sendable {
     var value: (any Sendable)?
+}
+
+/// The newest parse token, readable from the parse and companion queues.
+private final class ParseTicket: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latest: UInt64 = 0
+
+    func set(_ token: UInt64) {
+        lock.lock(); latest = token; lock.unlock()
+    }
+
+    func isCurrent(_ token: UInt64) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        return latest == token
+    }
 }

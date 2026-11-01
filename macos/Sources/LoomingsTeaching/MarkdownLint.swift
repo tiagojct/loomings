@@ -34,11 +34,14 @@ public struct LintIssue: Equatable, Sendable {
 public enum MarkdownLint {
     public static func lint(_ source: String) -> [LintIssue] {
         guard !source.isEmpty else { return [] }
-        let text = source as NSString
-        let map = SourceMap(source)
-        let tree = MarkdownTree(parsing: source)
-        var context = Context(text: text, map: map)
-        context.frontmatter = MarkdownFrontmatter.range(in: text)
+        return lint(ParsedMarkdown(source))
+    }
+
+    public static func lint(_ parsed: ParsedMarkdown) -> [LintIssue] {
+        guard parsed.text.length > 0 else { return [] }
+        let tree = parsed.tree
+        var context = Context(text: parsed.text, map: parsed.map)
+        context.frontmatter = parsed.frontmatter
 
         withExtendedLifetime(tree) {
             var stack: [MarkdownNode] = [tree.document]

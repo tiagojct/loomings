@@ -47,6 +47,38 @@ public enum MarkdownParser {
         )
     }
 
+    /// The outline alone: headings only, no spans, statistics or line map
+    /// beyond what headings need. Equal to `parse(_:).outline`.
+    public static func outline(_ source: String) -> [OutlineItem] {
+        outline(ParsedMarkdown(source))
+    }
+
+    public static func outline(_ parsed: ParsedMarkdown) -> [OutlineItem] {
+        let map = parsed.map
+        let text = parsed.text
+        let tree = parsed.tree
+        var spans: [MarkdownSyntaxSpan] = []
+        var outline: [OutlineItem] = []
+        withExtendedLifetime(tree) {
+            var stack: [MarkdownNode] = [tree.document]
+            while let node = stack.popLast() {
+                if node.kind == .heading {
+                    emitHeading(node, map: map, text: text, spans: &spans, outline: &outline)
+                    continue
+                }
+                var child = node.firstChild
+                while let current = child {
+                    if current.kind.isBlockContainer || current.kind == .heading { stack.append(current) }
+                    child = current.nextSibling
+                }
+            }
+        }
+        if let frontmatter = parsed.frontmatter {
+            outline.removeAll { $0.range.location < NSMaxRange(frontmatter) }
+        }
+        return outline.sorted { $0.range.location < $1.range.location }
+    }
+
     // MARK: - Node emission
 
     private static func emit(
