@@ -9,7 +9,8 @@ import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import { tags as t } from '@lezer/highlight';
-import { renderMarkdown } from './markdown.js';
+import { renderMarkdown, renderPreview } from './markdown.js';
+import { blockForLine, previewBlocks } from './pairing.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -336,6 +337,44 @@ const sentenceFocusPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations });
 
+// Paired lines (Split view): the source lines of the preview block under the
+// pointer. Built for the visible lines only, and dropped on any edit, since
+// the block's lines are stale until the preview renders again.
+/** @type {import('@codemirror/state').StateEffectType<{from: number, to: number}|null>} */
+const pairedLinesEffect = /** @type {any} */ (StateEffect.define());
+const pairedLineDeco = Decoration.line({ class: 'cm-paired-line' });
+
+const pairedLinesPlugin = ViewPlugin.fromClass(class {
+  constructor() {
+    /** @type {{from: number, to: number}|null} */ this.lines = null;
+    this.decorations = Decoration.none;
+  }
+  update(update) {
+    let changed = false;
+    for (const tr of update.transactions) {
+      for (const e of tr.effects) if (e.is(pairedLinesEffect)) { this.lines = e.value; changed = true; }
+    }
+    if (update.docChanged && this.lines) { this.lines = null; changed = true; }
+    if (changed || (this.lines && update.viewportChanged)) this.decorations = this.build(update.view);
+  }
+  build(view) {
+    if (!this.lines) return Decoration.none;
+    const doc = view.state.doc;
+    const first = doc.line(Math.min(this.lines.from, doc.lines));
+    const last = doc.line(Math.min(this.lines.to, doc.lines));
+    const builder = /** @type {RangeSetBuilder<Decoration>} */ (new RangeSetBuilder());
+    for (const { from, to } of view.visibleRanges) {
+      const start = Math.max(from, first.from);
+      const end = Math.min(to, last.to);
+      if (start > end) continue;
+      for (let n = doc.lineAt(start).number; n <= doc.lineAt(end).number; n++) {
+        builder.add(doc.line(n).from, doc.line(n).from, pairedLineDeco);
+      }
+    }
+    return builder.finish();
+  }
+}, { decorations: v => v.decorations });
+
 const smartTypographyHandler = EditorView.inputHandler.of((view, from, to, text) => {
   if (!smartTypo) return false;
   if (text === '"') {
@@ -463,6 +502,7 @@ function buildState(doc = '') {
       smartTypographyHandler,
       sentenceFocusPlugin,
       frontmatterPlugin,
+      pairedLinesPlugin,
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
@@ -1200,6 +1240,7 @@ function applyViewMode() {
   /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]')).forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.view === mode));
   });
+  clearPairing();
   if (mode !== 'editor') updatePreview();
   if (mode !== 'preview') view.requestMeasure();
   invalidatePreviewBlocks();
@@ -1247,6 +1288,7 @@ function getPreviewBlocks() {
 }
 function invalidatePreviewBlocks() {
   cachedPreviewBlocks = null;
+  pairElements = null;
 }
 window.addEventListener('resize', invalidatePreviewBlocks, { passive: true });
 
@@ -1311,9 +1353,74 @@ preview.addEventListener('scroll', () => {
   if (effectiveViewMode() === 'split') requestAnimationFrame(syncEditorToPreview);
 }, { passive: true });
 
+// ==========================
+//  Paired lines (split mode)
+// ==========================
+// The pointer over a source line lights the preview block made from it; the
+// pointer over a preview block lights its source lines. Top-level blocks
+// carry their lines (renderPreview); a re-render or a mode change clears both.
+
+/** @type {HTMLElement[]|null} */ let pairElements = null;
+/** @type {import('./pairing.js').PreviewBlock[]} */ let pairBlocks = [];
+/** @type {HTMLElement|null} */ let pairedBlockEl = null;
+let editorPaired = false;
+/** @type {number|null} */ let pairFrame = null;
+
+function lightPreviewBlock(node) {
+  if (pairedBlockEl === node) return;
+  pairedBlockEl?.classList.remove('paired');
+  pairedBlockEl = node;
+  node?.classList.add('paired');
+}
+
+function lightSourceLines(lines) {
+  if (!lines && !editorPaired) return;
+  editorPaired = !!lines;
+  view.dispatch({ effects: pairedLinesEffect.of(lines) });
+}
+
+function clearPairing() {
+  lightPreviewBlock(null);
+  lightSourceLines(null);
+}
+
+view.contentDOM.addEventListener('mousemove', (e) => {
+  if (effectiveViewMode() !== 'split') return;
+  if (pairFrame !== null) cancelAnimationFrame(pairFrame);
+  const { clientX: x, clientY: y } = e;
+  pairFrame = requestAnimationFrame(() => {
+    pairFrame = null;
+    const pos = view.posAtCoords({ x, y });
+    if (pos === null) { lightPreviewBlock(null); return; }
+    if (!pairElements) {
+      pairElements = /** @type {HTMLElement[]} */ (Array.from(preview.querySelectorAll('[data-line-end]')));
+      pairBlocks = previewBlocks(preview);
+    }
+    const index = blockForLine(pairBlocks, view.state.doc.lineAt(pos).number - 1);
+    lightPreviewBlock(index >= 0 ? pairElements[index] : null);
+  });
+}, { passive: true });
+
+view.contentDOM.addEventListener('mouseleave', () => {
+  if (pairFrame !== null) { cancelAnimationFrame(pairFrame); pairFrame = null; }
+  lightPreviewBlock(null);
+});
+
+preview.addEventListener('mouseover', (e) => {
+  if (effectiveViewMode() !== 'split') return;
+  const node = /** @type {HTMLElement} */ (e.target).closest('[data-line-end]');
+  if (!(node instanceof HTMLElement) || !preview.contains(node)) { lightSourceLines(null); return; }
+  const line = Number(node.dataset.line);
+  const end = Number(node.dataset.lineEnd);
+  lightSourceLines({ from: line + 1, to: Math.max(line + 1, end) });
+});
+
+preview.addEventListener('mouseleave', () => lightSourceLines(null));
+
 function updatePreview() {
   if (!previewShown()) return;
-  preview.innerHTML = renderMarkdown(getText());
+  preview.innerHTML = renderPreview(getText());
+  pairedBlockEl = null;
   invalidatePreviewBlocks();
   if (effectiveViewMode() === 'split') syncPreviewToEditor();
 }
@@ -1322,7 +1429,9 @@ function updatePreview() {
 // sure it is current even when the user is in editor-only mode.
 function printPreview() {
   const wasShown = previewShown();
-  preview.innerHTML = renderMarkdown(getText());
+  preview.innerHTML = renderPreview(getText());
+  pairedBlockEl = null;
+  invalidatePreviewBlocks();
   if (!wasShown) preview.classList.remove('hidden');
   const cleanup = () => { if (!wasShown) preview.classList.add('hidden'); window.removeEventListener('afterprint', cleanup); };
   window.addEventListener('afterprint', cleanup);

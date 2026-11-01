@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripFrontmatter, renderMarkdown, SAFE_URL } from './markdown.js';
+import { stripFrontmatter, renderMarkdown, renderPreview, SAFE_URL } from './markdown.js';
 
 describe('markdown and frontmatter', () => {
   it('strips YAML frontmatter at the start of a document', () => {
@@ -93,5 +93,16 @@ describe('URL sanitization', () => {
     const html = renderMarkdown(raw);
     expect(html).toMatch(/<h1 data-line="0">/);
     expect(html).toMatch(/<p data-line="2">/);
+  });
+
+  it('stamps data-line-end on top-level blocks of the live preview only', () => {
+    const raw = `# Title\n\nOne\ntwo\n\n- a\n- b\n`;
+    const html = renderPreview(raw);
+    expect(html).toMatch(/<h1 data-line="0" data-line-end="1">/);
+    expect(html).toMatch(/<p data-line="2" data-line-end="4">/);
+    expect(html).toMatch(/<ul data-line="5" data-line-end="7">/);
+    expect(html).toMatch(/<li data-line="5">/);
+    // Export and the native fixtures keep markdown-it's own output.
+    expect(renderMarkdown(raw)).not.toContain('data-line-end');
   });
 });

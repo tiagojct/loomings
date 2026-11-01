@@ -27,9 +27,12 @@ export function stripFrontmatter(text) {
  * Creates and configures a markdown-it instance.
  *
  * @param {object} [options]
+ * @param {{lineEnds?: boolean}} [extras] lineEnds stamps data-line-end (the
+ *   exclusive last source line, blank lines not counted) on top-level blocks,
+ *   for paired lines in the live preview.
  * @returns {InstanceType<typeof MarkdownIt>}
  */
-export function createMarkdownRenderer(options = {}) {
+export function createMarkdownRenderer(options = {}, { lineEnds = false } = {}) {
   const md = new MarkdownIt({
     html: false,
     linkify: true,
@@ -40,9 +43,17 @@ export function createMarkdownRenderer(options = {}) {
 
   // Stamp block tokens with data-line for scroll sync and navigation
   md.core.ruler.push('source_lines', (state) => {
+    /** @type {string[]|null} */
+    let lines = null;
     for (const token of state.tokens) {
       if (token.map && token.nesting !== -1 && !token.hidden) {
         token.attrSet('data-line', String(token.map[0]));
+        if (lineEnds && token.level === 0) {
+          lines ??= state.src.split('\n');
+          let end = token.map[1];
+          while (end > token.map[0] + 1 && !(lines[end - 1] ?? '').trim()) end--;
+          token.attrSet('data-line-end', String(end));
+        }
       }
     }
   });
@@ -83,6 +94,7 @@ export function createMarkdownRenderer(options = {}) {
 }
 
 export const defaultMd = createMarkdownRenderer();
+const previewMd = createMarkdownRenderer({}, { lineEnds: true });
 
 /**
  * Renders markdown to HTML, stripping frontmatter so it is never
@@ -93,4 +105,16 @@ export const defaultMd = createMarkdownRenderer();
  */
 export function renderMarkdown(text) {
   return defaultMd.render(stripFrontmatter(text));
+}
+
+/**
+ * As renderMarkdown, for the live preview: top-level blocks also carry
+ * data-line-end. Export keeps renderMarkdown, whose output the native
+ * preview fixtures are made from.
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function renderPreview(text) {
+  return previewMd.render(stripFrontmatter(text));
 }

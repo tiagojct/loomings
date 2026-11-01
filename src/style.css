@@ -267,6 +267,15 @@ body.fullscreen #statusbar:hover {
 }
 .cm-frontmatter span { color: var(--fg-ghost) !important; }
 
+/* Paired lines (Split view): the source of the preview block under the
+   pointer, and the block made from the source line under it. */
+.cm-paired-line { background: color-mix(in srgb, var(--selection) 45%, transparent); }
+#preview .paired {
+  background: color-mix(in srgb, var(--selection) 45%, transparent);
+  box-shadow: 0 0 0 6px color-mix(in srgb, var(--selection) 45%, transparent);
+  border-radius: 2px;
+}
+
 #editor-container {
   flex: 1;
   display: flex;
