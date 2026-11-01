@@ -198,5 +198,147 @@
       true,
       false
     ]
+  },
+  {
+    "name": "numbered list inside a bullet",
+    "source": "- a\n  1. b\n  2. c\n",
+    "checks": [
+      "nested-list",
+      "ordered-list 2",
+      "bullet-list 1"
+    ],
+    "passed": [
+      true,
+      true,
+      true
+    ]
+  },
+  {
+    "name": "collapsed and shortcut reference links",
+    "source": "[a][] and [b]\n\n[a]: https://a.example\n[b]: https://b.example\n",
+    "checks": [
+      "reference-link",
+      "link 2"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "an autolink is a link, not a reference",
+    "source": "<https://a.example>\n",
+    "checks": [
+      "link",
+      "reference-link"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "a fence inside a list item names its language",
+    "source": "- item\n\n  ```python\n  x\n  ```\n",
+    "checks": [
+      "code-block",
+      "code-language"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "tilde fence with a language",
+    "source": "~~~R\nx\n~~~\n",
+    "checks": [
+      "code-block r",
+      "code-language"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "an image inside a link",
+    "source": "[![A boat](b.png)](https://a.example)\n",
+    "checks": [
+      "link",
+      "image-alt"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "a table with only a header",
+    "source": "| a | b |\n| --- | --- |\n",
+    "checks": [
+      "table 1"
+    ],
+    "passed": [
+      false
+    ]
+  },
+  {
+    "name": "emphasis inside a heading",
+    "source": "# A *word*\n",
+    "checks": [
+      "emphasis",
+      "heading 1"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "strong and emphasis together",
+    "source": "***both***\n",
+    "checks": [
+      "emphasis",
+      "strong"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "quotation inside a list",
+    "source": "- > said\n",
+    "checks": [
+      "quote",
+      "bullet-list 1"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "setext headings count",
+    "source": "Title\n=====\n\nPart\n----\n",
+    "checks": [
+      "heading 1",
+      "heading 2"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "headings in frontmatter do not count",
+    "source": "---\ntitle: x\n---\n\nText\n",
+    "checks": [
+      "heading"
+    ],
+    "passed": [
+      false
+    ]
   }
 ]

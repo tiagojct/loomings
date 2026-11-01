@@ -444,6 +444,19 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   font-size: 12px;
 }
 
+/* The exercise checklist: each check with a tick or an open circle. */
+#status-exercise.done { color: var(--accent-light); }
+#statusbar .check-row {
+  align-items: flex-start;
+  cursor: default;
+  white-space: normal;
+}
+.check-mark { flex: 0 0 auto; width: 1.2em; color: var(--fg-ghost); text-align: center; }
+.check-row.passed .check-mark { color: var(--accent-light); }
+.check-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.check-detail { font-size: 11px; color: var(--fg-ghost); }
+.check-note { padding: 6px 10px; font-size: 12px; color: var(--fg-dim); white-space: normal; }
+
 /* Explain this marker: a small card under the marker. */
 #explain {
   position: fixed;

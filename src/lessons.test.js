@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { LESSONS, lessonBySlug } from './lessons.js';
+import checks from '../lessons/checks.json';
 
 describe('lessons', () => {
   it('bundles at least one lesson', () => {
@@ -14,6 +15,10 @@ describe('lessons', () => {
       expect(l.order).toBeLessThan(999);
       expect(l.content, l.slug).toMatch(/^# /m);
     }
+  });
+  it('names each lesson file, and lessons/checks.json covers exactly those files', () => {
+    expect(LESSONS.every((l) => /^\d+-.+\.md$/.test(l.file))).toBe(true);
+    expect(Object.keys(checks).sort()).toEqual(LESSONS.map((l) => l.file).sort());
   });
   it('keeps lessons in numeric order', () => {
     const orders = LESSONS.map((l) => l.order);

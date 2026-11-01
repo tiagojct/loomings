@@ -12,6 +12,7 @@ export const LESSONS = Object.entries(files)
     const m = file.match(/^(\d+)-(.+)\.md$/);
     const heading = content.match(/^#\s+(.+)$/m);
     return {
+      file,
       order: m ? parseInt(m[1], 10) : 999,
       slug: m ? m[2] : file.replace(/\.md$/, ''),
       title: heading ? heading[1].trim() : file,

@@ -13,6 +13,9 @@ import { renderMarkdown, renderPreview } from './markdown.js';
 import { blockForLine, previewBlocks } from './pairing.js';
 import { lint } from './teaching/lint.js';
 import { explain, markerAt } from './teaching/glossary.js';
+import { evaluate } from './teaching/exercises.js';
+import { parseCheck } from './teaching/directives.js';
+import lessonChecks from '../lessons/checks.json';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -1191,6 +1194,7 @@ async function fileNew() {
     if (!proceed) return;
   }
   await session.discardScratch();
+  attachedChecks = null;
   setText('');
   currentFile = null;
   currentDocId = null;
@@ -1566,8 +1570,10 @@ function scheduleTeaching() {
 
 function runTeaching() {
   teachingTimer = null;
-  const issues = lint(getText());
+  const text = getText();
+  const issues = lint(text);
   teaching = { revision: teachingRevision, issues };
+  updateExercise(evaluate(text, attachedChecks));
   view.dispatch({ effects: notesEffect.of(issues) });
   notesWrap.classList.toggle('hidden', issues.length === 0);
   notesButton.textContent = issues.length === 1 ? '1 note' : `${issues.length} notes`;
@@ -1617,6 +1623,59 @@ attachMenu(notesButton, notesMenu, {
     else goToPosition(issue.from);
   },
 });
+
+// ==========================
+//  Teaching: exercises that check themselves
+// ==========================
+// A document's own `check:` lines, plus the checks a bundled lesson brings
+// (lessons/checks.json). Those look only after the lesson's text and live
+// in memory only: they are never saved with the file.
+
+const exerciseWrap   = el('exercise-wrap');
+const exerciseButton = el('status-exercise');
+const exerciseMenu   = el('exercise-menu');
+/** @type {import('./teaching/exercises.js').AttachedChecks|null} */
+let attachedChecks = null;
+/** @type {ReturnType<typeof evaluate>} */
+let exercise = { results: [], notes: [] };
+
+/** @param {{file: string, content: string}} lesson */
+function checksForLesson(lesson) {
+  const values = /** @type {Record<string, string[]>} */ (lessonChecks)[lesson.file] || [];
+  const checks = values.map((value) => parseCheck({ key: 'check', value, line: 0 }))
+    .flatMap((r) => (r.ok ? [r.check] : []));
+  return checks.length ? { checks, after: lesson.content } : null;
+}
+
+/** @param {ReturnType<typeof evaluate>} report */
+function updateExercise(report) {
+  exercise = report;
+  const total = report.results.length;
+  const passed = report.results.filter((r) => r.passed).length;
+  const notes = report.notes.length;
+  exerciseWrap.classList.toggle('hidden', total === 0 && notes === 0);
+  const done = total > 0 && passed === total;
+  exerciseButton.textContent = total === 0
+    ? (notes === 1 ? '1 check not understood' : `${notes} checks not understood`)
+    : (done ? 'Exercise done' : `Exercise ${passed} of ${total}`);
+  exerciseButton.classList.toggle('done', done);
+}
+
+function renderExerciseMenu() {
+  const rows = exercise.results.map((r) => {
+    const state = r.passed ? 'Done' : 'Not yet';
+    return `<div class="tb-menu-item check-row ${r.passed ? 'passed' : ''}" role="listitem" tabindex="-1"
+        aria-label="${state}: ${escapeHtml(r.label)}, ${escapeHtml(r.detail)}">
+        <span class="check-mark" aria-hidden="true">${r.passed ? '✓' : '○'}</span>
+        <span class="check-text"><span>${escapeHtml(r.label)}</span><span class="check-detail">${escapeHtml(r.detail)}</span></span>
+      </div>`;
+  });
+  const notes = exercise.notes.map((n) =>
+    `<div class="tb-menu-item check-note" role="listitem" tabindex="-1">Line ${n.line + 1}: ${escapeHtml(n.message)}</div>`);
+  exerciseMenu.innerHTML = rows.concat(notes).join('');
+}
+
+attachMenu(exerciseButton, exerciseMenu, { onOpen: renderExerciseMenu });
 
 // ==========================
 //  Teaching: explain this marker
@@ -1717,6 +1776,8 @@ async function loadFile(payload) {
     if (!proceed) return;
   }
   await session.discardScratch(); // the buffer we're replacing is no longer relevant to recover
+  // Checks come only with a bundled lesson; any other document drops them.
+  attachedChecks = payload.attached || null;
   setText(payload.content);
   currentDocId = payload.docId || null;
   if (!payload.path) {
@@ -1782,7 +1843,7 @@ async function loadSharedPayload(payload) {
 async function openLesson(slug) {
   const lesson = lessonBySlug(slug);
   if (!lesson) { flashStatus('No lesson called ' + slug); return false; }
-  await loadFile({ path: '', content: lesson.content, title: lesson.title });
+  await loadFile({ path: '', content: lesson.content, title: lesson.title, attached: checksForLesson(lesson) });
   // Lessons are written to be read source-beside-result.
   if (!narrowMq.matches) setViewMode('split');
   return true;
