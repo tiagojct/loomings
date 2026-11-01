@@ -57,6 +57,17 @@ export function splitLines(source) {
 }
 
 const md = new MarkdownIt({ html: true, linkify: false, typographer: false });
+
+/**
+ * A fence's info string as cmark gives it: escapes and entities undone,
+ * outer white space removed.
+ *
+ * @param {string} info
+ * @returns {string}
+ */
+export function fenceInfo(info) {
+  return md.utils.unescapeAll(info).trim();
+}
 // Escapes stay separate tokens (text_special) and leftover emphasis marks
 // stay one token per mark, each with its own offset.
 md.core.ruler.disable('text_join');

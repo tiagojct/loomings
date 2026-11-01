@@ -6,9 +6,10 @@
 // macos/Tests/LoomingsTeachingTests/Fixtures/check-cases.json. Pure: no DOM.
 // ========================================
 
-import { parseSource } from './parse.js';
+import { parseSource, fenceInfo } from './parse.js';
 import { readDirectives, parseCheck } from './directives.js';
 import { countWords } from '../stats.js';
+import { addedText } from './linediff.js';
 
 /**
  * @typedef {import('./directives.js').Check} Check
@@ -50,7 +51,9 @@ const isLowSurrogate = (/** @type {number} */ unit) => unit >= 0xdc00 && unit <=
 /**
  * The part of `source` after the anchor (the lesson's original text):
  * everything after it while the document still starts with it, else after
- * its last line, else after the point where the document stops matching it.
+ * its last line, else what the document adds to the lesson after the point
+ * where it stops matching it. In that last case an edited lesson line gives
+ * only its new words, so the lesson's own words never count as the answer.
  *
  * @param {string} source
  * @param {string|null} anchor
@@ -67,7 +70,7 @@ export function scope(source, anchor) {
   let common = 0;
   while (common < source.length && common < trimmed.length && source.charCodeAt(common) === trimmed.charCodeAt(common)) common++;
   while (common > 0 && common < source.length && isLowSurrogate(source.charCodeAt(common))) common--;
-  return source.slice(common);
+  return addedText(trimmed.slice(common), source.slice(common));
 }
 
 /**
@@ -120,7 +123,7 @@ function census(source) {
         // line starts with the fence.
         const opening = token.map ? doc.lines[token.map[0]].text.trim() : '';
         const fenced = opening.startsWith('```') || opening.startsWith('~~~');
-        const language = fenced ? token.info.split(' ')[0].toLowerCase() : '';
+        const language = fenced ? fenceInfo(token.info).split(' ')[0].toLowerCase() : '';
         found.codeLanguages.push(language || null);
         break;
       }

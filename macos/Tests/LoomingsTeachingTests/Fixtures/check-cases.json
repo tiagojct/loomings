@@ -340,5 +340,74 @@
     "passed": [
       false
     ]
+  },
+  {
+    "name": "fence with a space before the language",
+    "source": "``` python\nx\n```\n",
+    "checks": [
+      "code-block python",
+      "code-language"
+    ],
+    "passed": [
+      true,
+      true
+    ]
+  },
+  {
+    "name": "fence language in capitals after tildes",
+    "source": "~~~ Py\nx\n~~~\n",
+    "checks": [
+      "code-block py"
+    ],
+    "passed": [
+      true
+    ]
+  },
+  {
+    "name": "escaped characters in the fence language",
+    "source": "```c\\+\\+\nx\n```\n",
+    "checks": [
+      "code-block c++"
+    ],
+    "passed": [
+      true
+    ]
+  },
+  {
+    "name": "a letter typed inside the lesson's last line is not an answer",
+    "after": "# Lesson\n\nWrite one two three four five six seven eight nine ten.\n",
+    "source": "# Lesson\n\nWrite one two thxree four five six seven eight nine ten.\n",
+    "checks": [
+      "words 3"
+    ],
+    "passed": [
+      false
+    ]
+  },
+  {
+    "name": "an answer after an edited last line still counts",
+    "after": "# Lesson\n\nWrite one two three four five six seven eight nine ten.\n",
+    "source": "# Lesson\n\nWrite one two three four five six seven eight nine ten\n\n- a\n- b\n",
+    "checks": [
+      "bullet-list 2",
+      "words 3"
+    ],
+    "passed": [
+      true,
+      false
+    ]
+  },
+  {
+    "name": "words typed into the lesson's last line count, the lesson's do not",
+    "after": "# Lesson\n\nWrite one two three four five six seven eight nine ten.\n",
+    "source": "# Lesson\n\nWrite one two three alpha beta gamma four five six seven eight nine ten.\n",
+    "checks": [
+      "words 3",
+      "words 4"
+    ],
+    "passed": [
+      true,
+      false
+    ]
   }
 ]

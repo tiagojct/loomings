@@ -9,6 +9,8 @@ struct ExerciseEvaluatorTests {
         let source: String
         let checks: [String]
         let passed: [Bool]
+        /// The lesson text attached checks look after, when the case has one.
+        let after: String?
     }
 
     static func checks(_ values: [String]) -> [ExerciseCheck] {
@@ -25,7 +27,7 @@ struct ExerciseEvaluatorTests {
         let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: url))
         #expect(cases.count >= 15)
         for item in cases {
-            let attached = AttachedChecks(checks: Self.checks(item.checks), after: nil)
+            let attached = AttachedChecks(checks: Self.checks(item.checks), after: item.after)
             #expect(attached.checks.count == item.checks.count, "\(item.name): every check parses")
             let report = ExerciseEvaluator.evaluate(item.source, attached: attached)
             #expect(report.results.map(\.passed) == item.passed, "\(item.name)")
@@ -79,6 +81,11 @@ struct ExerciseEvaluatorTests {
             let trimmed = String(lesson.trimmingCharacters(in: .whitespacesAndNewlines).dropLast())
             let edited = ExerciseEvaluator.evaluate(trimmed, attached: attached).results
             #expect(edited.allSatisfy { !$0.passed }, "\(file): deleting the lesson's last character passes nothing")
+            let body = lesson.trimmingCharacters(in: .whitespacesAndNewlines) as NSString
+            let lastLine = body.range(of: "\n", options: .backwards).location + 1
+            let typedIn = body.replacingCharacters(in: NSRange(location: lastLine + 5, length: 0), with: "q")
+            let typedResults = ExerciseEvaluator.evaluate(typedIn, attached: attached).results
+            #expect(typedResults.allSatisfy { !$0.passed }, "\(file): a letter typed into the last line passes nothing")
             let answer = try #require(answers[file])
             let editedAnswered = ExerciseEvaluator.evaluate(trimmed + "\n" + answer, attached: attached).results
             let editedFailing = editedAnswered.filter { !$0.passed }.map(\.label)

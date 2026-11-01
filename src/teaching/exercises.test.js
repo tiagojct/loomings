@@ -64,7 +64,7 @@ describe('exercise checks: shared cases', () => {
   it('has the native cases', () => expect(cases.length).toBeGreaterThanOrEqual(15));
   for (const item of cases) {
     it(item.name, () => {
-      const attached = { checks: checks(item.checks), after: null };
+      const attached = { checks: checks(item.checks), after: item.after ?? null };
       expect(attached.checks.length).toBe(item.checks.length);
       const { results } = evaluate(item.source, attached);
       expect(results.map((r) => r.passed)).toEqual(item.passed);
@@ -94,6 +94,14 @@ describe('exercise checks', () => {
       ['A table with 1 row', 'no table yet'],
       ['At least 1 words', '2 words'],
     ]);
+  });
+
+  it('reads the fence language as cmark does: trimmed, escapes undone', () => {
+    const passed = (source, values) => evaluate(source, { checks: checks(values), after: null }).results.map((r) => r.passed);
+    expect(passed('``` python\nx\n```\n', ['code-block python', 'code-language'])).toEqual([true, true]);
+    expect(passed('~~~ Py\nx\n~~~\n', ['code-block py'])).toEqual([true]);
+    expect(passed('```c\\+\\+\nx\n```\n', ['code-block c++'])).toEqual([true]);
+    expect(passed('```   \nx\n```\n', ['code-language'])).toEqual([false]);
   });
 
   it('attached checks look only after their anchor', () => {
@@ -136,6 +144,10 @@ describe('exercise checks', () => {
       expect(evaluate(lesson, attached).results.every((r) => !r.passed), `${file} untouched`).toBe(true);
       const trimmed = lesson.trim().slice(0, -1);
       expect(evaluate(trimmed, attached).results.every((r) => !r.passed), `${file} last character deleted`).toBe(true);
+      const body = lesson.trim();
+      const lastLine = body.lastIndexOf('\n') + 1;
+      const typedIn = body.slice(0, lastLine + 5) + 'q' + body.slice(lastLine + 5);
+      expect(evaluate(typedIn, attached).results.every((r) => !r.passed), `${file} a letter typed into the last line`).toBe(true);
       const editedFailing = evaluate(trimmed + '\n' + answers[file], attached).results.filter((r) => !r.passed).map((r) => r.label);
       expect(editedFailing, `${file} answer after an edited last line`).toEqual([]);
       const failing = evaluate(lesson + answers[file], attached).results.filter((r) => !r.passed).map((r) => r.label);

@@ -63,8 +63,9 @@ public enum ExerciseEvaluator {
 
     /// The part of `source` that follows the anchor text: everything after it
     /// when the document still starts with it, else after its last line,
-    /// else after the point where the document stops matching it. Never the
-    /// whole document: the lesson's own examples must not pass for an answer.
+    /// else what the document adds to the anchor after the point where it
+    /// stops matching it. In that last case an edited anchor line gives only
+    /// its new words: the lesson's own words must not pass for an answer.
     static func scope(of source: String, after anchor: String?) -> String {
         guard let anchor else { return source }
         let trimmed = anchor.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -83,7 +84,39 @@ public enum ExerciseEvaluator {
         var common = 0
         while common < a.count, common < b.count, a[common] == b[common] { common += 1 }
         while common > 0, common < a.count, (0xDC00...0xDFFF).contains(a[common]) { common -= 1 }
-        return text.substring(from: common)
+        let rest = (trimmed as NSString).substring(from: min(common, b.count))
+        return addedText(old: rest, new: text.substring(from: common))
+    }
+
+    /// What `new` adds to `old`: lines it adds whole, and for a line it
+    /// changes, only the words it adds (one line of them per changed line).
+    static func addedText(old: String, new: String) -> String {
+        let a = old.split(separator: "\n", omittingEmptySubsequences: false)
+        let b = new.split(separator: "\n", omittingEmptySubsequences: false)
+        var out: [String] = []
+        var removed: [Int] = []
+        var added: [Int] = []
+        func flush() {
+            for (index, line) in added.enumerated() {
+                if index < removed.count {
+                    let words = LineDiff.words(old: a[removed[index]], new: b[line]).added.map { String(b[line][$0]) }
+                    if !words.isEmpty { out.append(words.joined(separator: " ")) }
+                } else {
+                    out.append(String(b[line]))
+                }
+            }
+            removed = []
+            added = []
+        }
+        for op in LineDiff.lines(old: a, new: b) {
+            switch op {
+            case .same: flush()
+            case .removed(let index): removed.append(index)
+            case .added(let index): added.append(index)
+            }
+        }
+        flush()
+        return out.joined(separator: "\n")
     }
 }
 
