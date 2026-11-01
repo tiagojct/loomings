@@ -6,19 +6,6 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
-### Web app
-
-- Checker marks are found inside an image's alt text, and alt text made only
-  of a non-breaking space counts as none. A setext heading note starts at its
-  text.
-- A heading inside a quotation or list item is titled without its markers,
-  so a `limit:` line matches it; the heading palette shows indented and
-  quoted headings by their titles.
-- Escape in the Find panel closes the panel only. The notes list opened just
-  after an edit checks the text again rather than offering stale fixes.
-- A print replaces the last print's page style (some browsers never say a
-  print has ended).
-
 ### Native macOS app (`macos/`)
 
 - The learner's checker agrees with the web on every shared case and on a
@@ -44,6 +31,24 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The shelf finds a document by its identifier instead of reading every
   sidecar on each autosave, and ignores a sidecar that names a file outside the
   shelf.
+
+## [2.4.1] — 2026-11-01
+
+Fixes to the teaching features, found by comparing the web and native
+checkers on a corpus of documents.
+
+### Fixed
+
+- Checker marks are found inside an image's alt text, and alt text made only
+  of a non-breaking space counts as none. A setext heading note starts at its
+  text.
+- A heading inside a quotation or list item is titled without its markers,
+  so a `limit:` line matches it; the heading palette shows indented and
+  quoted headings by their titles.
+- Escape in the Find panel closes the panel only. The notes list opened just
+  after an edit checks the text again rather than offering stale fixes.
+- A print replaces the last print's page style (some browsers never say a
+  print has ended).
 
 ## [2.4.0] — 2026-11-01
 
@@ -795,6 +800,7 @@ earlier Electron prototype.
 [1.0.3]: https://github.com/tiagojct/loomings/releases/tag/v1.0.3
 [1.0.2]: https://github.com/tiagojct/loomings/releases/tag/v1.0.2
 [1.0.1]: https://github.com/tiagojct/loomings/releases/tag/v1.0.1
+[2.4.1]: https://github.com/tiagojct/loomings/releases/tag/v2.4.1
 [2.4.0]: https://github.com/tiagojct/loomings/releases/tag/v2.4.0
 [2.3.0]: https://github.com/tiagojct/loomings/releases/tag/v2.3.0
 [2.2.0]: https://github.com/tiagojct/loomings/releases/tag/v2.2.0
