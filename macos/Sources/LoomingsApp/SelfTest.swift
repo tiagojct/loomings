@@ -474,6 +474,17 @@ enum SelfTest {
             check(false, "lesson 02 is bundled")
         }
 
+        // 13a-4. Section word limits.
+        editor.setText("---\nlimit: Introduction 5\n---\n\n## Introduction\n\none two three four five six\n\n## Next\n\nseven\n")
+        _ = pump(timeout: 2) { controller.outlineTitlesForTesting.count == 2 }
+        editor.textView.setSelectedRange(NSRange(location: (editor.source as NSString).range(of: "three").location, length: 0))
+        _ = pump(timeout: 1) { controller.sectionTitleForTesting != nil }
+        check(controller.sectionTitleForTesting == "Introduction 6 of 5 words", "the status bar counts the caret's section against its limit")
+        check(controller.outlineTitlesForTesting == ["Introduction \u{2014} 6/5", "Next \u{2014} 1"], "the outline lists each section's words")
+        editor.textView.setSelectedRange(NSRange(location: (editor.source as NSString).range(of: "seven").location, length: 0))
+        _ = pump(timeout: 1) { controller.sectionTitleForTesting == nil }
+        check(controller.sectionTitleForTesting == nil, "a section without a limit shows nothing")
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

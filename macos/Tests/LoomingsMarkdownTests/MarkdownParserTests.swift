@@ -181,4 +181,10 @@ struct DocumentAnalysisTests {
         """
         #expect(MarkdownParser.parse(source).wordCount == 7)
     }
+
+    @Test("Frontmatter never appears in the outline")
+    func frontmatterIsNotAHeading() {
+        let output = MarkdownParser.parse("---\ntitle: A report\ndate: today\n---\n\n# Real\n")
+        #expect(output.outline.map(\.title) == ["Real"])
+    }
 }

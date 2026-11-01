@@ -43,6 +43,26 @@ final class StatusBarView: NSView {
         styleItems()
     }
 
+    private let sectionLabel = NSTextField(labelWithString: "")
+    private var sectionOver = false
+    var sectionTitle: String? { sectionLabel.isHidden ? nil : sectionLabel.stringValue }
+
+    /// The caret's section against its word limit; nil hides it.
+    func setSection(title: String?, words: Int, limit: Int) {
+        guard let title else {
+            sectionLabel.isHidden = true
+            return
+        }
+        sectionLabel.isHidden = false
+        sectionOver = words > limit
+        let number = Self.number
+        let done = number.string(from: NSNumber(value: words)) ?? "\(words)"
+        let total = number.string(from: NSNumber(value: limit)) ?? "\(limit)"
+        sectionLabel.stringValue = "\(title) \(done) of \(total) words"
+        sectionLabel.setAccessibilityLabel(sectionOver ? "\(sectionLabel.stringValue), over the limit" : sectionLabel.stringValue)
+        styleItems()
+    }
+
     @objc private func exerciseClicked(_ sender: Any?) {
         onExerciseClick?()
     }
@@ -55,6 +75,9 @@ final class StatusBarView: NSView {
     }
 
     private func styleItems() {
+        sectionLabel.textColor = sectionOver
+            ? (palette?.colors.accentColor ?? .systemRed)
+            : (palette?.colors.textDim ?? .secondaryLabelColor)
         let color = palette?.colors.linkColor ?? .linkColor
         for button in [notesButton, exerciseButton] {
             let color = button === exerciseButton && exerciseDone
@@ -97,7 +120,10 @@ final class StatusBarView: NSView {
         notesButton.action = #selector(notesClicked(_:))
         exerciseButton.target = self
         exerciseButton.action = #selector(exerciseClicked(_:))
-        let left = NSStackView(views: [positionLabel, notesButton, exerciseButton])
+        sectionLabel.font = NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        sectionLabel.lineBreakMode = .byTruncatingMiddle
+        sectionLabel.isHidden = true
+        let left = NSStackView(views: [positionLabel, notesButton, exerciseButton, sectionLabel])
         left.orientation = .horizontal
         left.spacing = 12
 

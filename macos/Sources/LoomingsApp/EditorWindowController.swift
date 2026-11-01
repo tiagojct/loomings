@@ -304,6 +304,38 @@ final class EditorWindowController: NSWindowController,
 
     var exerciseTitleForTesting: String? { statusBar.exerciseTitle }
 
+    // MARK: - Teaching: section limits
+
+    /// The innermost limited section around the caret.
+    private func updateSectionStatus(caret: Int) {
+        let section = currentReport?.sections
+            .filter { $0.limit != nil && (NSLocationInRange(caret, $0.range) || NSMaxRange($0.range) == caret) }
+            .max { $0.heading.level < $1.heading.level }
+        if let section, let limit = section.limit {
+            statusBar.setSection(title: section.heading.title, words: section.words, limit: limit)
+        } else {
+            statusBar.setSection(title: nil, words: 0, limit: 0)
+        }
+    }
+
+    /// Outline entries with each section's words, and its limit when set.
+    private func outlineEntries() -> [(item: OutlineItem, title: String)] {
+        let sections: [SectionCount]
+        if let report = currentReport, !report.sections.isEmpty {
+            sections = report.sections
+        } else {
+            sections = SectionStatistics.sections(editor.source, outline: editor.outline, limits: [])
+        }
+        return sections.map { section in
+            let name = section.heading.title.isEmpty ? "(empty heading)" : section.heading.title
+            let count = section.limit.map { "\(section.words)/\($0)" } ?? "\(section.words)"
+            return (section.heading, "\(name) \u{2014} \(count)")
+        }
+    }
+
+    var sectionTitleForTesting: String? { statusBar.sectionTitle }
+    var outlineTitlesForTesting: [String] { outlineEntries().map(\.title) }
+
     private func applyTeachingReport() {
         if let report = currentReport {
             statusBar.setExercise(
@@ -730,6 +762,8 @@ final class EditorWindowController: NSWindowController,
         let column = max(1, selection.location - lineStart + 1)
         let position = "Ln \(line), Col \(column)"
 
+        updateSectionStatus(caret: selection.location)
+
         if let statistics = editor.selectionStatistics() {
             statusBar.update(position: position, statistics: statistics)
             return
@@ -1016,29 +1050,31 @@ final class EditorWindowController: NSWindowController,
 
     @objc private func showOutlineMenu(_ sender: NSButton) {
         let menu = NSMenu(title: "Go to Heading")
-        let headings = editor.outline
-        if headings.isEmpty {
+        let entries = outlineEntries()
+        if entries.isEmpty {
             let empty = NSMenuItem(title: "No Headings", action: nil, keyEquivalent: "")
             empty.isEnabled = false
             menu.addItem(empty)
         }
-        for (index, heading) in headings.enumerated() {
+        for entry in entries {
+            let heading = entry.item
             let item = NSMenuItem(
-                title: heading.title.isEmpty ? "(empty heading)" : heading.title,
+                title: entry.title,
                 action: #selector(jumpToOutlineItem(_:)),
                 keyEquivalent: ""
             )
             item.target = self
-            item.tag = index
+            item.tag = heading.range.location
             item.indentationLevel = min(4, max(0, heading.level - 1))
             menu.addItem(item)
         }
         menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
     }
 
+    /// The item's tag is its heading's source location.
     @objc private func jumpToOutlineItem(_ sender: NSMenuItem) {
-        guard editor.outline.indices.contains(sender.tag) else { return }
-        jump(to: editor.outline[sender.tag])
+        guard let heading = editor.outline.first(where: { $0.range.location == sender.tag }) else { return }
+        jump(to: heading)
     }
 
     @objc private func showThemeMenu(_ sender: NSButton) {

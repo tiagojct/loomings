@@ -28,6 +28,8 @@ public enum MarkdownParser {
         let frontmatter = MarkdownFrontmatter.range(in: text)
         var normalized = normalize(spans, limit: text.length)
         if let frontmatter {
+            // cmark reads the closing --- as a setext underline.
+            outline.removeAll { $0.range.location < NSMaxRange(frontmatter) }
             normalized.removeAll { $0.intersects(frontmatter) }
             normalized.append(
                 MarkdownSyntaxSpan(range: frontmatter, kind: .frontmatter)
