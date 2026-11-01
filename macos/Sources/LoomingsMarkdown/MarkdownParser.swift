@@ -158,9 +158,11 @@ public enum MarkdownParser {
         let line = text.lineRange(for: NSRange(location: range.location, length: 0))
         let lineEnd = min(line.location + line.length, text.length)
 
-        // An ATX heading may be indented by up to three spaces.
-        var hashStart = line.location
-        while hashStart < lineEnd, hashStart - line.location < 3, text.character(at: hashStart) == 0x20 {
+        // An ATX heading may be indented by up to three spaces, and may sit
+        // inside a quotation or list item: read from the heading's own start.
+        let start = max(line.location, min(range.location, lineEnd))
+        var hashStart = start
+        while hashStart < lineEnd, hashStart - start < 3, text.character(at: hashStart) == 0x20 {
             hashStart += 1
         }
         var cursor = hashStart
@@ -176,7 +178,7 @@ public enum MarkdownParser {
         guard cursor > hashStart else {
             emitSetextUnderline(range, map: map, text: text, spans: &spans)
             let title = lineText(
-                text.lineRange(for: NSRange(location: range.location, length: 0)),
+                NSRange(location: start, length: lineEnd - start),
                 text: text
             ).trimmingCharacters(in: .whitespacesAndNewlines)
             // cmark knows the level; its range can run past the underline.

@@ -952,14 +952,19 @@ function extractHeadings(state) {
       if (node.from <= frontmatterEnd) return;
       const m = node.name.match(/^ATXHeading(\d)$/);
       if (m) {
+        // The text between the opening # signs and any closing run, so an
+        // indented or quoted heading reads as its title.
         const level = parseInt(m[1], 10);
         const line  = state.doc.lineAt(node.from);
-        const text  = line.text.replace(/^#+\s*/, '').trim();
-        out.push({ level, text, from: line.from, line: line.number });
+        const open  = node.node.firstChild;
+        const close = node.node.lastChild;
+        const start = open?.name === 'HeaderMark' ? open.to : node.from;
+        const end   = close && close.name === 'HeaderMark' && close.from !== open?.from ? close.from : Math.min(node.to, line.to);
+        out.push({ level, text: state.sliceDoc(start, Math.max(start, end)).trim(), from: line.from, line: line.number });
       } else if (node.name === 'SetextHeading1' || node.name === 'SetextHeading2') {
         const level = node.name === 'SetextHeading1' ? 1 : 2;
         const line  = state.doc.lineAt(node.from);
-        out.push({ level, text: line.text.trim(), from: line.from, line: line.number });
+        out.push({ level, text: state.sliceDoc(node.from, line.to).trim(), from: line.from, line: line.number });
       }
     },
   });
@@ -1686,6 +1691,8 @@ document.addEventListener('keydown', (e) => {
   const mod = e.metaKey || e.ctrlKey;
 
   if (e.key === 'Escape') {
+    // Escape in the Find panel closes the panel and nothing else.
+    if (e.defaultPrevented || (e.target instanceof Element && e.target.closest('.cm-panels'))) return;
     if (!explainEl.classList.contains('hidden')) { closeExplanation(true); return; }
     if (hasOpenMenus()) { closeAllMenus(); return; }
     if (!cheatsheetEl.classList.contains('hidden')) { toggleCheatsheet(false); return; }
@@ -1787,6 +1794,7 @@ function applyTeaching(revision, report) {
   notesWrap.classList.toggle('hidden', issues.length === 0);
   notesButton.textContent = issues.length === 1 ? '1 note' : `${issues.length} notes`;
   notesButton.setAttribute('aria-label', issues.length === 1 ? '1 Markdown note' : `${issues.length} Markdown notes`);
+  if (!notesMenu.classList.contains('hidden')) renderNotesMenu();
 }
 
 function renderNotesMenu() {
@@ -1824,7 +1832,14 @@ function goToPosition(pos) {
 }
 
 attachMenu(notesButton, notesMenu, {
-  onOpen: renderNotesMenu,
+  // Opened in the pause after an edit, the notes are those of older text:
+  // check now, and fill the list when the answer comes.
+  onOpen: () => {
+    if (teaching.revision === teachingRevision) { renderNotesMenu(); return; }
+    notesMenu.innerHTML = '<div class="tb-menu-empty">Checking…</div>';
+    if (teachingTimer) clearTimeout(teachingTimer);
+    runTeaching();
+  },
   onPick: (item) => {
     const issue = teaching.issues[Number(item.dataset.fix ?? item.dataset.go)];
     if (!issue) return;
@@ -1881,7 +1896,7 @@ function renderExerciseMenu() {
   });
   const notes = exercise.notes.map((n) =>
     `<div class="tb-menu-item check-note" role="listitem" tabindex="-1">Line ${n.line + 1}: ${escapeHtml(n.message)}</div>`);
-  exerciseMenu.innerHTML = rows.concat(notes).join('');
+  exerciseMenu.innerHTML = `<div role="list">${rows.concat(notes).join('')}</div>`;
 }
 
 attachMenu(exerciseButton, exerciseMenu, { onOpen: renderExerciseMenu });

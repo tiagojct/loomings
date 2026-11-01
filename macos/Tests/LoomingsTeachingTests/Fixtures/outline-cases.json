@@ -80,5 +80,35 @@
         "title": "#---"
       }
     ]
+  },
+  {
+    "name": "a heading in a quotation",
+    "source": "> ## Quoted\n> text\n",
+    "headings": [
+      {
+        "level": 2,
+        "title": "Quoted"
+      }
+    ]
+  },
+  {
+    "name": "a heading in a list item",
+    "source": "- ## In a list #\n",
+    "headings": [
+      {
+        "level": 2,
+        "title": "In a list"
+      }
+    ]
+  },
+  {
+    "name": "a setext heading in a quotation",
+    "source": "> Title\n> =====\n",
+    "headings": [
+      {
+        "level": 1,
+        "title": "Title"
+      }
+    ]
   }
 ]

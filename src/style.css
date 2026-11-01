@@ -135,7 +135,7 @@ body { display: flex; flex-direction: column; }
 }
 .tb-menu-right { left: auto; right: 0; }
 /* Labels with hints: wide enough that neither is cut short. */
-#export-menu { min-width: 340px; }
+#export-menu { min-width: min(340px, calc(100vw - 20px)); }
 .tb-menu-section {
   padding: 6px 10px 4px;
   font-size: 10px;
@@ -907,7 +907,7 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
   #preview blockquote { border-left-color: var(--print-border, #999); color: var(--print-dim, #333); }
   #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: var(--print-dim, #555); }
   #preview .paired { background: none; box-shadow: none; }
-  #preview .handout-qr { display: block; break-inside: avoid; margin-top: 2.5em; text-align: center; color: #000; }
+  #preview .handout-qr { display: block; break-inside: avoid; margin-top: 2.5em; text-align: center; color: var(--print-fg); }
   #preview .handout-qr svg { display: block; margin: 0 auto; }
   #preview .handout-qr p { margin: 6pt 0 0; font-family: var(--font-ui); font-size: 9pt; color: var(--print-dim, #555); }
 }

@@ -17,9 +17,9 @@ import { countWords } from '../stats.js';
  */
 
 /**
- * The headings, with titles taken from the source as the native outline
- * does: the text after the # signs (up to three spaces before them) without
- * a closing run, or the first line of a setext heading.
+ * The headings, with the titles the native outline gives: the text after
+ * the # signs without a closing run, or the first line of a setext heading,
+ * inside any quotation or list item.
  *
  * @param {string} source
  * @param {ReturnType<typeof parseSource>} [parsed] a parse of `source` to reuse
@@ -29,26 +29,13 @@ export function outline(source, parsed) {
   const doc = parsed || parseSource(source);
   /** @type {Heading[]} */
   const headings = [];
-  for (const token of doc.tokens) {
-    if (token.type !== 'heading_open' || !token.map) continue;
-    const line = doc.lines[token.map[0]];
-    const text = line.text;
-    let title;
-    const atx = /^ {0,3}#+/.exec(text);
-    if (atx && token.markup.startsWith('#')) {
-      const cursor = atx[0].length;
-      let end = text.length;
-      while (end > cursor && (text[end - 1] === ' ' || text[end - 1] === '\t')) end--;
-      let closing = end;
-      while (closing > cursor && text[closing - 1] === '#') closing--;
-      // A closing run needs a space before it: "## C#" keeps its #.
-      if (closing > cursor && closing < end && text[closing - 1] !== ' ' && text[closing - 1] !== '\t') closing = end;
-      title = text.slice(cursor, closing).trim();
-    } else {
-      title = text.trim();
-    }
-    headings.push({ level: Number(token.tag.slice(1)), title, from: line.from });
-  }
+  doc.tokens.forEach((token, t) => {
+    if (token.type !== 'heading_open' || !token.map) return;
+    // markdown-it's heading text: containers, # signs and a closing run
+    // already removed; a setext heading's first line.
+    const title = (doc.tokens[t + 1]?.content || '').split('\n')[0].trim();
+    headings.push({ level: Number(token.tag.slice(1)), title, from: doc.lines[token.map[0]].from });
+  });
   return headings;
 }
 
