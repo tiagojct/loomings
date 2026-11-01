@@ -48,8 +48,28 @@ public struct MarkdownSyntaxSpan: Sendable, Equatable {
     }
 }
 
+/// Text the editor sets in a heavier or slanted face when Styled Markdown
+/// is on (markers included), in the manner of iA Writer.
+public enum MarkdownTextStyle: Sendable, Equatable {
+    case heading
+    case strong
+    case emphasis
+}
+
+public struct MarkdownStyleRange: Sendable, Equatable {
+    public let range: NSRange
+    public let style: MarkdownTextStyle
+
+    public init(range: NSRange, style: MarkdownTextStyle) {
+        self.range = range
+        self.style = style
+    }
+}
+
 public struct MarkdownParseOutput: Sendable {
     public let spans: [MarkdownSyntaxSpan]
+    /// Sorted by location; nested styles overlap.
+    public let styleRanges: [MarkdownStyleRange]
     public let nodeCount: Int
     public let outline: [OutlineItem]
     /// UTF-16 offsets of every line start, including 0.
@@ -63,9 +83,11 @@ public struct MarkdownParseOutput: Sendable {
         outline: [OutlineItem],
         lineStarts: [Int],
         wordCount: Int,
-        characterCount: Int
+        characterCount: Int,
+        styleRanges: [MarkdownStyleRange] = []
     ) {
         self.spans = spans
+        self.styleRanges = styleRanges
         self.nodeCount = nodeCount
         self.outline = outline
         self.lineStarts = lineStarts

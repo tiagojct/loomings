@@ -636,6 +636,29 @@ enum SelfTest {
         check(compare.leftText.components(separatedBy: "\n").count == compare.rightText.components(separatedBy: "\n").count, "the two sides are aligned row by row")
         compare.close()
 
+        // 13a-10. Editor font and Styled Markdown follow the preferences, and
+        // styling never edits the document.
+        controller.applyPreferences()
+        check(editor.fontChoice == (EditorFontChoice(rawValue: EditorPreferences.editorFont) ?? .jetBrainsMono), "the editor uses the chosen font")
+        check(editor.stylesMarkdown == EditorPreferences.styledMarkdown, "Styled Markdown follows its preference")
+        let editedBeforeStyling = document.isDocumentEdited
+        editor.stylesMarkdown = true
+        editor.setText("Plain and **strong** text.\n")
+        _ = pump(timeout: 2) { editor.lastAppliedRevision == editor.revision && editor.revision > 0 }
+        editor.reparseSynchronously()
+        let strongAt = (editor.source as NSString).range(of: "strong").location
+        let strongFont = editor.textView.textStorage?.attribute(.font, at: strongAt, effectiveRange: nil) as? NSFont
+        let drawnBold = editor.textView.textStorage?.attribute(.strokeWidth, at: strongAt, effectiveRange: nil) != nil
+        check(drawnBold || strongFont.map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) } == true, "strong text is set bold in the editor")
+        check(editor.source == "Plain and **strong** text.\n", "styling leaves the text as it is")
+        check(document.isDocumentEdited == editedBeforeStyling, "styling does not dirty the document")
+        editor.stylesMarkdown = EditorPreferences.styledMarkdown
+        if let serif = NSFont(name: "SourceSerif4-Regular", size: 15) {
+            let face = StyledFace.make(base: serif, bold: true, italic: true)
+            check(NSFontManager.shared.traits(of: face.font).contains(.boldFontMask), "bold italic in Source Serif keeps its bold")
+            check(face.font.textTransform.m21 > 0 || NSFontManager.shared.traits(of: face.font).contains(.italicFontMask), "bold italic in Source Serif is slanted")
+        }
+
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
         controller.setViewMode(.split)

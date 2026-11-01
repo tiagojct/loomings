@@ -754,6 +754,8 @@ final class EditorWindowController: NSWindowController,
     // MARK: - Preferences and status
 
     func applyPreferences() {
+        editor.setFontChoice(EditorFontChoice(rawValue: EditorPreferences.editorFont) ?? .jetBrainsMono)
+        editor.stylesMarkdown = EditorPreferences.styledMarkdown
         editor.setFontSize(isProjectorMode ? ProjectorMode.editorFontSize : EditorPreferences.fontSize)
         editor.highlightsCurrentLine = isProjectorMode
         editor.setSmartTypography(EditorPreferences.smartTypography)

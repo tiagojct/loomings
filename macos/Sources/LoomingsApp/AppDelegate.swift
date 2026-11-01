@@ -675,6 +675,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         typewriter.target = self
         menu.addItem(typewriter)
 
+        let fonts = NSMenu(title: "Editor Font")
+        for choice in EditorFontChoice.builtIn {
+            let item = NSMenuItem(title: choice.title, action: #selector(setEditorFont(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = choice.rawValue
+            fonts.addItem(item)
+        }
+        fonts.addItem(.separator())
+        let otherFont = NSMenuItem(title: "Other\u{2026}", action: #selector(chooseOtherEditorFont(_:)), keyEquivalent: "")
+        otherFont.target = self
+        fonts.addItem(otherFont)
+        let fontsItem = NSMenuItem(title: "Editor Font", action: nil, keyEquivalent: "")
+        fontsItem.submenu = fonts
+        menu.addItem(fontsItem)
+
+        let styled = NSMenuItem(title: "Styled Markdown", action: #selector(toggleStyledMarkdown(_:)), keyEquivalent: "")
+        styled.target = self
+        menu.addItem(styled)
+
         let wordGoal = NSMenuItem(
             title: "Word Goal",
             action: #selector(cycleWordGoal(_:)),
@@ -906,6 +925,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         refreshAllWindows()
     }
 
+    @objc private func setEditorFont(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String else { return }
+        EditorPreferences.editorFont = raw
+        refreshAllWindows()
+    }
+
+    /// Opens the font panel; its choice becomes the editor font (only the
+    /// face: the size stays with View > Font Size).
+    @objc private func chooseOtherEditorFont(_ sender: Any?) {
+        let manager = NSFontManager.shared
+        let current = (EditorFontChoice(rawValue: EditorPreferences.editorFont) ?? .jetBrainsMono).font(size: EditorPreferences.fontSize)
+        manager.target = self
+        manager.action = #selector(changeEditorFont(_:))
+        manager.setSelectedFont(current, isMultiple: false)
+        manager.orderFrontFontPanel(self)
+    }
+
+    @objc private func changeEditorFont(_ sender: NSFontManager) {
+        let base = (EditorFontChoice(rawValue: EditorPreferences.editorFont) ?? .jetBrainsMono).font(size: EditorPreferences.fontSize)
+        let chosen = sender.convert(base)
+        EditorPreferences.editorFont = EditorFontChoice.custom(chosen.fontName).rawValue
+        refreshAllWindows()
+    }
+
+    @objc private func toggleStyledMarkdown(_ sender: Any?) {
+        EditorPreferences.styledMarkdown.toggle()
+        refreshAllWindows()
+    }
+
     @objc private func toggleTypewriter(_ sender: Any?) {
         EditorPreferences.typewriter.toggle()
         refreshAllWindows()
@@ -948,6 +996,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             menuItem.state = EditorPreferences.smartTypography ? .on : .off
         case #selector(toggleTypewriter(_:)):
             menuItem.state = EditorPreferences.typewriter ? .on : .off
+        case #selector(setEditorFont(_:)):
+            menuItem.state = (menuItem.representedObject as? String) == EditorPreferences.editorFont ? .on : .off
+        case #selector(chooseOtherEditorFont(_:)):
+            let choice = EditorFontChoice(rawValue: EditorPreferences.editorFont)
+            if case .custom = choice {
+                menuItem.state = .on
+                menuItem.title = "Other (\(choice?.title ?? ""))\u{2026}"
+            } else {
+                menuItem.state = .off
+                menuItem.title = "Other\u{2026}"
+            }
+        case #selector(toggleStyledMarkdown(_:)):
+            menuItem.state = EditorPreferences.styledMarkdown ? .on : .off
         case #selector(toggleFocusMode(_:)):
             let controller = NSApp.keyWindow?.windowController as? EditorWindowController
             menuItem.state = (controller?.editor.isFocusMode ?? false) ? .on : .off

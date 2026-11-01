@@ -218,6 +218,16 @@ Stage 2 decisions worth preserving:
   only when recording starts). Snapshot flags: `-LoomingsSnapshotPairLocation`,
   `-LoomingsSnapshotProjector`, `-LoomingsSnapshotCompareWith`; snapshot mode
   also writes `handout.pdf` and its first and last pages.
+- Editor font: `EditorFontChoice` (JetBrains Mono, Source Serif 4, SF Mono,
+  New York, System, or any font by PostScript name from View > Editor Font >
+  Other…), stored as `Loomings.Native.editorFont`. Styled Markdown (View
+  menu, on by default) sets strong text and heading lines bold and emphasis
+  italic at one size, as font attributes on the visible text (padded), like
+  focus mode: never an edit, never in undo. The parser reports
+  `styleRanges` for it. A face without bold is drawn with a stroke; a face
+  without italic is slanted through a skewed font matrix (`textTransform`),
+  because TextKit 2 ignores `.obliqueness`. JetBrains Mono ships in Regular
+  only, so its bold and italic are drawn until the real files are bundled.
 - Preview code blocks and tables are framed `NSTextBlock`s. Each code line is
   its own paragraph, so space around a frame comes from an empty spacer
   paragraph after it (`blockSpacer`), not from paragraph spacing (it lands

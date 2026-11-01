@@ -204,4 +204,20 @@ struct DocumentAnalysisTests {
             #expect(MarkdownParser.outline(source) == MarkdownParser.parse(source).outline)
         }
     }
+
+    @Test("The parse reports where bold, italic and heading text lie")
+    func styleRanges() {
+        let source = "## Head line\n\nA **bold** and *it* and ***both***.\n\n`**code**`\n"
+        let text = source as NSString
+        let output = MarkdownParser.parse(source)
+        func covered(_ word: String, _ style: MarkdownTextStyle) -> Bool {
+            let range = text.range(of: word)
+            return output.styleRanges.contains { $0.style == style && NSLocationInRange(range.location, $0.range) && NSMaxRange(range) <= NSMaxRange($0.range) }
+        }
+        #expect(covered("Head line", .heading))
+        #expect(covered("bold", .strong))
+        #expect(covered("it", .emphasis))
+        #expect(covered("both", .strong) && covered("both", .emphasis))
+        #expect(!output.styleRanges.contains { NSLocationInRange(text.range(of: "code").location, $0.range) }, "code is never styled")
+    }
 }

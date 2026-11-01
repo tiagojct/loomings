@@ -186,6 +186,88 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     public var source: String { textView.string }
 
     private var spans: [MarkdownSyntaxSpan] = []
+    private var styleRanges: [MarkdownStyleRange] = []
+    /// What Styled Markdown has covered since the last parse.
+    private var markdownStyledRange = NSRange(location: 0, length: 0)
+
+    public private(set) var fontChoice: EditorFontChoice = .jetBrainsMono
+
+    private var baseFont: NSFont { fontChoice.font(size: fontSize) }
+
+    /// Bold for strong text and heading lines, italic for emphasis, at one
+    /// size, in the manner of iA Writer. Font attributes on the visible text
+    /// only; never an edit, never in undo.
+    public var stylesMarkdown = false {
+        didSet {
+            guard stylesMarkdown != oldValue else { return }
+            resetFonts()
+            markdownStyledRange = NSRange(location: 0, length: 0)
+            applyVisibleStyling()
+        }
+    }
+
+    public func setFontChoice(_ choice: EditorFontChoice) {
+        guard choice != fontChoice else { return }
+        fontChoice = choice
+        resetFonts()
+        markdownStyledRange = NSRange(location: 0, length: 0)
+        scheduleVisibleStyling()
+    }
+
+    /// The plain face everywhere, with drawn bold and slant removed.
+    private func resetFonts() {
+        let font = baseFont
+        textView.font = font
+        textView.typingAttributes[.font] = font
+        for key in StyledFace.drawnKeys { textView.typingAttributes[key] = nil }
+        guard let storage = textView.textStorage, storage.length > 0 else { return }
+        let all = NSRange(location: 0, length: storage.length)
+        storage.beginEditing()
+        storage.addAttribute(.font, value: font, range: all)
+        for key in StyledFace.drawnKeys { storage.removeAttribute(key, range: all) }
+        storage.endEditing()
+    }
+
+    private func applyMarkdownStyles(to range: NSRange) {
+        guard let storage = textView.textStorage, storage.length > 0 else { return }
+        let target = intersection(range, NSRange(location: 0, length: storage.length))
+        guard target.length > 0 else { return }
+        if markdownStyledRange.length > 0,
+           target.location >= markdownStyledRange.location,
+           NSMaxRange(target) <= NSMaxRange(markdownStyledRange) {
+            return
+        }
+        let base = baseFont
+        let bold = StyledFace.make(base: base, bold: true, italic: false)
+        let italic = StyledFace.make(base: base, bold: false, italic: true)
+        let both = StyledFace.make(base: base, bold: true, italic: true)
+
+        storage.beginEditing()
+        storage.addAttribute(.font, value: base, range: target)
+        for key in StyledFace.drawnKeys { storage.removeAttribute(key, range: target) }
+        var emphasised: [NSRange] = []
+        for style in styleRanges {
+            if style.range.location >= NSMaxRange(target) { break }
+            let piece = intersection(style.range, target)
+            guard piece.length > 0 else { continue }
+            if style.style == .emphasis {
+                emphasised.append(piece)
+            } else {
+                storage.addAttributes(bold.attributes, range: piece)
+            }
+        }
+        for piece in emphasised {
+            // Emphasis inside bold text becomes bold italic.
+            storage.enumerateAttributes(in: piece) { attributes, run, _ in
+                let isBold = attributes[.strokeWidth] != nil
+                    || (attributes[.font] as? NSFont).map { NSFontManager.shared.traits(of: $0).contains(.boldFontMask) && $0 != base } == true
+                storage.addAttributes((isBold ? both : italic).attributes, range: run)
+            }
+        }
+        storage.endEditing()
+        markdownStyledRange = markdownStyledRange.length == 0 ? target : NSUnionRange(markdownStyledRange, target)
+    }
+
     private var styledRange = NSRange(location: 0, length: 0)
     private var parseWorkItem: DispatchWorkItem?
     private var parseToken: UInt64 = 0
@@ -235,6 +317,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         pendingCharacterEdit = false
 
         spans = []
+        styleRanges = []
+        markdownStyledRange = NSRange(location: 0, length: 0)
         frontmatterRange = nil
         needsAttributeRefresh = true
         styledRange = NSRange(location: 0, length: 0)
@@ -272,6 +356,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         }
 
         spans = output.spans
+        styleRanges = output.styleRanges
+        markdownStyledRange = NSRange(location: 0, length: 0)
         appliedParses &+= 1
         lastAppliedRevision = revision
         lastSpanCount = output.spans.count
@@ -384,6 +470,11 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         }
         scheduleVisibleStyling()
         if highlightsCurrentLine { updateCurrentLineMark() }
+        if stylesMarkdown {
+            // New text starts plain; the next parse styles it.
+            textView.typingAttributes[.font] = baseFont
+            for key in StyledFace.drawnKeys { textView.typingAttributes[key] = nil }
+        }
         onSelectionChange?()
         if isTypewriterMode {
             DispatchQueue.main.async { [weak self] in
@@ -591,6 +682,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         }
 
         spans = output.spans
+        styleRanges = output.styleRanges
+        markdownStyledRange = NSRange(location: 0, length: 0)
         appliedParses &+= 1
         lastAppliedRevision = revision
         needsAttributeRefresh = true
@@ -776,16 +869,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     public func setFontSize(_ size: CGFloat) {
         guard size != fontSize else { return }
         fontSize = size
-        let font = Self.editorFont(size: size)
-        textView.font = font
-        textView.typingAttributes[.font] = font
-        if let storage = textView.textStorage, storage.length > 0 {
-            storage.addAttribute(
-                .font,
-                value: font,
-                range: NSRange(location: 0, length: storage.length)
-            )
-        }
+        resetFonts()
+        markdownStyledRange = NSRange(location: 0, length: 0)
         scheduleVisibleStyling()
     }
 
@@ -960,6 +1045,9 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
         if isFocusMode {
             applyFocusAttributes(to: padded)
+        }
+        if stylesMarkdown {
+            applyMarkdownStyles(to: padded)
         }
         if needsAttributeRefresh {
             needsAttributeRefresh = false

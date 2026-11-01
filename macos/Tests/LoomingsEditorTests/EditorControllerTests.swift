@@ -205,4 +205,75 @@ struct EditorControllerTests {
         #expect(elapsed < 0.1, "took \(elapsed) s")
         window.close()
     }
+
+    private func font(_ editor: EditorController, at word: String) -> NSFont? {
+        let location = (editor.source as NSString).range(of: word).location
+        return editor.textView.textStorage?.attribute(.font, at: location, effectiveRange: nil) as? NSFont
+    }
+
+    private func attribute(_ key: NSAttributedString.Key, _ editor: EditorController, at word: String) -> Any? {
+        let location = (editor.source as NSString).range(of: word).location
+        return editor.textView.textStorage?.attribute(key, at: location, effectiveRange: nil)
+    }
+
+    @Test("Font choices round-trip and set the editor's face")
+    func fontChoices() {
+        for choice in EditorFontChoice.builtIn {
+            #expect(EditorFontChoice(rawValue: choice.rawValue) == choice)
+            #expect(!choice.title.isEmpty)
+        }
+        #expect(EditorFontChoice(rawValue: "custom:Menlo-Regular") == .custom("Menlo-Regular"))
+        #expect(EditorFontChoice(rawValue: "nonsense") == nil)
+        let editor = EditorController()
+        editor.setText("abc def")
+        editor.setFontChoice(.custom("Menlo-Regular"))
+        #expect(font(editor, at: "def")?.fontName == "Menlo-Regular")
+        #expect(editor.fontChoice == .custom("Menlo-Regular"))
+    }
+
+    @Test("Styled Markdown sets bold, italic and heading lines, and the text stays unedited")
+    func styledMarkdown() {
+        let editor = EditorController()
+        editor.setFontChoice(.custom("Menlo-Regular"))
+        editor.setText("## Head\n\nA **bold** and *it* word.\n")
+        editor.stylesMarkdown = true
+        editor.reparseSynchronously()
+        let manager = NSFontManager.shared
+        #expect(font(editor, at: "Head").map { manager.traits(of: $0).contains(.boldFontMask) } == true)
+        #expect(font(editor, at: "bold").map { manager.traits(of: $0).contains(.boldFontMask) } == true)
+        #expect(font(editor, at: "it*").map { manager.traits(of: $0).contains(.italicFontMask) } == true)
+        #expect(font(editor, at: "word")?.fontName == "Menlo-Regular")
+        #expect(editor.editGeneration == 0, "styling is not an edit")
+        editor.stylesMarkdown = false
+        #expect(font(editor, at: "bold")?.fontName == "Menlo-Regular")
+    }
+
+    @Test("A face without bold or italic gets drawn ones")
+    func syntheticStyles() {
+        let editor = EditorController()
+        editor.setFontChoice(.custom("Monaco"))
+        editor.setText("A **bold** and *it* word.\n")
+        editor.stylesMarkdown = true
+        editor.reparseSynchronously()
+        #expect((attribute(.strokeWidth, editor, at: "bold") as? Double).map { $0 < 0 } == true)
+        // TextKit 2 ignores .obliqueness, so the slant must be in the font itself.
+        #expect(font(editor, at: "it*").map { $0.textTransform.m21 > 0 } == true)
+        #expect(attribute(.strokeWidth, editor, at: "word") == nil)
+        #expect(font(editor, at: "word").map { $0.textTransform.m21 == 0 } == true)
+        editor.stylesMarkdown = false
+        #expect(attribute(.strokeWidth, editor, at: "bold") == nil)
+        #expect(font(editor, at: "it*").map { $0.textTransform.m21 == 0 } == true)
+    }
+
+    @Test("Bold is never lost when a face has no bold italic")
+    func boldItalicKeepsBold() {
+        for name in ["Menlo-Regular", "Monaco", "Courier"] {
+            guard let base = NSFont(name: name, size: 15) else { continue }
+            let face = StyledFace.make(base: base, bold: true, italic: true)
+            let bold = NSFontManager.shared.traits(of: face.font).contains(.boldFontMask) || face.attributes[.strokeWidth] != nil
+            let slanted = NSFontManager.shared.traits(of: face.font).contains(.italicFontMask) || face.font.textTransform.m21 > 0
+            #expect(bold, "\(name) keeps bold")
+            #expect(slanted, "\(name) is slanted")
+        }
+    }
 }

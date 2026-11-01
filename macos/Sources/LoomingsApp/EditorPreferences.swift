@@ -1,3 +1,4 @@
+import LoomingsEditor
 import AppKit
 
 enum ColumnWidth: String, CaseIterable {
@@ -77,6 +78,22 @@ enum EditorPreferences {
             return defaults.bool(forKey: key("smartTypography"))
         }
         set { defaults.set(newValue, forKey: key("smartTypography")) }
+    }
+
+    /// `EditorFontChoice.rawValue`.
+    static var editorFont: String {
+        get { defaults.string(forKey: key("editorFont")) ?? EditorFontChoice.jetBrainsMono.rawValue }
+        set { defaults.set(newValue, forKey: key("editorFont")) }
+    }
+
+    static var styledMarkdown: Bool {
+        get {
+            if defaults.object(forKey: key("styledMarkdown")) == nil {
+                return true
+            }
+            return defaults.bool(forKey: key("styledMarkdown"))
+        }
+        set { defaults.set(newValue, forKey: key("styledMarkdown")) }
     }
 
     static var typewriter: Bool {
