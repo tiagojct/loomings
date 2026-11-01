@@ -52,7 +52,7 @@ public struct SelectionStatistics: Sendable, Equatable {
 /// so a slow parse never blocks typing or overwrites newer text.
 @MainActor
 public final class EditorController: NSObject, NSTextViewDelegate {
-    public let textView: NSTextView
+    public let textView: EditorTextView
 
     /// Called after a user edit, never for programmatic `setText`.
     public var onEdit: (() -> Void)?
@@ -84,6 +84,26 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     public private(set) var fontSize: CGFloat = 15
     public var outline: [OutlineItem] { analysis.outline }
 
+    /// Source range lit because the pointer is over its preview block (Split
+    /// view). Drawn by the text view; the text is never touched.
+    public var pairedRange: NSRange? {
+        didSet {
+            guard pairedRange != oldValue else { return }
+            textView.setDecorations(
+                pairedRange.map { [EditorDecoration(range: $0, style: .lineFill(pairTint))] } ?? [],
+                for: "pair"
+            )
+        }
+    }
+
+    private var pairTint: NSColor {
+        (palette?.colors.selectionColor ?? .selectedTextBackgroundColor).withAlphaComponent(0.45)
+    }
+
+    /// The UTF-16 location under the pointer, or nil when it leaves the text.
+    public var onPointerLocation: ((Int?) -> Void)?
+    private var pointerTracker: PointerTracker?
+
     public var source: String { textView.string }
 
     private var spans: [MarkdownSyntaxSpan] = []
@@ -107,7 +127,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     private let parseDebounce: TimeInterval = 0.12
 
     public override init() {
-        self.textView = NSTextView(usingTextLayoutManager: true)
+        self.textView = EditorTextView(usingTextLayoutManager: true)
         super.init()
         configureTextView()
     }
@@ -855,6 +875,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
         layoutManager.setRenderingAttributes([:], for: fragment.rangeInElement)
 
+
         let text = textView.textStorage?.mutableString ?? ""
         let focusRange: NSRange? = isFocusMode
             ? SentenceFocus.activeRange(
@@ -894,6 +915,21 @@ public final class EditorController: NSObject, NSTextViewDelegate {
             }
             index += 1
         }
+    }
+
+    /// Starts reporting the character under the pointer through
+    /// `onPointerLocation`. Idempotent.
+    public func trackPointer() {
+        guard pointerTracker == nil else { return }
+        let tracker = PointerTracker(textView: textView) { [weak self] location in
+            self?.onPointerLocation?(location)
+        }
+        pointerTracker = tracker
+        textView.addTrackingArea(NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: tracker
+        ))
     }
 
     private func firstSpanIndex(startingBefore location: Int) -> Int {
@@ -1031,5 +1067,33 @@ public final class EditorController: NSObject, NSTextViewDelegate {
             }
         }
         textView.delegate = self
+    }
+}
+
+/// Receives pointer events for the editor's text view and reports the
+/// character under the pointer.
+private final class PointerTracker: NSResponder {
+    private weak var textView: NSTextView?
+    private let report: (Int?) -> Void
+
+    init(textView: NSTextView, report: @escaping (Int?) -> Void) {
+        self.textView = textView
+        self.report = report
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("PointerTracker is created in code")
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        guard let textView else { return }
+        let point = textView.convert(event.locationInWindow, from: nil)
+        report(textView.characterIndexForInsertion(at: point))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        report(nil)
     }
 }

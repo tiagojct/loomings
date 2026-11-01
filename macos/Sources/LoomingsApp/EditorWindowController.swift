@@ -224,6 +224,13 @@ final class EditorWindowController: NSWindowController,
         previewTextView.onScroll = { [weak self] in
             self?.syncEditorToPreview()
         }
+        editor.trackPointer()
+        editor.onPointerLocation = { [weak self] location in
+            self?.pair(editorLocation: location)
+        }
+        previewTextView.onPointerBlock = { [weak self] block in
+            self?.pair(previewBlock: block)
+        }
     }
 
     // MARK: - View modes and preview
@@ -258,7 +265,53 @@ final class EditorWindowController: NSWindowController,
         applyViewMode()
     }
 
+    // MARK: - Paired lines
+
+    /// Split view only: the source under the pointer lights its preview block.
+    private func pair(editorLocation location: Int?) {
+        guard viewMode == .split, let location else {
+            previewTextView.highlightedBlockIndex = nil
+            return
+        }
+        previewTextView.highlightedBlockIndex = PreviewDocument.blockIndex(
+            in: previewTextView.blocks,
+            containing: location
+        )
+    }
+
+    /// Split view only: the preview block under the pointer lights its source.
+    private func pair(previewBlock block: PreviewBlock?) {
+        guard viewMode == .split else {
+            editor.pairedRange = nil
+            return
+        }
+        editor.pairedRange = block?.sourceRange
+    }
+
+    private func clearPairing() {
+        previewTextView.highlightedBlockIndex = nil
+        editor.pairedRange = nil
+    }
+
+    func pairForTesting(editorLocation location: Int) { pair(editorLocation: location) }
+    func pairForTesting(previewBlockAt index: Int) {
+        pair(previewBlock: previewTextView.blocks.indices.contains(index) ? previewTextView.blocks[index] : nil)
+    }
+    var previewHighlightedBlockKind: String? {
+        previewTextView.highlightedBlockIndex.map { previewTextView.blocks[$0].kind.rawValue }
+    }
+    var editorPairedRange: NSRange? { editor.pairedRange }
+
+    /// Lights both sides of one pair at once, for design snapshots.
+    func pairBothForSnapshot(editorLocation location: Int) {
+        pair(editorLocation: location)
+        if let index = previewTextView.highlightedBlockIndex {
+            editor.pairedRange = previewTextView.blocks[index].sourceRange
+        }
+    }
+
     private func applyViewMode() {
+        clearPairing()
         let showEditor = viewMode != .preview
         let showPreview = viewMode != .write
 
@@ -417,6 +470,9 @@ final class EditorWindowController: NSWindowController,
             (scroller as? ThemedScroller)?.trackColor = resolved?.colors.background
         }
         splitView.themedDividerColor = resolved?.colors.borderColor
+        previewTextView.setHighlightColor(
+            (resolved?.colors.selectionColor ?? .selectedTextBackgroundColor).withAlphaComponent(0.45)
+        )
         statusBar.applyPalette(resolved)
         applyChrome(resolved)
         applyToolbarPalette(resolved)

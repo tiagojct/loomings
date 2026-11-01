@@ -213,6 +213,30 @@ public struct PreviewDocument {
         self.blocks = blocks
     }
 
+    /// The block whose source contains `location` (UTF-16), counting the
+    /// position just past its last character, so a caret at a line's end
+    /// still pairs. Blank lines between blocks pair with nothing.
+    public func blockIndex(containing location: Int) -> Int? {
+        Self.blockIndex(in: blocks, containing: location)
+    }
+
+    public static func blockIndex(in blocks: [PreviewBlock], containing location: Int) -> Int? {
+        var low = 0
+        var high = blocks.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            let range = blocks[mid].sourceRange
+            if location < range.location {
+                high = mid - 1
+            } else if location > range.location + range.length {
+                low = mid + 1
+            } else {
+                return mid
+            }
+        }
+        return nil
+    }
+
     /// Built on demand: it is only needed for export, not for every preview.
     public var html: String {
         blocks.map(\.html).joined()

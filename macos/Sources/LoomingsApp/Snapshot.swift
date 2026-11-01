@@ -5,7 +5,8 @@ import Foundation
 /// design review: `Loomings --snapshot <out-dir> <file.md>`. Theme and other
 /// preferences can be overridden for one run with argument-domain defaults,
 /// for example `-Loomings.Native.themeFamily pequod -Loomings.Native.themeMode dark`.
-/// `-LoomingsSnapshotWidth 640` sets the window width.
+/// `-LoomingsSnapshotWidth 640` sets the window width;
+/// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split.
 /// Writes write.png, split.png and preview.png, then exits.
 @MainActor
 enum Snapshot {
@@ -41,6 +42,11 @@ enum Snapshot {
         for (name, mode) in [("write", EditorWindowController.ViewMode.write), ("split", .split), ("preview", .preview)] {
             controller.setViewMode(mode)
             settle(1.2)
+            let pairLocation = UserDefaults.standard.integer(forKey: "LoomingsSnapshotPairLocation")
+            if mode == .split, pairLocation > 0 {
+                controller.pairBothForSnapshot(editorLocation: pairLocation)
+                settle(0.3)
+            }
             guard let frame = window.contentView?.superview else { continue }
             guard let bitmap = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { continue }
             frame.cacheDisplay(in: frame.bounds, to: bitmap)

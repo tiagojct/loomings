@@ -5,7 +5,7 @@ import LoomingsPreview
 final class PreviewTextView: NSTextView, NSTextViewDelegate {
     var onScroll: (() -> Void)?
 
-    private var blocks: [PreviewBlock] = []
+    private(set) var blocks: [PreviewBlock] = []
     private var blockRanges: [NSRange] = []
     private var documentURL: URL?
     private var imageCache: [String: NSImage] = [:]
@@ -62,6 +62,78 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
     }
 
     private var placeholderTheme = PreviewTheme.standard
+
+    /// The block lit because the pointer is over its source (Split view).
+    var highlightedBlockIndex: Int? {
+        didSet { if highlightedBlockIndex != oldValue { needsDisplay = true } }
+    }
+    /// The block under the pointer, or nil when it leaves the preview.
+    var onPointerBlock: ((PreviewBlock?) -> Void)?
+    private var highlightColor: NSColor = .selectedTextBackgroundColor
+    private var pointerArea: NSTrackingArea?
+
+    func setHighlightColor(_ color: NSColor) {
+        highlightColor = color
+        needsDisplay = true
+    }
+
+    func blockIndex(atCharacter index: Int) -> Int? {
+        var low = 0
+        var high = blockRanges.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            let range = blockRanges[mid]
+            if index < range.location {
+                high = mid - 1
+            } else if index >= range.location + range.length {
+                low = mid + 1
+            } else {
+                return mid
+            }
+        }
+        return nil
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let pointerArea { removeTrackingArea(pointerArea) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        pointerArea = area
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        guard let onPointerBlock else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let index = characterIndexForInsertion(at: point)
+        onPointerBlock(blockIndex(atCharacter: index).map { blocks[$0] })
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        onPointerBlock?(nil)
+    }
+
+    override func drawBackground(in rect: NSRect) {
+        super.drawBackground(in: rect)
+        guard let index = highlightedBlockIndex,
+              blockRanges.indices.contains(index),
+              let layoutManager, let container = textContainer else { return }
+        let glyphs = layoutManager.glyphRange(forCharacterRange: blockRanges[index], actualCharacterRange: nil)
+        var bounds = layoutManager.boundingRect(forGlyphRange: glyphs, in: container)
+        let origin = textContainerOrigin
+        bounds.origin.x = origin.x - 8
+        bounds.origin.y += origin.y - 4
+        bounds.size.width = container.size.width + 16
+        bounds.size.height += 8
+        highlightColor.setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: 4, yRadius: 4).fill()
+    }
 
     func applyTheme(_ theme: PreviewTheme) {
         renderer.theme = theme
@@ -159,6 +231,9 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
 
         blocks = next
         recomputeRanges()
+        if let index = highlightedBlockIndex, !blocks.indices.contains(index) {
+            highlightedBlockIndex = nil
+        }
         loadImages()
         resizeToFit()
         restoreScroll(to: topLine)

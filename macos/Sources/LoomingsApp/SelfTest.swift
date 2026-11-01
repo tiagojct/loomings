@@ -449,6 +449,31 @@ enum SelfTest {
         check(pdf.starts(with: Data("%PDF".utf8)), "PDF export produces a PDF")
         check(pdf.count > 1_000, "PDF export has content")
 
+        // 13c-1. Paired lines: a source position lights its preview block and
+        // a preview block lights its source, as rendering state only.
+        let pairingSource = editor.source as NSString
+        let cellLocation = pairingSource.range(of: "| 1 |").location
+        let editedBeforePairing = document.isDocumentEdited
+        let storageBeforePairing = editor.textView.string
+        controller.pairForTesting(editorLocation: cellLocation)
+        check(controller.previewHighlightedBlockKind == "table", "a source line lights its preview block")
+        controller.pairForTesting(previewBlockAt: 0)
+        check(controller.editorPairedRange == NSRange(location: 0, length: 15), "a preview block lights its source")
+        _ = pump(timeout: 0.3) { false }
+        check(lineIsTinted(editor.textView, sourceLocation: 3), "the lit source is tinted on screen")
+        check(editor.textView.string == storageBeforePairing, "pairing does not change the text")
+        check(document.isDocumentEdited == editedBeforePairing, "pairing does not dirty the document")
+        controller.pairForTesting(previewBlockAt: 99)
+        _ = pump(timeout: 0.3) { false }
+        check(!lineIsTinted(editor.textView, sourceLocation: 3), "the tint goes when the pointer leaves")
+        controller.pairForTesting(editorLocation: (pairingSource.range(of: "\n\n| a").location) + 1)
+        check(controller.previewHighlightedBlockKind == nil, "a blank line lights nothing")
+        controller.pairForTesting(editorLocation: cellLocation)
+        controller.setViewMode(.write)
+        check(controller.previewHighlightedBlockKind == nil && controller.editorPairedRange == nil, "leaving Split clears the pairing")
+        controller.setViewMode(.split)
+        _ = pump(timeout: 2) { controller.previewText.contains("Emoji") }
+
         controller.setViewMode(.preview)
         _ = pump(timeout: 1) { controller.isPreviewVisible && !controller.isEditorVisible }
         check(controller.isPreviewVisible, "preview mode shows the preview")
@@ -635,5 +660,27 @@ enum SelfTest {
             RunLoop.main.run(until: Date().addingTimeInterval(0.005))
         }
         return condition()
+    }
+
+    /// Compares a pixel at the empty right end of the text column on the line
+    /// of `sourceLocation` with the same column on the document's last line,
+    /// which carries no decoration.
+    private static func lineIsTinted(_ textView: EditorTextView, sourceLocation: Int) -> Bool {
+        let length = (textView.string as NSString).length
+        guard let line = textView.lineRects(for: NSRange(location: sourceLocation, length: 1)).first,
+              let reference = textView.lineRects(for: NSRange(location: max(0, length - 1), length: 1)).last,
+              let lit = pixel(textView, at: NSPoint(x: line.maxX - 10, y: line.midY)),
+              let plain = pixel(textView, at: NSPoint(x: reference.maxX - 10, y: reference.midY)) else { return false }
+        let difference = abs(lit.redComponent - plain.redComponent)
+            + abs(lit.greenComponent - plain.greenComponent)
+            + abs(lit.blueComponent - plain.blueComponent)
+        return difference > 0.04
+    }
+
+    private static func pixel(_ view: NSView, at point: NSPoint) -> NSColor? {
+        let sample = NSRect(x: point.x, y: point.y, width: 1, height: 1)
+        guard let bitmap = view.bitmapImageRepForCachingDisplay(in: sample) else { return nil }
+        view.cacheDisplay(in: sample, to: bitmap)
+        return bitmap.colorAt(x: 0, y: 0)?.usingColorSpace(.sRGB)
     }
 }
