@@ -9,7 +9,8 @@ import LoomingsTheme
 enum TeachingPopovers {
     static let width: CGFloat = 360
 
-    static func show(_ content: NSView, relativeTo rect: NSRect, of view: NSView, palette: ResolvedPalette?) {
+    @discardableResult
+    static func show(_ content: NSView, relativeTo rect: NSRect, of view: NSView, palette: ResolvedPalette?) -> NSPopover {
         let controller = NSViewController()
         controller.view = content
         let popover = NSPopover()
@@ -19,6 +20,7 @@ enum TeachingPopovers {
             popover.appearance = NSAppearance(named: palette.isDark ? .darkAqua : .aqua)
         }
         popover.show(relativeTo: rect, of: view, preferredEdge: .maxY)
+        return popover
     }
 
     /// A column of rows inside a scroll view no taller than `maxHeight`.

@@ -436,6 +436,12 @@ enum SelfTest {
         check(editor.source == "Intro.\n\n#Title\n", "undo brings the mistake back")
         _ = pump(timeout: 2) { controller.notesForTesting == ["heading-space"] }
         check(editor.textView.decorations(for: "notes").count == 1, "the note is marked in the text")
+        editor.setText("#One\n\n#Two\n")
+        _ = pump(timeout: 2) { controller.notesForTesting.count == 2 }
+        controller.showNotesForTesting()
+        check(controller.isNotesPopoverShownForTesting, "the notes list opens")
+        controller.fixFromNotesPopoverForTesting(0)
+        check(!controller.isNotesPopoverShownForTesting, "a fix closes the notes list, so no stale fix button stays")
         editor.setText("# Clean\n\nNothing to say.\n")
         _ = pump(timeout: 2) { controller.notesForTesting.isEmpty && controller.statusNotesTitleForTesting == nil }
         check(controller.statusNotesTitleForTesting == nil, "a clean document shows no notes")
@@ -483,8 +489,11 @@ enum SelfTest {
         _ = pump(timeout: 1) { controller.sectionTitleForTesting != nil }
         check(controller.sectionTitleForTesting == "Introduction 6 of 5 words", "the status bar counts the caret's section against its limit")
         check(controller.outlineTitlesForTesting == ["Introduction \u{2014} 6/5", "Next \u{2014} 1"], "the outline lists each section's words")
+        editor.textView.insertText(" more", replacementRange: editor.textView.selectedRange())
+        controller.updateStatusNowForTesting()
+        check(controller.sectionTitleForTesting != nil, "the section count stays visible while typing")
         editor.textView.setSelectedRange(NSRange(location: (editor.source as NSString).range(of: "seven").location, length: 0))
-        _ = pump(timeout: 1) { controller.sectionTitleForTesting == nil }
+        _ = pump(timeout: 2) { controller.sectionTitleForTesting == nil }
         check(controller.sectionTitleForTesting == nil, "a section without a limit shows nothing")
 
         // 13a-5. Projector mode changes the view, never the preferences.

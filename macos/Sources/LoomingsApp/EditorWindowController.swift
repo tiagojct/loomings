@@ -314,7 +314,10 @@ final class EditorWindowController: NSWindowController,
 
     /// The innermost limited section around the caret.
     private func updateSectionStatus(caret: Int) {
-        let section = currentReport?.sections
+        // Between an edit and its parse there is no current report; keep the
+        // last count rather than blink it away while the student types.
+        guard let report = currentReport else { return }
+        let section = report.sections
             .filter { $0.limit != nil && (NSLocationInRange(caret, $0.range) || NSMaxRange($0.range) == caret) }
             .max { $0.heading.level < $1.heading.level }
         if let section, let limit = section.limit {
@@ -359,21 +362,40 @@ final class EditorWindowController: NSWindowController,
         editor.lineNumber(at: issue.range.location)
     }
 
+    private var notesPopover: NSPopover?
+
     private func showNotes(_ only: [LintIssue]? = nil) {
         guard let issues = only ?? currentReport?.lintIssues, !issues.isEmpty else { return }
         let content = TeachingPopovers.notes(
             issues,
             line: { [weak self] in self?.lineNumber(of: $0) ?? 1 },
-            onFix: { [weak self] in self?.apply(fixOf: $0) },
+            onFix: { [weak self] in self?.fixFromNotes($0) },
             onGo: { [weak self] in self?.reveal($0.range) }
         )
+        notesPopover?.close()
         if let only, let first = only.first,
            let rect = editor.textView.segmentFrames(for: first.range).first {
-            TeachingPopovers.show(content, relativeTo: rect, of: editor.textView, palette: ThemeManager.shared.resolved())
+            notesPopover = TeachingPopovers.show(content, relativeTo: rect, of: editor.textView, palette: ThemeManager.shared.resolved())
         } else {
-            TeachingPopovers.show(content, relativeTo: statusBar.bounds, of: statusBar, palette: ThemeManager.shared.resolved())
+            notesPopover = TeachingPopovers.show(content, relativeTo: statusBar.bounds, of: statusBar, palette: ThemeManager.shared.resolved())
         }
     }
+
+    /// A fix changes the text, so every other note's range is out of date:
+    /// the list closes rather than leave buttons that can no longer work.
+    private func fixFromNotes(_ issue: LintIssue) {
+        apply(fixOf: issue)
+        notesPopover?.close()
+        notesPopover = nil
+    }
+
+    func showNotesForTesting() { showNotes() }
+    var isNotesPopoverShownForTesting: Bool { notesPopover?.isShown ?? false }
+    func fixFromNotesPopoverForTesting(_ index: Int) {
+        guard let issues = currentReport?.lintIssues, issues.indices.contains(index) else { return }
+        fixFromNotes(issues[index])
+    }
+    func updateStatusNowForTesting() { updateStatus() }
 
     private func apply(fixOf issue: LintIssue) {
         guard let fix = issue.fix, currentReport?.lintIssues.contains(issue) == true else { return }
