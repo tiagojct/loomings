@@ -18,8 +18,8 @@ import { countWords } from '../stats.js';
 
 /**
  * The headings, with titles taken from the source as the native outline
- * does: the text after the # signs without a closing run, or the first line
- * of a setext heading.
+ * does: the text after the # signs (up to three spaces before them) without
+ * a closing run, or the first line of a setext heading.
  *
  * @param {string} source
  * @param {ReturnType<typeof parseSource>} [parsed] a parse of `source` to reuse
@@ -34,13 +34,15 @@ export function outline(source, parsed) {
     const line = doc.lines[token.map[0]];
     const text = line.text;
     let title;
-    if (text[0] === '#') {
-      let cursor = 0;
-      while (text[cursor] === '#') cursor++;
+    const atx = /^ {0,3}#+/.exec(text);
+    if (atx && token.markup.startsWith('#')) {
+      const cursor = atx[0].length;
       let end = text.length;
       while (end > cursor && (text[end - 1] === ' ' || text[end - 1] === '\t')) end--;
       let closing = end;
       while (closing > cursor && text[closing - 1] === '#') closing--;
+      // A closing run needs a space before it: "## C#" keeps its #.
+      if (closing > cursor && closing < end && text[closing - 1] !== ' ' && text[closing - 1] !== '\t') closing = end;
       title = text.slice(cursor, closing).trim();
     } else {
       title = text.trim();

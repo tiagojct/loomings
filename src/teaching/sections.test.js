@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { outline, sections, limitsIn, sectionAt } from './sections.js';
+
+const outlineCases = JSON.parse(readFileSync(new URL('../../macos/Tests/LoomingsTeachingTests/Fixtures/outline-cases.json', import.meta.url), 'utf8'));
 
 const source = '# T\n\n## A\n\none two\n\n### A1\n\nthree four\n\n## B\n\nfive\n';
 const count = (src, limits = []) => sections(src, outline(src), limits);
@@ -12,6 +15,14 @@ describe('outline', () => {
     ]);
     expect(outline('---\ntitle: x\n---\n\n## Body\n').map((h) => h.title)).toEqual(['Body']);
   });
+});
+
+describe('outline: shared cases', () => {
+  for (const item of outlineCases) {
+    it(item.name, () => {
+      expect(outline(item.source).map(({ level, title }) => ({ level, title }))).toEqual(item.headings);
+    });
+  }
 });
 
 describe('section word limits', () => {

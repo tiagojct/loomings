@@ -44,14 +44,20 @@ public enum MarkdownLint {
         context.frontmatter = parsed.frontmatter
 
         withExtendedLifetime(tree) {
-            var stack: [MarkdownNode] = [tree.document]
-            while let node = stack.popLast() {
-                context.visit(node)
+            // Each node travels with the range of its nearest paragraph or
+            // heading: cmark gives no position to text on a lazy line.
+            var stack: [(MarkdownNode, NSRange?)] = [(tree.document, nil)]
+            while let (node, block) = stack.popLast() {
+                context.visit(node, block: block)
+                let inner = (node.kind == .paragraph || node.kind == .heading) ? context.map.nsRange(for: node) : block
+                // Pushed last-first so they are visited in document order.
+                var children: [MarkdownNode] = []
                 var child = node.firstChild
                 while let current = child {
-                    stack.append(current)
+                    children.append(current)
                     child = current.nextSibling
                 }
+                stack.append(contentsOf: children.reversed().map { ($0, inner) })
             }
         }
         context.checkParagraphs()
@@ -78,6 +84,13 @@ private struct Context {
     /// item or a quotation), whose lines can be read as written.
     var paragraphs: [NSRange] = []
     var codeSpans: [NSRange] = []
+    /// Source places already given to a text or image node, so the
+    /// nearest-match fallback never gives one place to two nodes.
+    var claimed: [NSRange] = []
+
+    func isClaimed(_ range: NSRange) -> Bool {
+        claimed.contains { NSIntersectionRange($0, range).length > 0 || $0.location == range.location }
+    }
     /// cmark reads frontmatter as a paragraph or setext heading; it is
     /// metadata, so it is never checked.
     var frontmatter: NSRange?
@@ -103,7 +116,7 @@ private struct Context {
         issues.append(LintIssue(rule: rule, range: range, message: MarkdownLint.messages[rule] ?? "", fix: fix))
     }
 
-    mutating func visit(_ node: MarkdownNode) {
+    mutating func visit(_ node: MarkdownNode, block: NSRange?) {
         let kind = node.kind
         switch kind {
         case .paragraph, .code, .heading, .codeBlock, .image:
@@ -113,7 +126,7 @@ private struct Context {
         default:
             return
         }
-        guard let range = map.nsRange(for: node) else { return }
+        guard let range = sourceRange(of: node, kind: kind, in: block) else { return }
         if let frontmatter, NSIntersectionRange(frontmatter, range).length > 0 { return }
         switch kind {
         case .paragraph:
@@ -140,14 +153,18 @@ private struct Context {
 
     /// Setext headings made with hyphens, when the text reads like prose.
     mutating func checkSetext(_ node: MarkdownNode, _ range: NSRange) {
-        let first = text.lineRange(for: NSRange(location: range.location, length: 0))
+        let first = lineRange(at: range.location)
         if lineText(first).trimmingCharacters(in: .whitespaces).hasPrefix("#") { return }
-        let lastLine = text.lineRange(for: NSRange(location: max(range.location, NSMaxRange(range) - 1), length: 0))
+        // cmark's range for a setext heading can run on past its underline,
+        // so the underline is the first line after the text made only of the
+        // marks.
+        guard let lastLine = setextUnderline(after: first, before: NSMaxRange(range)) else { return }
         let underline = lineText(lastLine).trimmingCharacters(in: .whitespaces)
-        guard underline.first == "-", lastLine.location > first.location else { return }
+        guard underline.first == "-" else { return }
         let content = text.substring(with: NSRange(location: first.location, length: lastLine.location - first.location))
             .trimmingCharacters(in: .whitespacesAndNewlines)
-        let multiline = content.contains("\n")
+        // "\r\n" is one Character, so look at scalars.
+        let multiline = content.unicodeScalars.contains { $0 == "\n" || $0 == "\r" }
         let prose = content.last.map { ".,;:".contains($0) } ?? false
         guard multiline || prose else { return }
         add("accidental-setext", range, fix: LintFix(
@@ -157,9 +174,27 @@ private struct Context {
         ))
     }
 
+    /// The first line after `first`, up to `limit`, that is a setext
+    /// underline: up to three spaces, then only = or only -.
+    func setextUnderline(after first: NSRange, before limit: Int) -> NSRange? {
+        var cursor = NSMaxRange(first)
+        while cursor < min(limit, text.length) {
+            let line = lineRange(at: cursor)
+            let content = lineText(line)
+            let indent = content.prefix { $0 == " " }.count
+            let marks = content.dropFirst(indent).trimmingCharacters(in: .whitespaces)
+            if indent <= 3, !marks.isEmpty, marks.allSatisfy({ $0 == "=" }) || marks.allSatisfy({ $0 == "-" }) {
+                return line
+            }
+            guard NSMaxRange(line) > cursor else { break }
+            cursor = NSMaxRange(line)
+        }
+        return nil
+    }
+
     /// A fenced block that runs to the end of the document with no closing fence.
     mutating func checkFence(_ range: NSRange) {
-        let first = text.lineRange(for: NSRange(location: range.location, length: 0))
+        let first = lineRange(at: range.location)
         let opening = lineText(first)
         let indent = opening.prefix { $0 == " " }.count
         let trimmed = opening.dropFirst(indent)
@@ -170,7 +205,7 @@ private struct Context {
         let end = NSMaxRange(range)
         guard end >= contentEnd else { return }
 
-        let lastLine = text.lineRange(for: NSRange(location: max(range.location, end - 1), length: 0))
+        let lastLine = lineRange(at: max(range.location, end - 1))
         if lastLine.location > first.location {
             let closing = lineText(lastLine).trimmingCharacters(in: .whitespaces)
             if closing.count >= fence.count, closing.allSatisfy({ $0 == fenceCharacter }) { return }
@@ -192,23 +227,82 @@ private struct Context {
 
     // MARK: Inline
 
-    /// Leftover `**` or `__` in a text node. Only a pair written as such in
-    /// the source counts: escaped marks (`\*\*`) are meant to show.
+    /// Where a node is in the source. cmark's inline positions are off by
+    /// a character or two after a tab or on a lazy line, or missing there, so
+    /// a text or image position is checked against the source and, when the
+    /// text is not there, the nearest match in its paragraph is taken.
+    mutating func sourceRange(of node: MarkdownNode, kind: MarkdownNodeKind, in block: NSRange?) -> NSRange? {
+        let found = locateNode(node, kind: kind, in: block)
+        if let found, kind == .text || kind == .image { claimed.append(found) }
+        return found
+    }
+
+    func locateNode(_ node: MarkdownNode, kind: MarkdownNodeKind, in block: NSRange?) -> NSRange? {
+        let reported = map.nsRange(for: node)
+        switch kind {
+        case .text:
+            let literal = node.literal
+            if let reported, !isClaimed(reported), text.substring(with: reported).contains(literal) { return reported }
+            return nearest(literal, in: block, near: reported?.location) ?? reported
+        case .image:
+            if let reported, !isClaimed(reported),
+               text.substring(with: reported).hasPrefix("!["), text.substring(with: reported).hasSuffix(")") {
+                return reported
+            }
+            guard let start = nearest("![", in: block, near: reported?.location) else { return reported }
+            let destination = text.range(of: "](", options: .literal, range: NSRange(location: start.location, length: NSMaxRange(block ?? start) - start.location))
+            guard destination.location != NSNotFound else { return reported }
+            let close = text.range(of: ")", options: .literal, range: NSRange(location: NSMaxRange(destination), length: NSMaxRange(block ?? destination) - NSMaxRange(destination)))
+            guard close.location != NSNotFound else { return reported }
+            return NSRange(location: start.location, length: NSMaxRange(close) - start.location)
+        default:
+            return reported
+        }
+    }
+
+    /// The occurrence of `needle` in `block` nearest to `location` (the
+    /// first when there is no location).
+    func nearest(_ needle: String, in block: NSRange?, near location: Int?) -> NSRange? {
+        guard let block, !needle.isEmpty, NSMaxRange(block) <= text.length else { return nil }
+        var best: NSRange?
+        var search = block
+        while search.length > 0 {
+            let found = text.range(of: needle, options: .literal, range: search)
+            guard found.location != NSNotFound else { break }
+            if isClaimed(found) {
+                let next = found.location + 1
+                search = NSRange(location: next, length: NSMaxRange(block) - next)
+                continue
+            }
+            guard let location else { return found }
+            if best.map({ abs($0.location - location) > abs(found.location - location) }) ?? true { best = found }
+            let next = found.location + 1
+            search = NSRange(location: next, length: NSMaxRange(block) - next)
+        }
+        return best
+    }
+
+    /// Leftover `**` or `__` in a text node, one note for each run of marks.
+    /// Only marks written as such count: an escaped mark (`\*`) is meant to
+    /// show, though a mark after an escaped backslash (`\\**`) is not escaped.
     mutating func checkUnpaired(_ node: MarkdownNode, _ range: NSRange) {
         let source = text.substring(with: range) as NSString
-        for marker in ["**", "__"] {
-            var search = NSRange(location: 0, length: source.length)
-            while true {
-                let found = source.range(of: marker, options: .literal, range: search)
-                guard found.location != NSNotFound else { break }
-                let escaped = found.location > 0 && source.character(at: found.location - 1) == 0x5C // \
-                if !escaped {
-                    add("unpaired-emphasis", NSRange(location: range.location + found.location, length: 2))
-                    return
-                }
-                let next = found.location + 1
-                search = NSRange(location: next, length: source.length - next)
+        var found: [Int] = []
+        for marker in [0x2A, 0x5F] as [unichar] { // * _
+            var index = 0
+            while index < source.length {
+                guard source.character(at: index) == marker else { index += 1; continue }
+                var backslashes = 0
+                while index - backslashes - 1 >= 0, source.character(at: index - backslashes - 1) == 0x5C { backslashes += 1 }
+                if backslashes % 2 == 1 { index += 1; continue }
+                var end = index
+                while end < source.length, source.character(at: end) == marker { end += 1 }
+                if end - index >= 2 { found.append(index) }
+                index = end
             }
+        }
+        for location in found.sorted() {
+            add("unpaired-emphasis", NSRange(location: range.location + location, length: 2))
         }
     }
 
@@ -293,7 +387,7 @@ private struct Context {
         guard columns >= 1 else { return }
         let row = "|" + String(repeating: " --- |", count: columns) + newline()
         let firstRange = lines[0]
-        let afterFirst = text.lineRange(for: NSRange(location: firstRange.location, length: 0))
+        let afterFirst = lineRange(at: firstRange.location)
         add("table-separator", firstRange, fix: LintFix(
             range: NSRange(location: NSMaxRange(afterFirst), length: 0),
             replacement: row,
@@ -342,13 +436,42 @@ private struct Context {
         var cursor = range.location
         let end = NSMaxRange(range)
         while cursor < end {
-            let line = text.lineRange(for: NSRange(location: cursor, length: 0))
+            let line = lineRange(at: cursor)
             lines.append(NSRange(location: line.location, length: (lineText(line) as NSString).length))
             let next = NSMaxRange(line)
             guard next > cursor else { break }
             cursor = next
         }
         return lines
+    }
+
+    /// The line holding `location`, its terminator included. Lines end at
+    /// LF, CRLF or CR, as cmark reads them (NSString would also end them at
+    /// U+2028, U+2029 and U+0085, which cmark does not).
+    func lineRange(at location: Int) -> NSRange {
+        let length = text.length
+        var position = min(max(0, location), length)
+        // The LF of a CRLF belongs to the line the pair ends.
+        if position > 0, position < length, text.character(at: position) == 0x0A, text.character(at: position - 1) == 0x0D {
+            position -= 1
+        }
+        var start = position
+        while start > 0 {
+            let previous = text.character(at: start - 1)
+            if previous == 0x0A || previous == 0x0D { break }
+            start -= 1
+        }
+        var end = position
+        while end < length {
+            let character = text.character(at: end)
+            if character == 0x0A { return NSRange(location: start, length: end + 1 - start) }
+            if character == 0x0D {
+                let width = end + 1 < length && text.character(at: end + 1) == 0x0A ? 2 : 1
+                return NSRange(location: start, length: end + width - start)
+            }
+            end += 1
+        }
+        return NSRange(location: start, length: end - start)
     }
 
     func lineText(_ line: NSRange) -> String {

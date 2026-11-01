@@ -36,7 +36,14 @@ public struct SourceMap {
         var unitOffset = 0
         var nextCheckpoint = Self.checkpointStride
 
+        // cmark ends a line at LF, CRLF or a lone CR; so do the line starts.
+        var afterCR = false
         for scalar in source.unicodeScalars {
+            if afterCR, scalar.value != 0x0A {
+                starts8.append(byteOffset)
+                starts16.append(unitOffset)
+            }
+            afterCR = scalar.value == 0x0D
             let byteWidth: Int
             switch scalar.value {
             case 0..<0x80: byteWidth = 1
@@ -58,6 +65,11 @@ public struct SourceMap {
                 starts8.append(byteOffset)
                 starts16.append(unitOffset)
             }
+        }
+
+        if afterCR {
+            starts8.append(byteOffset)
+            starts16.append(unitOffset)
         }
 
         self.utf8Count = byteOffset

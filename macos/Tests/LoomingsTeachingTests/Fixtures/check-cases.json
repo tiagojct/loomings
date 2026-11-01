@@ -409,5 +409,15 @@
       true,
       false
     ]
+  },
+  {
+    "name": "alt text of only a non-breaking space does not count",
+    "source": "![&nbsp;](x)\n",
+    "checks": [
+      "image-alt"
+    ],
+    "passed": [
+      false
+    ]
   }
 ]

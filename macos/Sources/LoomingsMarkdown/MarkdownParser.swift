@@ -158,25 +158,36 @@ public enum MarkdownParser {
         let line = text.lineRange(for: NSRange(location: range.location, length: 0))
         let lineEnd = min(line.location + line.length, text.length)
 
-        var cursor = line.location
+        // An ATX heading may be indented by up to three spaces.
+        var hashStart = line.location
+        while hashStart < lineEnd, hashStart - line.location < 3, text.character(at: hashStart) == 0x20 {
+            hashStart += 1
+        }
+        var cursor = hashStart
         while cursor < lineEnd, text.character(at: cursor) == 0x23 {
             cursor += 1
         }
+        // ATX means one to six # then a space, a tab or the line's end;
+        // "#---" under-lined is a setext heading whose text starts with #.
+        let atx = (1...6).contains(cursor - hashStart)
+            && (cursor >= lineEnd || isSpaceOrTab(text.character(at: cursor)) || isNewline(text.character(at: cursor)))
+        if !atx { cursor = hashStart }
 
-        guard cursor > line.location else {
+        guard cursor > hashStart else {
             emitSetextUnderline(range, map: map, text: text, spans: &spans)
             let title = lineText(
                 text.lineRange(for: NSRange(location: range.location, length: 0)),
                 text: text
             ).trimmingCharacters(in: .whitespacesAndNewlines)
+            // cmark knows the level; its range can run past the underline.
             outline.append(
-                OutlineItem(level: setextLevel(in: range, text: text), title: title, range: NSRange(location: line.location, length: 0))
+                OutlineItem(level: heading.headingLevel, title: title, range: NSRange(location: line.location, length: 0))
             )
             return
         }
 
         append(
-            NSRange(location: line.location, length: cursor - line.location),
+            NSRange(location: hashStart, length: cursor - hashStart),
             .headingMarker,
             to: &spans,
             limit: text.length
@@ -193,6 +204,10 @@ public enum MarkdownParser {
         var trailingStart = trailingEnd
         while trailingStart > cursor, text.character(at: trailingStart - 1) == 0x23 {
             trailingStart -= 1
+        }
+        // A closing run needs a space before it: "## C#" keeps its #.
+        if trailingStart > cursor, trailingStart < trailingEnd, !isSpaceOrTab(text.character(at: trailingStart - 1)) {
+            trailingStart = trailingEnd
         }
         if trailingStart < trailingEnd {
             append(
@@ -223,19 +238,6 @@ public enum MarkdownParser {
         return text.substring(with: NSRange(location: line.location, length: end - line.location))
     }
 
-    private static func setextLevel(in range: NSRange, text: NSString) -> Int {
-        guard range.length > 1 else { return 1 }
-        let last = range.location + range.length - 1
-        let line = text.lineRange(for: NSRange(location: last, length: 0))
-        var cursor = line.location
-        while cursor < min(line.location + line.length, text.length),
-              isSpaceOrTab(text.character(at: cursor)) {
-            cursor += 1
-        }
-        guard cursor < min(line.location + line.length, text.length) else { return 1 }
-        return text.character(at: cursor) == 0x3D ? 1 : 2
-    }
-
     private static func emitSetextUnderline(
         _ headingRange: NSRange,
         map: SourceMap,
@@ -243,8 +245,22 @@ public enum MarkdownParser {
         spans: inout [MarkdownSyntaxSpan]
     ) {
         guard headingRange.length > 1 else { return }
-        let lastCharacter = headingRange.location + headingRange.length - 1
-        let line = text.lineRange(for: NSRange(location: lastCharacter, length: 0))
+        // The underline is the first line after the text made only of = or
+        // -; cmark's range for the heading can run on past it.
+        let first = text.lineRange(for: NSRange(location: headingRange.location, length: 0))
+        var line = NSRange(location: NSNotFound, length: 0)
+        var scan = NSMaxRange(first)
+        while scan < min(NSMaxRange(headingRange), text.length) {
+            let candidate = text.lineRange(for: NSRange(location: scan, length: 0))
+            let marks = lineText(candidate, text: text).trimmingCharacters(in: .whitespaces)
+            if !marks.isEmpty, marks.allSatisfy({ $0 == "=" }) || marks.allSatisfy({ $0 == "-" }) {
+                line = candidate
+                break
+            }
+            guard NSMaxRange(candidate) > scan else { break }
+            scan = NSMaxRange(candidate)
+        }
+        guard line.location != NSNotFound else { return }
         let lineEnd = min(line.location + line.length, text.length)
 
         var cursor = line.location

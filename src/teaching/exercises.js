@@ -162,7 +162,7 @@ function census(source, parsed) {
             if (level === 0 && (part.type === 'text' || part.type === 'text_special')) alt += part.content;
             if (part.nesting === 1) level++;
           }
-          if (alt.replace(/[ \t]/g, '')) found.imagesWithAlt++;
+          if (alt.replace(/\s/g, '')) found.imagesWithAlt++;
           if (child.children) inline(child.children, child.content);
           break;
         }

@@ -1,0 +1,84 @@
+[
+  {
+    "name": "ATX and setext headings",
+    "source": "# One #\n\nTwo\n---\n",
+    "headings": [
+      {
+        "level": 1,
+        "title": "One"
+      },
+      {
+        "level": 2,
+        "title": "Two"
+      }
+    ]
+  },
+  {
+    "name": "a setext heading with text after it",
+    "source": "A\n===\nx y\n",
+    "headings": [
+      {
+        "level": 1,
+        "title": "A"
+      }
+    ]
+  },
+  {
+    "name": "an indented ATX heading",
+    "source": "  # A\n\n## B\n",
+    "headings": [
+      {
+        "level": 1,
+        "title": "A"
+      },
+      {
+        "level": 2,
+        "title": "B"
+      }
+    ]
+  },
+  {
+    "name": "a hash at the end of a word is not a closing run",
+    "source": "## C#\n\n## D ##\n",
+    "headings": [
+      {
+        "level": 2,
+        "title": "C#"
+      },
+      {
+        "level": 2,
+        "title": "D"
+      }
+    ]
+  },
+  {
+    "name": "the frontmatter is not a heading",
+    "source": "---\ntitle: x\n---\n\n## Body\n",
+    "headings": [
+      {
+        "level": 2,
+        "title": "Body"
+      }
+    ]
+  },
+  {
+    "name": "setext with two lines takes the first",
+    "source": "Long\ntitle\n=====\n",
+    "headings": [
+      {
+        "level": 1,
+        "title": "Long"
+      }
+    ]
+  },
+  {
+    "name": "a hash without a space under-lined is a setext heading",
+    "source": "#---\n---\n",
+    "headings": [
+      {
+        "level": 2,
+        "title": "#---"
+      }
+    ]
+  }
+]

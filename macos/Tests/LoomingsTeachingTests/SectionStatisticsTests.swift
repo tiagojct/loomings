@@ -59,4 +59,25 @@ struct SectionStatisticsTests {
         #expect(report.sections.map(\.heading.title) == ["A"])
         #expect(TeachingReport.limits(in: "---\nlimit: A 4\nlimit: nope\n---\n").limits == [SectionLimit(heading: "A", maxWords: 4)])
     }
+
+    struct OutlineCase: Decodable {
+        struct Heading: Decodable, Equatable {
+            let level: Int
+            let title: String
+        }
+        let name: String
+        let source: String
+        let headings: [Heading]
+    }
+
+    @Test("The shared outline cases give the same levels and titles")
+    func outlineCasesFromFixture() throws {
+        let url = try #require(Bundle.module.url(forResource: "outline-cases", withExtension: "json", subdirectory: "Fixtures"))
+        let cases = try JSONDecoder().decode([OutlineCase].self, from: Data(contentsOf: url))
+        #expect(cases.count >= 6)
+        for item in cases {
+            let outline = MarkdownParser.parse(item.source).outline.map { OutlineCase.Heading(level: $0.level, title: $0.title) }
+            #expect(outline == item.headings, "\(item.name)")
+        }
+    }
 }

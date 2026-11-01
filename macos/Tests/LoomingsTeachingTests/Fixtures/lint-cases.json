@@ -419,6 +419,164 @@
     "rules": [
       "image-alt"
     ],
-    "fixed": "- a\n\t\t\t![](x)\n"
+    "fixed": "- a\n\t\t\t![](x)\n",
+    "starts": [
+      7
+    ]
+  },
+  {
+    "name": "hyphens under a sentence with text after",
+    "source": "Text.\n---\nMore.\n",
+    "rules": [
+      "accidental-setext"
+    ],
+    "fixed": "Text.\n\n---\nMore.\n",
+    "starts": [
+      0
+    ]
+  },
+  {
+    "name": "hyphens under two lines, CRLF",
+    "source": "Line one\r\nline two\r\n----------\r\n",
+    "rules": [
+      "accidental-setext"
+    ],
+    "fixed": "Line one\r\nline two\r\n\r\n----------\r\n",
+    "starts": [
+      0
+    ]
+  },
+  {
+    "name": "marks on a lazy line of a quotation",
+    "source": "> a\n**b\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "> a\n**b\n",
+    "starts": [
+      4
+    ]
+  },
+  {
+    "name": "marks on a lazy line of a list item",
+    "source": "- a\n**b\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "- a\n**b\n",
+    "starts": [
+      4
+    ]
+  },
+  {
+    "name": "marks after a lone CR line ending",
+    "source": "a\rb **c",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "a\rb **c",
+    "starts": [
+      4
+    ]
+  },
+  {
+    "name": "marks after an escaped backslash",
+    "source": "\\\\**x\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "\\\\**x\n",
+    "starts": [
+      2
+    ]
+  },
+  {
+    "name": "a line separator is not a line break",
+    "source": "a #Title\n",
+    "rules": [],
+    "fixed": "a #Title\n"
+  },
+  {
+    "name": "a fence inside the frontmatter",
+    "source": "---\n```\n---\nfoo **bar\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "---\n```\n---\nfoo **bar\n",
+    "starts": [
+      16
+    ]
+  },
+  {
+    "name": "each run of leftover marks gets a note",
+    "source": "**a **b\n",
+    "rules": [
+      "unpaired-emphasis",
+      "unpaired-emphasis"
+    ],
+    "fixed": "**a **b\n",
+    "starts": [
+      0,
+      4
+    ]
+  },
+  {
+    "name": "an image without alt text inside another image's alt text",
+    "source": "![a ![](b)](c)\n",
+    "rules": [
+      "image-alt"
+    ],
+    "fixed": "![a ![](b)](c)\n",
+    "starts": [
+      4
+    ]
+  },
+  {
+    "name": "marks inside alt text",
+    "source": "![**](x)\n",
+    "rules": [
+      "unpaired-emphasis"
+    ],
+    "fixed": "![**](x)\n",
+    "starts": [
+      2
+    ]
+  },
+  {
+    "name": "alt text of only a non-breaking space is no alt text",
+    "source": "![&nbsp;](x)\n",
+    "rules": [
+      "image-alt"
+    ],
+    "fixed": "![&nbsp;](x)\n",
+    "starts": [
+      0
+    ]
+  },
+  {
+    "name": "two leftover runs with the same text get two notes",
+    "source": "a **x\n**x b\n",
+    "rules": [
+      "unpaired-emphasis",
+      "unpaired-emphasis"
+    ],
+    "fixed": "a **x\n**x b\n",
+    "starts": [
+      2,
+      6
+    ]
+  },
+  {
+    "name": "marks in a quotation and on its lazy line",
+    "source": "> (---text,__|\n__\n",
+    "rules": [
+      "unpaired-emphasis",
+      "unpaired-emphasis"
+    ],
+    "fixed": "> (---text,__|\n__\n",
+    "starts": [
+      11,
+      15
+    ]
   }
 ]

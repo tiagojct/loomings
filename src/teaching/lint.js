@@ -64,7 +64,8 @@ export function lint(source, parsed) {
         paragraphs.push({ first, last: token.map[1] - 1, from });
       }
     } else if (token.type === 'heading_open' && token.map && (token.markup === '-' || token.markup === '=')) {
-      checkSetext(token.map[0], token.map[1] - 1);
+      // The note starts at the heading's text, as cmark's range does.
+      checkSetext(token.map[0], token.map[1] - 1, doc.mapper.forInline(tokens[t + 1], false)(0));
     } else if (token.type === 'fence' && token.map) {
       checkFence(token.map[0], token.map[1] - 1);
     } else if (token.type === 'inline' && token.children) {
@@ -81,7 +82,7 @@ export function lint(source, parsed) {
   // ---------- Blocks ----------
 
   /** Setext headings made with hyphens, when the text reads like prose. */
-  function checkSetext(first, last) {
+  function checkSetext(first, last, from) {
     if (lines[first].text.trim().startsWith('#')) return;
     const underline = lines[last].text.trim();
     if (underline[0] !== '-' || last <= first) return;
@@ -89,7 +90,7 @@ export function lint(source, parsed) {
     const multiline = content.includes('\n');
     const prose = '.,;:'.includes(content.slice(-1)) && content.length > 0;
     if (!multiline && !prose) return;
-    add('accidental-setext', lines[first].from, lines[last].from + lines[last].text.length, {
+    add('accidental-setext', from, lines[last].from + lines[last].text.length, {
       from: lines[last].from, to: lines[last].from, insert: nl, title: 'Add a blank line above',
     });
   }
@@ -118,15 +119,20 @@ export function lint(source, parsed) {
 
   // ---------- Inline ----------
 
+  /**
+   * @param {{children: import('markdown-it/lib/token.mjs').default[]|null}} inline
+   * @param {(offset: number) => number} toSource
+   */
   function checkInline(inline, toSource) {
-    const children = inline.children;
+    const children = inline.children || [];
     for (let i = 0; i < children.length; i++) {
       const child = children[i];
       const meta = child.meta || {};
       if (child.type === 'code_inline' && meta.pos !== undefined) {
         codeSpans.push({ from: toSource(meta.pos), to: toSource(meta.end) });
       } else if (child.type === 'image' && meta.pos !== undefined) {
-        // Only the alternative text's own words count, as in the native app.
+        // Only the alternative text's own words count, as in the native app;
+        // white space of any kind (a non-breaking space too) is not alt text.
         let alt = '';
         let level = 0;
         for (const part of child.children || []) {
@@ -134,7 +140,10 @@ export function lint(source, parsed) {
           if (level === 0 && (part.type === 'text' || part.type === 'text_special')) alt += part.content;
           if (part.nesting === 1) level++;
         }
-        if (!alt.replace(/[ \t]/g, '')) add('image-alt', toSource(meta.pos), toSource(meta.end));
+        if (!alt.replace(/\s/g, '')) add('image-alt', toSource(meta.pos), toSource(meta.end));
+        // The alt text is parsed on its own: its offsets count from after "![".
+        const start = meta.pos + 2;
+        checkInline(child, (offset) => toSource(start + offset));
       } else if (meta.delim && (child.content === '*' || child.content === '_') && child.type === 'text') {
         // A run of leftover marks: consecutive, one character apart.
         let j = i;
