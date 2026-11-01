@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import PDFKit
 
 /// Draws the editor window to PNG files without screen-recording access, for
 /// design review: `Loomings --snapshot <out-dir> <file.md>`. Theme and other
@@ -59,6 +60,20 @@ enum Snapshot {
             if let png = bitmap.representation(using: .png, properties: [:]) {
                 try? png.write(to: output.appendingPathComponent("\(name).png"))
                 print(output.appendingPathComponent("\(name).png").path)
+            }
+        }
+        // The handout, and its first and last pages as images.
+        let pdf = controller.renderedPDFForTesting()
+        try? pdf.write(to: output.appendingPathComponent("handout.pdf"))
+        if let document = PDFDocument(data: pdf), document.pageCount > 0 {
+            for (name, index) in [("handout-first", 0), ("handout-last", document.pageCount - 1)] {
+                guard let page = document.page(at: index) else { continue }
+                let bounds = page.bounds(for: .mediaBox)
+                let image = page.thumbnail(of: NSSize(width: bounds.width * 1.5, height: bounds.height * 1.5), for: .mediaBox)
+                if let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),
+                   let png = rep.representation(using: .png, properties: [:]) {
+                    try? png.write(to: output.appendingPathComponent("\(name).png"))
+                }
             }
         }
         controller.editor.setText("")

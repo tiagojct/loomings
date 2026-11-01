@@ -778,8 +778,15 @@ final class EditorWindowController: NSWindowController,
     }
 
     func renderedPDFForTesting() -> Data {
-        let view = makePrintablePreview(width: 612)
-        return view.dataWithPDF(inside: view.bounds)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("loomings-handout-\(UUID().uuidString).pdf")
+        defer { try? FileManager.default.removeItem(at: url) }
+        Handout.writePDF(makeHandout(), to: url)
+        return (try? Data(contentsOf: url)) ?? Data()
+    }
+
+    private func makeHandout() -> HandoutTextView {
+        Handout.view(source: editor.source, documentURL: loomingsDocument?.fileURL, title: exportTitle)
     }
 
     func refreshStatus() {
@@ -879,60 +886,19 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "pdf") else {
             return
         }
-        let view = makePrintablePreview(width: 612)
-        let data = view.dataWithPDF(inside: view.bounds)
-        do {
-            try data.write(to: url, options: .atomic)
-        } catch {
-            NSAlert(error: error).runModal()
+        if !Handout.writePDF(makeHandout(), to: url) {
+            let alert = NSAlert()
+            alert.messageText = "The PDF could not be written."
+            alert.informativeText = "Check that the folder can be written to, then try again."
+            alert.runModal()
         }
     }
 
     @objc func printPreview(_ sender: Any?) {
-        let view = makePrintablePreview(width: 612)
-        let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
-        info.paperSize = NSSize(width: 612, height: 792)
-        info.topMargin = 36
-        info.bottomMargin = 36
-        info.leftMargin = 36
-        info.rightMargin = 36
-        let operation = NSPrintOperation(view: view, printInfo: info)
+        let operation = NSPrintOperation(view: makeHandout(), printInfo: Handout.printInfo())
         operation.showsPrintPanel = true
         operation.showsProgressPanel = true
         operation.run()
-    }
-
-    private func makePrintablePreview(width: CGFloat) -> NSTextView {
-        let rendered = PreviewRenderer().render(
-            source: editor.source,
-            documentURL: loomingsDocument?.fileURL
-        )
-        let view = NSTextView(frame: NSRect(x: 0, y: 0, width: width, height: 200))
-        view.isEditable = false
-        view.isSelectable = false
-        view.drawsBackground = true
-        view.backgroundColor = .white
-        view.appearance = NSAppearance(named: .aqua)
-        view.textContainerInset = NSSize(width: 36, height: 36)
-        view.textStorage?.setAttributedString(rendered.attributed)
-
-        if let container = view.textContainer {
-            container.widthTracksTextView = true
-            container.containerSize = NSSize(
-                width: width - 72,
-                height: CGFloat.greatestFiniteMagnitude
-            )
-        }
-        view.layoutManager?.ensureLayout(for: view.textContainer!)
-        let used = view.layoutManager?.usedRect(for: view.textContainer!).height ?? 0
-        view.frame = NSRect(
-            x: 0,
-            y: 0,
-            width: width,
-            height: max(200, used + 72)
-        )
-        view.layoutManager?.ensureLayout(for: view.textContainer!)
-        return view
     }
 
     // MARK: - Formatting actions
@@ -1066,7 +1032,7 @@ final class EditorWindowController: NSWindowController,
 
         case ToolbarItem.share:
             item.label = "Share"
-            let button = makeTool(symbol: "link", label: "Copy Share Link", action: #selector(copyShareLinkFromToolbar(_:)))
+            let button = makeTool(symbol: "link", label: "Share", action: #selector(showShareMenu(_:)))
             shareButton = button
             item.view = button
 
@@ -1134,6 +1100,52 @@ final class EditorWindowController: NSWindowController,
         copyShareLink(sender)
         shareButton?.confirm()
     }
+
+    // MARK: - Share menu
+
+    private func makeShareMenu() -> NSMenu {
+        let menu = NSMenu(title: "Share")
+        let copy = NSMenuItem(title: "Copy Share Link", action: #selector(copyShareLinkFromToolbar(_:)), keyEquivalent: "")
+        copy.target = self
+        menu.addItem(copy)
+        let qr = NSMenuItem(title: "Show QR Code\u{2026}", action: #selector(showQRCode(_:)), keyEquivalent: "")
+        qr.target = self
+        menu.addItem(qr)
+        return menu
+    }
+
+    @objc private func showShareMenu(_ sender: NSButton) {
+        makeShareMenu().popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+    }
+
+    /// The share link as a QR code to show a room, or why there is none.
+    private func qrContent() -> (image: NSImage?, caption: String) {
+        let manager = ThemeManager.shared
+        guard let url = try? ShareLink.url(for: editor.source, family: manager.family, mode: manager.mode.rawValue),
+              let code = ShareQRCode.image(for: url, side: 720) else {
+            return (nil, "This document is too long for a QR code; share it as a link.")
+        }
+        return (NSImage(cgImage: code, size: NSSize(width: 240, height: 240)), "Scan to open this document in Loomings.")
+    }
+
+    @objc private func showQRCode(_ sender: Any?) {
+        let content = qrContent()
+        var rows: [NSView] = []
+        if let image = content.image {
+            let view = NSImageView(image: image)
+            view.imageScaling = .scaleProportionallyUpOrDown
+            view.widthAnchor.constraint(equalToConstant: 240).isActive = true
+            view.heightAnchor.constraint(equalToConstant: 240).isActive = true
+            view.setAccessibilityLabel("QR code of the share link")
+            rows.append(view)
+        }
+        rows.append(TeachingPopovers.label(content.caption, secondary: content.image == nil))
+        let anchor: NSView = shareButton ?? statusBar
+        TeachingPopovers.show(TeachingPopovers.column(rows), relativeTo: anchor.bounds, of: anchor, palette: ThemeManager.shared.resolved())
+    }
+
+    var shareMenuTitlesForTesting: [String] { makeShareMenu().items.map(\.title) }
+    var qrCaptionForTesting: String? { qrContent().caption }
 }
 
 /// Owns the preview renderer and its block cache. Only ever called on the

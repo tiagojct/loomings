@@ -1,10 +1,12 @@
 import AppKit
+import CoreImage
 import Foundation
 import LoomingsDocuments
 import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsShare
 import LoomingsTeaching
+import PDFKit
 
 /// Exercises the real window, text view and parse pipeline without a human
 /// at the keyboard. Run with `Loomings --self-test`; exit status 0 is proof.
@@ -518,6 +520,41 @@ enum SelfTest {
         check(controller.areLineNumbersVisibleForTesting == EditorPreferences.showLineNumbers, "turning it off restores line numbers")
         check(!editor.highlightsCurrentLine, "turning it off clears the line mark")
         check(loomingsDefaults() == defaultsBefore, "projector mode writes no preference")
+
+        // 13a-6. The handout is paginated, numbered and carries the link.
+        if let handoutURL = Bundle.main.resourceURL?.appendingPathComponent("lessons/05-tables-rules.md"),
+           let handoutText = try? String(contentsOf: handoutURL, encoding: .utf8) {
+            editor.setText(handoutText + handoutText)
+            let handout = controller.renderedPDFForTesting()
+            let pdf = PDFDocument(data: handout)
+            check((pdf?.pageCount ?? 0) > 1, "the handout runs over several pages")
+            check(pdf?.page(at: 0)?.string?.contains("page 1 of") == true, "handout pages are numbered")
+            let lastPage = pdf.flatMap { $0.page(at: $0.pageCount - 1)?.string } ?? ""
+            check(lastPage.contains("Scan to open this document in Loomings"), "the handout ends with the share link's QR code")
+            if let document = pdf, let page = document.page(at: document.pageCount - 1) {
+                let bounds = page.bounds(for: .mediaBox)
+                let image = page.thumbnail(of: NSSize(width: bounds.width * 2, height: bounds.height * 2), for: .mediaBox)
+                let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+                let decoded = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                    .flatMap { detector?.features(in: CIImage(cgImage: $0)) }?
+                    .compactMap { ($0 as? CIQRCodeFeature)?.messageString } ?? []
+                let expected = try? ShareLink.url(for: editor.source, family: ThemeManager.shared.family, mode: ThemeManager.shared.mode.rawValue)
+                check(decoded.first == expected?.absoluteString, "the printed QR code reads back as the share link")
+            }
+            if let page = pdf?.page(at: 0) {
+                let size = page.bounds(for: .mediaBox).size
+                let a4 = abs(size.width - 595.28) < 1 && abs(size.height - 841.89) < 1
+                let letter = abs(size.width - 612) < 1 && abs(size.height - 792) < 1
+                check(a4 || letter, "the handout is A4 or Letter")
+            }
+        }
+
+        // 13a-7. The share tool offers its actions as a menu.
+        check(controller.shareMenuTitlesForTesting == ["Copy Share Link", "Show QR Code\u{2026}"], "the share tool lists its actions")
+        editor.setText("# Short\n")
+        check(controller.qrCaptionForTesting == "Scan to open this document in Loomings.", "a short document gets a QR code")
+        editor.setText((0..<200).map { _ in "A line that does not compress to nothing: \(UUID().uuidString)\n" }.joined())
+        check(controller.qrCaptionForTesting?.contains("too long") == true, "a long document is told it is too long for a QR code")
 
         // 13b. Preview modes render the document.
         editor.setText("# Preview\n\nBody with *emphasis*.\n")
