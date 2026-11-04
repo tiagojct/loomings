@@ -118,21 +118,23 @@ final class CitationController {
             return
         }
         if let report = report(for: source) {
-            completion(ExportText(markdown: report.markdownSource, status: nil))
+            completion(Self.exportText(of: report))
             return
         }
-        var finished = false
+        // The limit's timer outlives a quick report, and `completion` can hold
+        // a window, so `finish` lets go of it on the first call.
+        var waiting: ((ExportText) -> Void)? = completion
         let finish = { (text: ExportText) in
-            guard !finished else { return }
-            finished = true
-            completion(text)
+            guard let done = waiting else { return }
+            waiting = nil
+            done(text)
         }
         let request = Request(source: source, documentURL: documentURL)
         let worker = self.worker
         worker.queue.async {
             let report = worker.report(for: request.source, folder: request.folder)
             DispatchQueue.main.async {
-                finish(ExportText(markdown: report.markdownSource, status: nil))
+                finish(Self.exportText(of: report))
             }
         }
         let limit = exportLimit
@@ -142,6 +144,16 @@ final class CitationController {
                 status: "The citations were not ready after \(Int(limit.rounded())) seconds, so the export shows the citation keys. Export again in a moment."
             ))
         }
+    }
+
+    /// A note with no place in the text is about a file or a failure, and the
+    /// export can then show citation keys. A note about one key has a place.
+    private static func exportText(of report: CitationReport) -> ExportText {
+        let notes = report.notes.filter { $0.to == 0 }.prefix(3).map(\.message)
+        return ExportText(
+            markdown: report.markdownSource,
+            status: notes.isEmpty ? nil : notes.joined(separator: " ")
+        )
     }
 
     private func forget() {

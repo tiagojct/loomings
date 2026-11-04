@@ -290,29 +290,86 @@ final class EditorWindowController: NSWindowController,
         citations.update(source: editor.source, documentURL: loomingsDocument?.citationDocumentURL)
     }
 
+    /// One export, fixed when it starts: the page and the share link come from
+    /// one text, and the writer can type during the wait.
+    private struct ExportPage {
+        let source: String
+        let markdown: String
+        let documentURL: URL?
+        let title: String
+    }
+
+    private var currentPage: ExportPage {
+        let source = editor.source
+        return ExportPage(
+            source: source,
+            markdown: citations.report(for: source)?.markdownSource ?? source,
+            documentURL: loomingsDocument?.linkBaseURL,
+            title: exportTitle
+        )
+    }
+
     /// Runs `body` with the text to export: the source with its citations
-    /// formatted when the report for this text comes in time.
-    private func withExportText(_ body: @escaping (String) -> Void) {
+    /// formatted when the report for this text comes in time. The closure
+    /// holds this window controller on purpose: a window that closes during
+    /// the wait still gets its file, and the export limit bounds the wait.
+    /// - Parameter statusFirst: the status comes before `body`, not after it.
+    private func withExportPage(statusFirst: Bool = false, _ body: @escaping (ExportPage) -> Void) {
+        let start = currentPage
         citations.exportText(
-            source: editor.source,
+            source: start.source,
             documentURL: loomingsDocument?.citationDocumentURL
-        ) { [weak self] text in
-            body(text.markdown)
-            self?.showExportStatus(text.status)
+        ) { text in
+            let page = ExportPage(
+                source: start.source,
+                markdown: text.markdown,
+                documentURL: start.documentURL,
+                title: start.title
+            )
+            self.exportStatus = text.status
+            if statusFirst {
+                self.showExportStatus(text.status) { body(page) }
+            } else {
+                body(page)
+                self.showExportStatus(text.status)
+            }
         }
     }
 
-    private func showExportStatus(_ status: String?) {
-        exportStatus = status
-        guard let status, let window, showsExportStatusSheet else { return }
+    private func showExportStatus(_ status: String?, then next: @escaping () -> Void = {}) {
+        guard let status, showsExportStatusSheet else {
+            next()
+            return
+        }
         let alert = NSAlert()
-        alert.messageText = "The citations are not formatted."
+        alert.messageText = "Check the citations in this export."
         alert.informativeText = status
-        alert.beginSheetModal(for: window)
+        present(alert, then: next)
+    }
+
+    /// A sheet when the window is open. An export can end after its window
+    /// closes, and then the alert has no window.
+    private func present(_ alert: NSAlert, then next: @escaping () -> Void = {}) {
+        if let window, window.isVisible {
+            alert.beginSheetModal(for: window) { _ in next() }
+        } else {
+            afterMainQueueBlock {
+                alert.runModal()
+                next()
+            }
+        }
+    }
+
+    /// An export can end inside a block on the main queue. A modal run there
+    /// holds each later block of the queue until the modal ends, so a modal
+    /// run must start from the run loop.
+    private func afterMainQueueBlock(_ work: @escaping () -> Void) {
+        RunLoop.main.perform { MainActor.assumeIsolated(work) }
     }
 
     private(set) var exportStatus: String?
     var showsExportStatusSheet = true
+    var printHookForTesting: ((HandoutTextView) -> Void)?
 
     /// The text of the last render that reached the preview pipeline.
     private(set) var previewInputForTesting: String?
@@ -986,21 +1043,13 @@ final class EditorWindowController: NSWindowController,
 
     /// With no report for the current text, the output has the literal keys.
     func renderedHTMLForTesting() -> String {
-        documentHTML(markdown: currentMarkdown)
+        documentHTML(currentPage)
     }
 
-    private var currentMarkdown: String {
-        let source = editor.source
-        return citations.report(for: source)?.markdownSource ?? source
-    }
-
-    private func documentHTML(markdown: String) -> String {
-        let rendered = PreviewRenderer().render(
-            source: markdown,
-            documentURL: loomingsDocument?.linkBaseURL
-        )
+    private func documentHTML(_ page: ExportPage) -> String {
+        let rendered = PreviewRenderer().render(source: page.markdown, documentURL: page.documentURL)
         return PreviewHTMLExport.document(
-            title: exportTitle,
+            title: page.title,
             bodyHTML: rendered.html,
             palette: ThemeManager.shared.resolved()
         )
@@ -1010,16 +1059,16 @@ final class EditorWindowController: NSWindowController,
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("loomings-handout-\(UUID().uuidString).pdf")
         defer { try? FileManager.default.removeItem(at: url) }
-        Handout.writePDF(makeHandout(markdown: currentMarkdown), to: url)
+        Handout.writePDF(makeHandout(currentPage), to: url)
         return (try? Data(contentsOf: url)) ?? Data()
     }
 
-    private func makeHandout(markdown: String) -> HandoutTextView {
+    private func makeHandout(_ page: ExportPage) -> HandoutTextView {
         Handout.view(
-            source: editor.source,
-            markdown: markdown,
-            documentURL: loomingsDocument?.linkBaseURL,
-            title: exportTitle
+            source: page.source,
+            markdown: page.markdown,
+            documentURL: page.documentURL,
+            title: page.title
         )
     }
 
@@ -1104,13 +1153,12 @@ final class EditorWindowController: NSWindowController,
     }
 
     func exportHTML(to url: URL, completion: (() -> Void)? = nil) {
-        withExportText { [weak self] markdown in
+        withExportPage { page in
             defer { completion?() }
-            guard let self else { return }
             do {
-                try self.documentHTML(markdown: markdown).data(using: .utf8)?.write(to: url, options: .atomic)
+                try self.documentHTML(page).data(using: .utf8)?.write(to: url, options: .atomic)
             } catch {
-                NSAlert(error: error).runModal()
+                self.present(NSAlert(error: error))
             }
         }
     }
@@ -1119,22 +1167,35 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "pdf") else {
             return
         }
-        withExportText { [weak self] markdown in
-            guard let self, !Handout.writePDF(self.makeHandout(markdown: markdown), to: url) else { return }
+        withExportPage { page in
+            // No panel, so this run is not modal.
+            if Handout.writePDF(self.makeHandout(page), to: url) { return }
             let alert = NSAlert()
             alert.messageText = "The PDF could not be written."
             alert.informativeText = "Check that the folder can be written to, then try again."
-            alert.runModal()
+            self.present(alert)
         }
     }
 
     @objc func printPreview(_ sender: Any?) {
-        withExportText { [weak self] markdown in
-            guard let self else { return }
-            let operation = NSPrintOperation(view: self.makeHandout(markdown: markdown), printInfo: Handout.printInfo())
-            operation.showsPrintPanel = true
-            operation.showsProgressPanel = true
-            operation.run()
+        withExportPage(statusFirst: true) { page in
+            self.print(page)
+        }
+    }
+
+    private func print(_ page: ExportPage) {
+        let view = makeHandout(page)
+        if let printHookForTesting {
+            printHookForTesting(view)
+            return
+        }
+        let operation = NSPrintOperation(view: view, printInfo: Handout.printInfo())
+        operation.showsPrintPanel = true
+        operation.showsProgressPanel = true
+        if let window, window.isVisible {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            afterMainQueueBlock { operation.run() }
         }
     }
 

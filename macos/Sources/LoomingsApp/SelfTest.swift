@@ -976,6 +976,10 @@ enum SelfTest {
             try checkStaleReports(check, folder: root.appendingPathComponent("stale"))
             try checkNoFlash(check, folder: root.appendingPathComponent("flash"))
             try checkExportLimit(check, folder: root.appendingPathComponent("limit"))
+            try checkExportNotes(check, folder: root.appendingPathComponent("notes"))
+            try checkExportAfterClose(check, folder: root.appendingPathComponent("closed"))
+            try checkPrintOrder(check, folder: root.appendingPathComponent("print"))
+            try checkPrintPanel(check, folder: root.appendingPathComponent("panel"))
             try checkInsertWithSlowEngine(check, folder: root.appendingPathComponent("insert"))
         } catch {
             check(false, "citation setup (\(error))")
@@ -1137,6 +1141,91 @@ enum SelfTest {
         check(pump(timeout: 15) { controller.citations.report(for: citationText) != nil }, "the report still arrives")
     }
 
+    private static func checkExportNotes(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: citationText, folder: folder)
+        defer { closeCitationDocument(document) }
+        check(pump(timeout: 15) { controller.citations.report(for: citationText) != nil }, "the notes document has a report")
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("refs.bib"))
+        document.checkCitationFiles()
+        let noted = pump(timeout: 15) {
+            controller.citations.report(for: citationText)?.notes.isEmpty == false
+        }
+        check(noted, "the deleted file gives a note")
+        var written = false
+        controller.exportHTML(to: folder.appendingPathComponent("noted.html")) { written = true }
+        check(pump { written }, "the export with a note ends")
+        check(controller.exportStatus?.contains("refs.bib is missing") == true, "a report with a file note gives an export status")
+
+        let failed = try citationDocument(text: citationText, folder: folder.appendingPathComponent("failed"))
+        defer { closeCitationDocument(failed.0) }
+        failed.1.citations.useEngineForTesting(try FailingCitationEngine())
+        var done = false
+        failed.1.exportHTML(to: folder.appendingPathComponent("failed.html")) { done = true }
+        check(pump(timeout: 15) { done }, "the export of a failed report ends")
+        check(failed.1.exportStatus?.contains("The citation code failed") == true, "a failed report gives an export status")
+    }
+
+    /// A window that closes during the wait still writes the file. No test
+    /// variable may hold the window controller past the close.
+    private static func checkExportAfterClose(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let url = folder.appendingPathComponent("closed.html")
+        var written = false
+        weak var closed: EditorWindowController?
+        try autoreleasepool {
+            let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+            closed = controller
+            controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0.5))
+            controller.editor.setText(citationText)
+            controller.exportHTML(to: url) { written = true }
+            closeCitationDocument(document)
+        }
+        check(pump(timeout: 15) { written }, "an export ends after its window closes")
+        let html = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        check(html.contains("(Silva 2020)"), "the export after a close has the formatted citation")
+        check(pump { closed == nil }, "the closed window is released after its export")
+    }
+
+    /// At the limit the status comes first. The page and the share link come
+    /// from one text, also when the writer types during the wait.
+    private static func checkPrintOrder(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 1))
+        controller.citations.exportLimit = 0.2
+        controller.editor.setText(citationText)
+        var statusAtPrint: String?
+        var printed: HandoutTextView?
+        controller.printHookForTesting = { view in
+            statusAtPrint = controller.exportStatus
+            printed = view
+        }
+        controller.printPreview(nil)
+        controller.editor.setText(citationText + "Typed during the wait.\n")
+        check(pump { printed != nil }, "the print ends at the limit")
+        check(statusAtPrint?.contains("not ready") == true, "the status comes before the print panel")
+        check(printed?.string.contains("[@silva2020]") == true, "the late print has the literal key")
+        check(printed?.sharedSource == citationText, "the share link has the same text as the page")
+        check(printed?.string.contains("Typed during the wait.") == false, "the page has the text from the start of the wait")
+    }
+
+    /// The print panel opens from a main queue block. As a sheet it leaves the
+    /// main queue free. A nested modal run would hold every later block.
+    private static func checkPrintPanel(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0.1))
+        controller.editor.setText(citationText)
+        controller.printPreview(nil)
+        guard let window = controller.window else { return }
+        let opened = pump(timeout: 15) { window.attachedSheet != nil }
+        check(opened, "the print panel opens as a sheet from the wait path")
+        var ran = false
+        DispatchQueue.main.async { ran = true }
+        check(pump(timeout: 2) { ran }, "the main queue runs while the print panel is open")
+        if let sheet = window.attachedSheet { window.endSheet(sheet, returnCode: .cancel) }
+        check(pump(timeout: 5) { window.attachedSheet == nil }, "the print panel closes")
+    }
+
     /// Runs the run loop, and gives the longest single turn in milliseconds.
     private static func longestTurn(_ seconds: TimeInterval) -> Double {
         let deadline = Date().addingTimeInterval(seconds)
@@ -1251,6 +1340,28 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
     }
 
     func setSources(_ sources: CitationSources) { engine.setSources(sources) }
+    func readMeta(_ source: String) throws -> CitationMeta { try engine.readMeta(source) }
+    func bundledStyle(_ id: String) -> String? { engine.bundledStyle(id) }
+    func bundledLocale(_ tag: String) -> String? { engine.bundledLocale(tag) }
+    func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan {
+        try engine.resolveNative(request, known: known)
+    }
+}
+
+/// An engine whose reports all fail, as a broken script does.
+private final class FailingCitationEngine: CitationEngineProtocol, @unchecked Sendable {
+    private let engine: CitationEngine
+
+    init() throws {
+        guard let root = Bundle.main.resourceURL else { throw CocoaError(.fileNoSuchFile) }
+        engine = try CitationEngine(resources: root.appendingPathComponent("Citations"))
+    }
+
+    func analyse(_ source: String) -> CitationReport {
+        CitationReport(failure: "The citation code failed.", source: source)
+    }
+
+    func setSources(_ sources: CitationSources) {}
     func readMeta(_ source: String) throws -> CitationMeta { try engine.readMeta(source) }
     func bundledStyle(_ id: String) -> String? { engine.bundledStyle(id) }
     func bundledLocale(_ tag: String) -> String? { engine.bundledLocale(tag) }

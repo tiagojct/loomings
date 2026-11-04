@@ -48,6 +48,7 @@ enum Handout {
         let width = paperSize.width - sideMargin * 2
         let view = HandoutTextView(frame: NSRect(x: 0, y: 0, width: width, height: 200))
         view.title = title
+        view.sharedSource = source
         view.footerColor = theme.secondaryTextColor
         view.footerFont = NSFont(name: "SourceSerif4-Regular", size: 9) ?? .systemFont(ofSize: 9)
         view.isEditable = false
@@ -117,6 +118,8 @@ enum Handout {
 /// A text view that prints "title · page n of N" at the foot of every page.
 final class HandoutTextView: NSTextView {
     var title = ""
+    /// The text in the share link.
+    var sharedSource = ""
     var footerColor: NSColor = .secondaryLabelColor
     var footerFont: NSFont = .systemFont(ofSize: 9)
 
