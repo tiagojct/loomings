@@ -6,8 +6,25 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Web app
+
+- Find ignores accents: "ciencia" finds "ciência" and "saúde" finds "saude".
+  Match case keeps the exact comparison.
+- A URL pasted over selected words makes a link. The `url` placeholder of
+  Insert Link, a URL, a selection of two lines and inline code keep the
+  ordinary paste.
+- Smart typography rests during a composition, so a dead key is not broken.
+- A straight quote after a word closes. The opening quote's pattern matched
+  every character, so every quote opened (the native editor was correct).
+
 ### Native macOS app (`macos/`)
 
+- A URL pasted over selected words makes a link, with the web's rule and a
+  shared fixture.
+- An image dropped on the editor inserts a link at the drop point, with the
+  alt text selected. The path is relative to the document's folder; an
+  untitled or shelf document gets an absolute path.
+- Smart typography rests while text is marked.
 - The learner's checker agrees with the web on every shared case and on a
   636-document corpus: setext headings with text after them or in CRLF,
   marks and images after a tab or on a lazy line, lone CR line endings, an

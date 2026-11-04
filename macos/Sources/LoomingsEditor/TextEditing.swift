@@ -91,6 +91,107 @@ public enum MarkdownEditing {
     }
 }
 
+/// A URL pasted over selected words makes a link. The web's `linkFromPaste`
+/// has the same rule; `Fixtures/paste-links.json` is the contract for both.
+public enum PasteLink {
+    private static let urlOnly = try! NSRegularExpression(
+        pattern: #"^(?:https?://|mailto:)\S+$"#,
+        options: [.caseInsensitive]
+    )
+    private static let insideDestination = try! NSRegularExpression(
+        pattern: #"(?:\]\(|\]:\s*|<)$"#
+    )
+
+    /// The text to insert, or nil for an ordinary paste. `before` is the
+    /// text between the line start and the selection.
+    public static func markdown(selected: String, pasted: String, before: String) -> String? {
+        let url = pasted.trimmingCharacters(in: .whitespacesAndNewlines)
+        let label = selected.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty, matches(urlOnly, url),
+              !url.contains("<"), !url.contains(">"),
+              !selected.contains(where: { $0.isNewline || $0 == "[" || $0 == "]" }),
+              !matches(urlOnly, label),
+              !matches(insideDestination, before),
+              before.filter({ $0 == "`" }).count % 2 == 0,
+              let range = selected.range(of: label) else {
+            return nil
+        }
+        let hasParenthesis = url.contains("(") || url.contains(")")
+        let destination = hasParenthesis ? "<\(url)>" : url
+        return selected[..<range.lowerBound] + "[\(label)](\(destination))" + selected[range.upperBound...]
+    }
+
+    private static func matches(_ expression: NSRegularExpression, _ text: String) -> Bool {
+        let range = NSRange(location: 0, length: (text as NSString).length)
+        return expression.firstMatch(in: text, range: range) != nil
+    }
+}
+
+/// The Markdown for an image file dropped on the editor.
+public enum ImageLink {
+    /// What the preview can decode through ImageIO.
+    public static let fileExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "gif", "webp", "heic", "tif", "tiff", "bmp",
+    ]
+
+    public struct Insertion: Equatable {
+        public let text: String
+        /// The alt text in `text`, selected so that the writer replaces the
+        /// words that came from the file name.
+        public let alt: NSRange
+    }
+
+    public static func isImage(_ url: URL) -> Bool {
+        fileExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    public static func insertion(for file: URL, relativeTo directory: URL?) -> Insertion {
+        let alt = altText(for: file)
+        let text = "![\(alt)](\(destination(for: file, relativeTo: directory)))"
+        return Insertion(text: text, alt: NSRange(location: 2, length: (alt as NSString).length))
+    }
+
+    /// A path from `directory`. It starts with `./` or `../`, because the
+    /// preview's URL filter refuses a bare name. Without a directory, or
+    /// when the two share only the root, the path is absolute.
+    public static func destination(for file: URL, relativeTo directory: URL?) -> String {
+        let target = file.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        guard let directory else { return encoded(target) }
+        let base = directory.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        var shared = 0
+        while shared < min(target.count, base.count), target[shared] == base[shared] {
+            shared += 1
+        }
+        guard shared > 1 else { return encoded(target) }
+        let climbs = Array(repeating: "..", count: base.count - shared)
+        return encoded((climbs.isEmpty ? ["."] : climbs) + target[shared...])
+    }
+
+    private static func encoded(_ components: [String]) -> String {
+        let path = components.first == "/"
+            ? "/" + components.dropFirst().joined(separator: "/")
+            : components.joined(separator: "/")
+        // Only what would end the destination, or what the loader would
+        // decode. Accented names stay readable in the source.
+        return path.unicodeScalars.reduce(into: "") { result, scalar in
+            let value = scalar.value
+            if value <= 0x20 || value == 0x7F || "%()<>\\".unicodeScalars.contains(scalar) {
+                result += String(format: "%%%02X", value)
+            } else {
+                result.unicodeScalars.append(scalar)
+            }
+        }
+    }
+
+    private static func altText(for file: URL) -> String {
+        let name = file.deletingPathExtension().lastPathComponent
+            .map { "-_".contains($0) ? " " : $0 }
+            .filter { !"[]\\".contains($0) }
+        let words = String(name).split(whereSeparator: \.isWhitespace)
+        return words.joined(separator: " ")
+    }
+}
+
 /// The web editor's smart typography: curly quotes, em dashes and ellipses.
 public enum SmartTypography {
     public struct Replacement: Equatable {

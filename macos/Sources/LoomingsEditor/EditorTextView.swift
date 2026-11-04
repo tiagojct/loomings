@@ -25,6 +25,15 @@ public final class EditorTextView: NSTextView {
     /// Option-click asks what is under the pointer instead of placing the
     /// caret (an option-drag still makes a rectangular selection).
     var onOptionClick: ((Int) -> Void)?
+    /// Takes the pasted text and returns true if it used it.
+    var onPaste: ((String) -> Bool)?
+
+    public override func paste(_ sender: Any?) {
+        if let text = NSPasteboard.general.string(forType: .string), onPaste?(text) == true {
+            return
+        }
+        super.paste(sender)
+    }
 
     public override func mouseDown(with event: NSEvent) {
         if let onOptionClick, event.modifierFlags.contains(.option), event.clickCount == 1,

@@ -8,8 +8,11 @@ import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirro
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
+import './search.js';
 import { tags as t } from '@lezer/highlight';
 import { renderMarkdown, renderPreview } from './markdown.js';
+import { linkFromPaste } from './links.js';
+import { smartTypography } from './typography.js';
 import { blockForLine, previewBlocks } from './pairing.js';
 import { analyse } from './teaching/report.js';
 import { explain, markerAt, frontmatterRange } from './teaching/glossary.js';
@@ -422,30 +425,7 @@ const notesPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations });
 
-const smartTypographyHandler = EditorView.inputHandler.of((view, from, to, text) => {
-  if (!smartTypo) return false;
-  if (text === '"') {
-    const prev = from > 0 ? view.state.sliceDoc(from - 1, from) : ' ';
-    const rep = /\s|^|\(|\[|\{/.test(prev) ? '“' : '”';
-    view.dispatch({ changes: { from, to, insert: rep }, selection: { anchor: from + 1 } });
-    return true;
-  }
-  if (text === "'") {
-    const prev = from > 0 ? view.state.sliceDoc(from - 1, from) : ' ';
-    const rep = /\s|^|\(|\[|\{/.test(prev) ? '‘' : '’';
-    view.dispatch({ changes: { from, to, insert: rep }, selection: { anchor: from + 1 } });
-    return true;
-  }
-  if (text === '-' && from > 0 && view.state.sliceDoc(from - 1, from) === '-') {
-    view.dispatch({ changes: { from: from - 1, to, insert: '—' }, selection: { anchor: from } });
-    return true;
-  }
-  if (text === '.' && from >= 2 && view.state.sliceDoc(from - 2, from) === '..') {
-    view.dispatch({ changes: { from: from - 2, to, insert: '…' }, selection: { anchor: from - 1 } });
-    return true;
-  }
-  return false;
-});
+const smartTypographyHandler = smartTypography(() => smartTypo);
 
 function insertLink(view) {
   const sel = view.state.selection.main;
@@ -591,6 +571,22 @@ function buildState(doc = '') {
           if (pos === null || !explainAt(pos, false)) return false;
           explainOpenedByClick = true;
           e.preventDefault();
+          return true;
+        },
+        paste: (e, v) => {
+          const sel = v.state.selection.main;
+          if (sel.empty) return false;
+          const before = v.state.sliceDoc(v.state.doc.lineAt(sel.from).from, sel.from);
+          const pasted = e.clipboardData?.getData('text/plain') ?? '';
+          const link = linkFromPaste(v.state.sliceDoc(sel.from, sel.to), pasted, before);
+          if (!link) return false;
+          e.preventDefault();
+          v.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: link },
+            selection: { anchor: sel.from + link.length },
+            userEvent: 'input.paste',
+            scrollIntoView: true,
+          });
           return true;
         },
       }),

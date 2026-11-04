@@ -2,6 +2,71 @@ import AppKit
 import Testing
 @testable import LoomingsEditor
 
+private struct PasteLinkCase: Decodable {
+    let name: String
+    let selected: String
+    let pasted: String
+    let before: String
+    let link: String?
+}
+
+@Suite("Paste a URL over a selection")
+struct PasteLinkTests {
+    @Test("The fixture the web also reads")
+    func fixture() throws {
+        let url = try #require(Bundle.module.url(forResource: "paste-links", withExtension: "json", subdirectory: "Fixtures"))
+        let cases = try JSONDecoder().decode([PasteLinkCase].self, from: Data(contentsOf: url))
+        #expect(!cases.isEmpty)
+        for item in cases {
+            let result = PasteLink.markdown(selected: item.selected, pasted: item.pasted, before: item.before)
+            #expect(result == item.link, "\(item.name)")
+        }
+    }
+}
+
+@Suite("Image links")
+struct ImageLinkTests {
+    private func file(_ path: String) -> URL { URL(fileURLWithPath: path) }
+
+    @Test("A path from the document's folder")
+    func relative() {
+        let folder = file("/Users/a/notes")
+        #expect(ImageLink.destination(for: file("/Users/a/notes/p.png"), relativeTo: folder) == "./p.png")
+        #expect(ImageLink.destination(for: file("/Users/a/notes/img/p.png"), relativeTo: folder) == "./img/p.png")
+        #expect(ImageLink.destination(for: file("/Users/a/pics/p.png"), relativeTo: folder) == "../pics/p.png")
+        #expect(ImageLink.destination(for: file("/Users/b/p.png"), relativeTo: folder) == "../../b/p.png")
+    }
+
+    @Test("Absolute without a folder or a shared parent")
+    func absolute() {
+        #expect(ImageLink.destination(for: file("/Users/a/p.png"), relativeTo: nil) == "/Users/a/p.png")
+        #expect(ImageLink.destination(for: file("/Volumes/x/p.png"), relativeTo: file("/Users/a")) == "/Volumes/x/p.png")
+    }
+
+    @Test("Characters that would end the destination are encoded, accents are not")
+    func encoding() {
+        let folder = file("/Users/a")
+        #expect(ImageLink.destination(for: file("/Users/a/my photo (1).png"), relativeTo: folder) == "./my%20photo%20%281%29.png")
+        #expect(ImageLink.destination(for: file("/Users/a/ciência.png"), relativeTo: folder) == "./ciência.png")
+        #expect(ImageLink.destination(for: file("/Users/a/50%.png"), relativeTo: folder) == "./50%25.png")
+    }
+
+    @Test("The alt text comes from the file name and is the selected range")
+    func alt() {
+        let insertion = ImageLink.insertion(for: file("/Users/a/lung_function-chart.png"), relativeTo: file("/Users/a"))
+        #expect(insertion.text == "![lung function chart](./lung_function-chart.png)")
+        #expect((insertion.text as NSString).substring(with: insertion.alt) == "lung function chart")
+        #expect(ImageLink.insertion(for: file("/Users/a/[x].png"), relativeTo: nil).text.hasPrefix("![x]("))
+    }
+
+    @Test("Image files by extension")
+    func extensions() {
+        #expect(ImageLink.isImage(file("/a/P.PNG")))
+        #expect(ImageLink.isImage(file("/a/p.jpeg")))
+        #expect(!ImageLink.isImage(file("/a/p.md")))
+    }
+}
+
 @Suite("Markdown editing rules")
 struct MarkdownEditingTests {
     @Test("List and quotation continuation")

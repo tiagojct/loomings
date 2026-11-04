@@ -67,7 +67,8 @@ let package = Package(
         ),
         .testTarget(
             name: "LoomingsEditorTests",
-            dependencies: ["LoomingsEditor"]
+            dependencies: ["LoomingsEditor"],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "LoomingsDocumentsTests",

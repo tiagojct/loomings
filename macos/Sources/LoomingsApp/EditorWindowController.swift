@@ -91,6 +91,18 @@ final class EditorWindowController: NSWindowController,
             }
         }
 
+        scrollView.onInsertImages = { [weak self] urls, point in
+            guard let self else { return }
+            let textView = self.editor.textView
+            let location = textView.characterIndexForInsertion(at: textView.convert(point, from: nil))
+            self.editor.insertImages(
+                urls,
+                at: location,
+                relativeTo: self.loomingsDocument?.imageLinkDirectory
+            )
+            self.window?.makeFirstResponder(textView)
+        }
+
         document.editor = editor
         editor.setText(document.pendingText)
         applyPreferences()

@@ -5,6 +5,62 @@ import Testing
 @MainActor
 @Suite("Editor controller")
 struct EditorControllerTests {
+    @Test("Pasting a URL over selected words makes a link")
+    func pasteLink() {
+        let editor = EditorController()
+        editor.setText("Call me Ishmael.\n")
+        editor.textView.setSelectedRange(NSRange(location: 8, length: 7))
+        #expect(editor.pasteLink("https://example.org"))
+        #expect(editor.source == "Call me [Ishmael](https://example.org).\n")
+        #expect(editor.textView.selectedRange() == NSRange(location: 38, length: 0))
+    }
+
+    @Test("Pasting with no selection, or over a placeholder, stays a plain paste")
+    func plainPaste() {
+        let editor = EditorController()
+        editor.setText("[word](url)\n")
+        #expect(!editor.pasteLink("https://example.org"))
+        editor.textView.setSelectedRange(NSRange(location: 7, length: 3))
+        #expect(!editor.pasteLink("https://example.org"))
+        #expect(editor.source == "[word](url)\n")
+    }
+
+    @Test("A dropped image goes in at the point, with its alt text selected")
+    func oneImage() {
+        let editor = EditorController()
+        editor.setText("ab\n")
+        editor.insertImages(
+            [URL(fileURLWithPath: "/Users/a/lung-chart.png")],
+            at: 1,
+            relativeTo: URL(fileURLWithPath: "/Users/a")
+        )
+        #expect(editor.source == "a![lung chart](./lung-chart.png)b\n")
+        #expect(editor.textView.selectedRange() == NSRange(location: 3, length: 10))
+    }
+
+    @Test("Dropped images each take a paragraph")
+    func twoImages() {
+        let editor = EditorController()
+        editor.setText("")
+        editor.insertImages(
+            [URL(fileURLWithPath: "/a/one.png"), URL(fileURLWithPath: "/a/two.png")],
+            at: 99,
+            relativeTo: nil
+        )
+        #expect(editor.source == "![one](/a/one.png)\n\n![two](/a/two.png)")
+    }
+
+    @Test("Smart typography rests while text is marked")
+    func markedText() {
+        let editor = EditorController()
+        editor.setText("")
+        let textView = editor.textView
+        textView.setMarkedText("'", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: 0, length: 0))
+        #expect(textView.hasMarkedText())
+        #expect(editor.textView(textView, shouldChangeTextIn: NSRange(location: 1, length: 0), replacementString: "'"))
+        #expect(!editor.source.contains("‘"))
+    }
+
     @Test("Parse applies to the current revision")
     func parseAppliesToTheCurrentRevision() {
         let editor = EditorController()

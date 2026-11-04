@@ -32,6 +32,12 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
 - `src/share.js` — document ⇄ URL fragment. Pure, tested.
+- `src/search.js` — accent-insensitive find. It wraps the `normalize` that
+  each `SearchCursor` sets on itself, because the library has no option;
+  `search.test.js` fails if that stops working. `src/typography.js` — smart
+  typography, resting during a composition. `src/links.js` — a URL pasted
+  over a selection; `macos/Tests/LoomingsEditorTests/Fixtures/paste-links.json`
+  is the contract with `PasteLink`, so a rule change goes there first.
 - `src/lessons.js` — index of `lessons/NN-slug.md` via `import.meta.glob`;
   each entry carries its `file`, the key in `lessons/checks.json`.
 - `src/teaching/` — the teaching features' rules, pure and tested, matching
@@ -253,6 +259,10 @@ Stage 2 decisions worth preserving:
   inside the frame) or block margins (they take the fill). Quotes use the
   bundled Source Serif 4 italic; strong text inside them falls back to bold
   roman because no bold italic is bundled.
+- Dropped images: `ImageLink` writes `./` or `../` paths, because the
+  preview's URL filter refuses a bare name, and encodes only what would end
+  the destination, so accented names stay readable. Web documents have no
+  folder, so this is native only.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).

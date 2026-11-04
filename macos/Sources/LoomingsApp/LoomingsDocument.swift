@@ -159,6 +159,14 @@ final class LoomingsDocument: NSDocument {
         return shelf.contains(url)
     }
 
+    /// The folder for relative image links. An untitled or shelf document
+    /// has none: a path from the shelf's private folder means nothing to
+    /// the writer, and the link stays absolute.
+    var imageLinkDirectory: URL? {
+        guard let url = fileURL, !shelf.contains(url) else { return nil }
+        return url.deletingLastPathComponent()
+    }
+
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
         if item.action == #selector(saveToShelf(_:)) { return canSaveToShelf }
         return super.validateUserInterfaceItem(item)

@@ -434,7 +434,9 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         // must not advance the parse revision.
         guard let replacementString else { return true }
 
+        // A dead key can pass through ' or " on its way to an accented letter.
         if isSmartTypographyEnabled,
+           !textView.hasMarkedText(),
            replacementString.count == 1,
            let character = replacementString.first,
            let storage = textView.textStorage,
@@ -804,6 +806,41 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         let urlStart = selection.location + (label as NSString).length + 3
         textView.setSelectedRange(NSRange(location: urlStart, length: 3))
         return true
+    }
+
+    /// Makes a link from a URL pasted over selected words. False means an
+    /// ordinary paste.
+    @discardableResult
+    public func pasteLink(_ pasted: String) -> Bool {
+        let selection = textView.selectedRange()
+        guard selection.length > 0 else { return false }
+        let text = textView.string as NSString
+        let lineStart = text.lineRange(for: NSRange(location: selection.location, length: 0)).location
+        let before = text.substring(with: NSRange(location: lineStart, length: selection.location - lineStart))
+        guard let link = PasteLink.markdown(
+            selected: text.substring(with: selection),
+            pasted: pasted,
+            before: before
+        ) else {
+            return false
+        }
+        textView.insertText(link, replacementRange: selection)
+        return true
+    }
+
+    /// Inserts a link for each image at `location`. `directory` is the
+    /// document's folder. One image has its alt text selected.
+    public func insertImages(_ files: [URL], at location: Int, relativeTo directory: URL?) {
+        guard !files.isEmpty else { return }
+        let start = min(location, (textView.string as NSString).length)
+        let insertions = files.map { ImageLink.insertion(for: $0, relativeTo: directory) }
+        textView.insertText(
+            insertions.map(\.text).joined(separator: "\n\n"),
+            replacementRange: NSRange(location: start, length: 0)
+        )
+        if insertions.count == 1, let alt = insertions.first?.alt {
+            textView.setSelectedRange(NSRange(location: start + alt.location, length: alt.length))
+        }
     }
 
     private func replaceSelection(with text: String) -> Bool {
@@ -1295,6 +1332,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
             }
         }
         textView.delegate = self
+        textView.onPaste = { [weak self] text in self?.pasteLink(text) ?? false }
     }
 }
 
