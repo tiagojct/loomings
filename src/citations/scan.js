@@ -19,10 +19,36 @@ import { parseSource } from '../teaching/parse.js';
 // A key starts with a letter, digit or underscore. Internal punctuation must
 // have a key character after it, so no key ends in punctuation.
 const KEY = '[\\p{L}\\p{N}_](?:[\\p{L}\\p{N}_]|[:.#$%&\\-+?<>~/](?=[\\p{L}\\p{N}_]))*';
-// One pass: a bracket group, or a bare key that has no letter, digit or
-// backslash before it.
-const SCAN = new RegExp(`\\[([^\\[\\]]*)\\]|(?<![\\p{L}\\p{N}_])@(${KEY})`, 'gu');
-const ITEM_KEY = new RegExp(`(?<![\\p{L}\\p{N}_])(-?)@(${KEY})`, 'u');
+// One pass: a bracket group, or a bare key. The code tests the character
+// before a key, because the build target has no lookbehind in a RegExp.
+const SCAN = new RegExp(`\\[([^\\[\\]]*)\\]|@(${KEY})`, 'gu');
+const ITEM_KEY = new RegExp(`(-?)@(${KEY})`, 'gu');
+const ENDS_IN_KEY_CHAR = /[\p{L}\p{N}_]$/u;
+
+/**
+ * True when a letter, digit or underscore comes right before `index`. Two code
+ * units hold a whole character.
+ *
+ * @param {string} text
+ * @param {number} index
+ */
+const keyCharBefore = (text, index) => ENDS_IN_KEY_CHAR.test(text.slice(Math.max(0, index - 2), index));
+
+/**
+ * The first key of an item that has no key character before it.
+ *
+ * @param {string} part
+ * @returns {RegExpExecArray|null}
+ */
+function findItemKey(part) {
+  ITEM_KEY.lastIndex = 0;
+  let m;
+  while ((m = ITEM_KEY.exec(part)) !== null) {
+    if (!keyCharBefore(part, m.index)) return m;
+    ITEM_KEY.lastIndex = m.index + 1;
+  }
+  return null;
+}
 
 /**
  * True when an odd number of backslashes come right before `index`.
@@ -61,15 +87,31 @@ function urlTest(source) {
       to = end < 0 ? source.length : end;
       links = LINKIFY.match(source.slice(from, to)) ?? [];
     }
-    return links.some((link) => offset >= from + link.index && offset < from + link.lastIndex);
+    // The links are in text order, so a binary search finds the one at this offset.
+    const at = offset - from;
+    let low = 0;
+    let high = links.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (links[mid].lastIndex <= at) low = mid + 1;
+      else high = mid;
+    }
+    return low < links.length && at >= links[low].index;
   };
 }
 
 const LABELS = /** @type {Record<string, string>} */ ({
   'p.': 'page', 'pp.': 'page', 'chap.': 'chapter', 'sec.': 'section', 'vol.': 'volume', 'fig.': 'figure',
 });
-const LOCATOR = /^(pp?\.|chap\.|sec\.|vol\.|fig\.)[ \t]*([^,]*?)[ \t]*(?:,[ \t]*(.*))?$/s;
-const PLAIN_LOCATOR = /^(\d[^,]*?)[ \t]*(?:,[ \t]*(.*))?$/s;
+const LOCATOR_LABEL = /^(?:pp?\.|chap\.|sec\.|vol\.|fig\.)/;
+
+/**
+ * One space for each run of white space, as Pandoc does. Citeproc needs time
+ * for the square of a run, and a share link can hold a million spaces.
+ *
+ * @param {string} text
+ */
+const oneSpace = (text) => text.replace(/\s+/g, ' ');
 
 /**
  * Reads the text after a key.
@@ -78,14 +120,19 @@ const PLAIN_LOCATOR = /^(\d[^,]*?)[ \t]*(?:,[ \t]*(.*))?$/s;
  * @returns {{locator: string|null, label: string|null, suffix: string}}
  */
 function readSuffix(rest) {
-  const trimmed = rest.trim();
-  if (!rest.trimStart().startsWith(',')) return { locator: null, label: null, suffix: trimmed };
-  const after = rest.trimStart().slice(1).trim();
-  const m = LOCATOR.exec(after);
-  if (m) return { locator: m[2], label: LABELS[m[1]], suffix: (m[3] || '').trim() };
-  const p = PLAIN_LOCATOR.exec(after);
-  if (p) return { locator: p[1], label: 'page', suffix: (p[2] || '').trim() };
-  return { locator: null, label: null, suffix: after };
+  const start = rest.trimStart();
+  if (!start.startsWith(',')) return { locator: null, label: null, suffix: oneSpace(start.trimEnd()) };
+  const after = oneSpace(start.slice(1).trim());
+  const label = LOCATOR_LABEL.exec(after)?.[0];
+  if (!label && !/^\d/.test(after)) return { locator: null, label: null, suffix: after };
+  // A cut at the first comma, not a RegExp: spaces in a share link must not take seconds.
+  const body = label ? after.slice(label.length) : after;
+  const comma = body.indexOf(',');
+  return {
+    locator: (comma < 0 ? body : body.slice(0, comma)).trim(),
+    label: label ? LABELS[label] : 'page',
+    suffix: comma < 0 ? '' : body.slice(comma + 1).trim(),
+  };
 }
 
 /**
@@ -101,10 +148,10 @@ function readItems(inner, offset, inUrl) {
   for (const part of inner.split(';')) {
     const start = at;
     at += part.length + 1;
-    const m = ITEM_KEY.exec(part);
+    const m = findItemKey(part);
     if (!m || escaped(part, m.index + m[1].length)) continue;
     if (inUrl(start + m.index + m[1].length)) continue;
-    const prefix = part.slice(0, m.index);
+    const prefix = oneSpace(part.slice(0, m.index));
     items.push({
       key: m[2],
       prefix: prefix.trim() ? prefix : '',
@@ -176,6 +223,10 @@ export function scanCitations(source) {
   let m;
   while ((m = SCAN.exec(source)) !== null) {
     const start = m.index;
+    if (m[2] !== undefined && keyCharBefore(source, start)) {
+      SCAN.lastIndex = start + 1;
+      continue;
+    }
     const end = start + m[0].length;
     while (k < skips.length && skips[k].to <= start) k++;
     // Skip ranges can nest or overlap, so test the ones that start before us.

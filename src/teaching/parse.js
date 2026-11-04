@@ -224,8 +224,15 @@ function createMapper(lines) {
         start += part.length + 1;
       });
       return (offset) => {
-        let k = starts.length - 1;
-        while (k > 0 && starts[k].start > offset) k--;
+        // The last line that starts at or before the offset. A paragraph can
+        // have many lines and many tokens, so this is a binary search.
+        let k = 0;
+        let high = starts.length - 1;
+        while (k < high) {
+          const mid = (k + high + 1) >> 1;
+          if (starts[mid].start > offset) high = mid - 1;
+          else k = mid;
+        }
         return starts[k].at(offset - starts[k].start);
       };
     },

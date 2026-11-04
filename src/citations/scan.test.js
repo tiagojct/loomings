@@ -6,6 +6,62 @@ const item = (key, extra = {}) => ({
 });
 
 describe('scanCitations', () => {
+  it('takes a character before a bare key as the regular expression did', () => {
+    expect(scanCitations('a@b é@x 9@y _@z 𝒳@astral')).toEqual([]);
+    expect(scanCitations('(@a')[0].items[0].key).toBe('a');
+    expect(scanCitations('🐋@a')[0].items[0].key).toBe('a');
+    expect(scanCitations('a@b @c').map((c) => c.items[0].key)).toEqual(['c']);
+  });
+
+  it('takes a character before a key in brackets as the regular expression did', () => {
+    expect(scanCitations('[x@a; @b]')[0].items.map((i) => i.key)).toEqual(['b']);
+    expect(scanCitations('[é@a]')).toEqual([]);
+    expect(scanCitations('[𝒳@a]')).toEqual([]);
+    const [c] = scanCitations('[x-@a]');
+    expect(c.items[0]).toEqual(item('a', { prefix: 'x-' }));
+    expect(scanCitations('[-@a]')[0].items[0].suppressAuthor).toBe(true);
+    expect(scanCitations('[x@a @b]')[0].items[0]).toEqual(item('b', { prefix: 'x@a ' }));
+  });
+
+  it.each([
+    ['a label', 'p. 1'],
+    ['no label', '1'],
+  ])('reads a locator with %s and a million spaces in time', (_, locator) => {
+    const source = `[@k, ${locator}${' '.repeat(1000000)}x, more]`;
+    const before = performance.now();
+    const [c] = scanCitations(source);
+    expect(performance.now() - before).toBeLessThan(1000);
+    expect(c.items[0].locator).toBe('1 x');
+    expect(c.items[0].suffix).toBe('more');
+  });
+
+  it('keeps one space for a run of white space in each affix', () => {
+    const [c] = scanCitations('[see  \n  also @k, p.  3 \t 4,  and   more]');
+    expect(c.items[0]).toEqual(item('k', { prefix: 'see also ', locator: '3 4', label: 'page', suffix: 'and more' }));
+    expect(scanCitations('[@k  and   more]')[0].items[0].suffix).toBe('and more');
+  });
+
+  it('reads a paragraph of many lines and many tokens in time', () => {
+    const source = `@k\n${'[a]: b\n'.repeat(100000)}`;
+    const before = performance.now();
+    expect(scanCitations(source)).toHaveLength(1);
+    expect(performance.now() - before).toBeLessThan(3000);
+  });
+
+  it('trims a locator on each side of a comma', () => {
+    expect(scanCitations('[@k, p.   3  ,   more  ]')[0].items[0]).toEqual(item('k', { locator: '3', label: 'page', suffix: 'more' }));
+    expect(scanCitations('[@k, 3  ,   more  ]')[0].items[0]).toEqual(item('k', { locator: '3', label: 'page', suffix: 'more' }));
+    expect(scanCitations('[@k, p.]')[0].items[0]).toEqual(item('k', { locator: '', label: 'page' }));
+    expect(scanCitations('[@k, in press]')[0].items[0]).toEqual(item('k', { suffix: 'in press' }));
+  });
+
+  it('checks many keys on one line of many links in time', () => {
+    const source = 'https://a.pt/x @k '.repeat(20000);
+    const before = performance.now();
+    expect(scanCitations(source)).toHaveLength(20000);
+    expect(performance.now() - before).toBeLessThan(2000);
+  });
+
   it('returns nothing without an at sign', () => {
     expect(scanCitations('plain [text] here')).toEqual([]);
   });
