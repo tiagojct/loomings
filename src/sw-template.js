@@ -32,10 +32,13 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin || !isApp) return;
 
   if (req.mode === 'navigate') {
+    // A licence file under the app is a navigation too. Only the shell goes
+    // into the shell's place.
+    const isShell = url.pathname === BASE || url.pathname === BASE + 'index.html';
     event.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) caches.open(CACHE).then((cache) => cache.put(BASE, res.clone()));
+          if (res.ok && isShell) caches.open(CACHE).then((cache) => cache.put(BASE, res.clone()));
           return res;
         })
         .catch(() => caches.match(BASE))

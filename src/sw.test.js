@@ -125,6 +125,31 @@ describe('service worker', () => {
     expect(worker.cache.has(`${ORIGIN}/app/`)).toBe(true);
   });
 
+  it('keeps the shell in the cache after a navigation to a licence file', async () => {
+    const worker = createWorker();
+    await fire(worker, 'install', event('install', {}));
+
+    const evt = event('fetch', { request: { url: `${ORIGIN}/app/licenses/citeproc-LICENSE.txt`, mode: 'navigate', method: 'GET' } });
+    await fire(worker, 'fetch', evt);
+
+    const response = await evt.responded;
+    expect(await response.text()).toBe(`network:${ORIGIN}/app/licenses/citeproc-LICENSE.txt`);
+    await new Promise((done) => { setTimeout(done, 0); });
+    expect(worker.cache.get(`${ORIGIN}/app/`)).toBe('cached:/app/');
+  });
+
+  it.each(['/app/', '/app/?lesson=01-first', '/app/index.html'])('takes a navigation to %s as the shell', async (path) => {
+    const worker = createWorker();
+    await fire(worker, 'install', event('install', {}));
+
+    const evt = event('fetch', { request: { url: `${ORIGIN}${path}`, mode: 'navigate', method: 'GET' } });
+    await fire(worker, 'fetch', evt);
+    await evt.responded;
+    await new Promise((done) => { setTimeout(done, 0); });
+
+    expect(await worker.cache.get(`${ORIGIN}/app/`).text()).toBe(`network:${ORIGIN}${path}`);
+  });
+
   it('falls back to the cached shell when the network is gone', async () => {
     const worker = createWorker({ network: 'offline' });
     worker.cache.set(`${ORIGIN}/app/`, 'cached:/app/');
