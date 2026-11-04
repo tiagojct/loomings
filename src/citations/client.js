@@ -1,8 +1,9 @@
 // ========================================
 // Loomings — the citation client (web only)
-// Runs the session in a worker. Where a worker cannot start, the session
-// runs on this thread through a dynamic import. An answer counts only if it
-// is for the latest request. The caller keeps the debounce.
+// Runs the session in a worker, never on the main thread: a render can take
+// 500 ms. Where a worker cannot start, each report has one note and the
+// citations stay literal. An answer counts only if it is for the latest
+// request. The caller keeps the debounce.
 // ========================================
 
 import { loadLocale } from './assets.js';
@@ -10,7 +11,6 @@ import { loadLocale } from './assets.js';
 /**
  * @typedef {import('./session.js').CitationReport} CitationReport
  * @typedef {import('./session.js').CitationSources} CitationSources
- * @typedef {{analyse(text: string): CitationReport, setSources(sources: CitationSources): void}} Session
  */
 
 function startWorker() {
@@ -32,24 +32,36 @@ async function withLocales(sources) {
 }
 
 /**
- * @param {{spawn?: () => Worker, loadSession?: () => Promise<Session>}} [options]  tests replace both
+ * The report when no worker runs. It has no citations, so the text stays literal.
+ *
+ * @param {string} source
+ * @returns {CitationReport}
+ */
+function unavailableReport(source) {
+  return {
+    citations: [],
+    bibliography: [],
+    bibliographyMarkdown: '',
+    library: [],
+    notes: [{ from: 0, to: 0, line: 0, message: 'Citations are not available: the worker did not start.' }],
+    markdownSource: source,
+  };
+}
+
+/**
+ * The object is frozen: `onReport` is a method, and an assignment to it throws.
+ *
+ * @param {{spawn?: () => Worker}} [options]  tests replace the worker
  * @returns {{update(source: string): void, setSources(sources: CitationSources): Promise<void>,
  *   onReport(listener: (report: CitationReport) => void): void, latest(): CitationReport|null}}
  */
-export function createCitationClient({
-  spawn = startWorker,
-  loadSession = () => import('./session.js').then((m) => m.createSession()),
-} = {}) {
-  /** @type {Worker|null|undefined} undefined: not started. null: this thread. */
+export function createCitationClient({ spawn = startWorker } = {}) {
+  /** @type {Worker|null|undefined} undefined: not started. null: cannot run. */
   let worker;
-  /** @type {Promise<Session>|null} */
-  let session = null;
   let id = 0;
   let sourcesRequest = 0;
   /** @type {string|null} */
   let text = null;
-  /** @type {CitationSources|null} */
-  let sources = null;
   /** @type {CitationReport|null} */
   let report = null;
   /** @type {((report: CitationReport) => void)[]} */
@@ -68,7 +80,7 @@ export function createCitationClient({
       started.onerror = () => {
         started.terminate();
         worker = null;
-        resend();
+        if (text !== null) update(text);
       };
       return started;
     } catch {
@@ -76,35 +88,19 @@ export function createCitationClient({
     }
   }
 
-  /** The order of the messages stays, because each waits for one promise. */
-  function runHere(/** @type {any} */ message) {
-    session ??= loadSession();
-    session
-      .then((s) => {
-        if (message.type === 'sources') s.setSources(message.sources);
-        else if (message.id === id) deliver(message.id, s.analyse(message.text));
-      })
-      // No session means no report: the preview keeps the literal text.
-      .catch(() => {});
-  }
-
   function post(/** @type {any} */ message) {
     if (worker === undefined) worker = start();
     if (worker) worker.postMessage(message);
-    else runHere(message);
   }
 
   function update(/** @type {string} */ source) {
     text = source;
-    post({ id: ++id, type: 'analyse', text: source });
+    id++;
+    post({ id, type: 'analyse', text: source });
+    if (worker === null) deliver(id, unavailableReport(source));
   }
 
-  function resend() {
-    if (sources) post({ id: ++id, type: 'sources', sources });
-    if (text !== null) update(text);
-  }
-
-  return {
+  return Object.freeze({
     update,
 
     async setSources(next) {
@@ -117,8 +113,8 @@ export function createCitationClient({
         // A locale chunk did not load. The session reports that it is not ready.
       }
       if (request !== sourcesRequest) return;
-      sources = full;
-      resend();
+      post({ id: ++id, type: 'sources', sources: full });
+      if (text !== null) update(text);
     },
 
     onReport(listener) {
@@ -126,5 +122,5 @@ export function createCitationClient({
     },
 
     latest: () => report,
-  };
+  });
 }

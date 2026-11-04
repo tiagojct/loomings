@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createCitationClient } from './client.js';
 
-const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
 const report = (markdownSource) => ({ markdownSource });
 
 function fakeWorker() {
@@ -69,42 +68,51 @@ describe('createCitationClient', () => {
     await Promise.all([first, second]);
     expect(w.sent.filter((m) => m.type === 'sources').map((m) => m.sources.styleXml)).toEqual(['two']);
   });
-  it('runs on this thread when the worker cannot start', async () => {
-    const analyse = vi.fn((text) => report(text));
-    const setSources = vi.fn();
-    const client = createCitationClient({
-      spawn: () => { throw new Error('no worker'); },
-      loadSession: async () => ({ analyse, setSources }),
-    });
+  it('gives one note and literal text when the worker cannot start', () => {
+    const client = createCitationClient({ spawn: () => { throw new Error('no worker'); } });
     const seen = [];
     client.onReport((r) => seen.push(r));
-    await client.setSources(fullSources);
-    client.update('a');
+    client.update('a [@k]');
+    expect(seen.length).toBe(1);
+    expect(seen[0].citations).toEqual([]);
+    expect(seen[0].bibliography).toEqual([]);
+    expect(seen[0].markdownSource).toBe('a [@k]');
+    expect(seen[0].notes).toEqual([{ from: 0, to: 0, line: 0, message: 'Citations are not available: the worker did not start.' }]);
     client.update('b');
-    await tick();
-    expect(setSources).toHaveBeenCalledTimes(1);
-    expect(seen).toEqual([report('b')]);
+    expect(seen[1].notes.length).toBe(1);
+    expect(client.latest().markdownSource).toBe('b');
   });
-  it('moves to this thread when the worker fails, and sends the state again', async () => {
-    const w = fakeWorker();
-    const analyse = vi.fn((text) => report(text));
-    const setSources = vi.fn();
-    const client = createCitationClient({ spawn: () => w, loadSession: async () => ({ analyse, setSources }) });
+  it('does not fail when sources arrive and the worker cannot start', async () => {
+    const client = createCitationClient({ spawn: () => { throw new Error('no worker'); } });
     await client.setSources(fullSources);
+    expect(client.latest()).toBe(null);
+    client.update('a');
+    expect(client.latest().notes.length).toBe(1);
+  });
+  it('gives the note when the worker fails later, and does not start it again', () => {
+    const w = fakeWorker();
+    const spawn = vi.fn(() => w);
+    const client = createCitationClient({ spawn });
     client.update('a');
     w.onerror();
-    await tick();
     expect(w.terminate).toHaveBeenCalled();
-    expect(setSources).toHaveBeenCalledTimes(1);
-    expect(client.latest()).toEqual(report('a'));
+    expect(client.latest().notes.length).toBe(1);
+    expect(client.latest().markdownSource).toBe('a');
+    client.update('b');
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(w.sent.length).toBe(1);
   });
-  it('survives a session that cannot load', async () => {
-    const client = createCitationClient({
-      spawn: () => { throw new Error('no worker'); },
-      loadSession: () => Promise.reject(new Error('no chunk')),
-    });
+  it('drops an answer that comes after the worker failed', () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
     client.update('a');
-    await tick();
-    expect(client.latest()).toBe(null);
+    const sent = w.sent[0].id;
+    w.onerror();
+    w.answer(sent, report('late'));
+    expect(client.latest().notes.length).toBe(1);
+  });
+  it('is frozen, so assigning onReport throws', () => {
+    const client = createCitationClient({ spawn: fakeWorker });
+    expect(() => { client.onReport = () => {}; }).toThrow(TypeError);
   });
 });
