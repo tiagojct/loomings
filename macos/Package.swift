@@ -53,13 +53,23 @@ let package = Package(
             name: "LoomingsPreview",
             dependencies: ["LoomingsMarkdown", "LoomingsTheme"]
         ),
+        .target(
+            name: "LoomingsCitations",
+            dependencies: [],
+            linkerSettings: [.linkedFramework("JavaScriptCore")]
+        ),
         .executableTarget(
             name: "LoomingsApp",
             dependencies: ["LoomingsDocuments", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTheme", "LoomingsShare", "LoomingsTeaching"]
         ),
         .executableTarget(
             name: "LoomingsBench",
-            dependencies: ["LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTeaching"]
+            dependencies: ["LoomingsCitations", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTeaching"]
+        ),
+        .testTarget(
+            name: "LoomingsCitationsTests",
+            dependencies: ["LoomingsCitations"],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "LoomingsMarkdownTests",

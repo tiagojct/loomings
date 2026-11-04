@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// Export the web app's palettes, lessons and example into macos/Resources so
-// the native build shares the same source of truth. Run after changing
-// src/palettes.js, lessons/, or examples/.
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+// Export the web app's palettes, lessons, example and citation files into
+// macos/Resources so the native build shares the same source of truth. Run
+// after changing src/palettes.js, lessons/, or examples/. After a change in
+// src/citations/, use `npm run export:native`: it builds the bundle first.
+import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles } from '../src/palettes.js';
@@ -30,3 +31,17 @@ writeFileSync(
 cpSync(join(root, 'lessons'), join(resources, 'lessons'), { recursive: true });
 cpSync(join(root, 'examples', 'loomings.md'), join(resources, 'example.md'));
 console.log('exported palettes.json, lessons/ and example.md');
+
+const citations = join(resources, 'Citations');
+const bundle = join(root, 'node_modules', '.cache', 'loomings-citations', 'citations.js');
+mkdirSync(citations, { recursive: true });
+cpSync(join(root, 'src', 'citations', 'styles'), join(citations, 'styles'), { recursive: true });
+cpSync(join(root, 'src', 'citations', 'locales'), join(citations, 'locales'), { recursive: true });
+cpSync(join(root, 'src', 'citations', 'LICENSE-CSL.md'), join(citations, 'LICENSE-CSL.md'));
+cpSync(join(root, 'node_modules', 'citeproc', 'LICENSE'), join(citations, 'LICENSE-citeproc'));
+if (existsSync(bundle)) {
+  cpSync(bundle, join(citations, 'citations.js'));
+  console.log('exported Citations/ with the bundle');
+} else {
+  console.warn('exported Citations/ without the bundle: run npm run export:native to build it');
+}

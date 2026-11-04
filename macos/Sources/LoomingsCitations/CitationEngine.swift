@@ -1,0 +1,183 @@
+import Foundation
+import JavaScriptCore
+
+public enum CitationEngineError: Error, Equatable, CustomStringConvertible {
+    /// The resources folder has no `citations.js`.
+    case bundleMissing(String)
+    /// The citation code failed, or its output cannot be read.
+    case script(String)
+
+    public var description: String {
+        switch self {
+        case .bundleMissing(let path): return "The citation code is missing: \(path)"
+        case .script(let message): return message
+        }
+    }
+}
+
+/// Runs the citation code of `src/citations` in JavaScriptCore, so that its
+/// rules are not repeated in Swift.
+///
+/// One `JSContext` is confined to one private serial queue, and each method
+/// waits on that queue, so the work runs while the caller waits. A call can
+/// take 500 ms: do not call from the main thread. The bundle loads on the
+/// first call that needs it, so a document with no citations costs nothing.
+/// `init` only finds the file.
+public final class CitationEngine: @unchecked Sendable {
+    private let resources: URL
+    private let queue = DispatchQueue(label: "eu.tiagojacinto.loomings.citations", qos: .userInitiated)
+
+    // Use these only on `queue`.
+    private var context: JSContext?
+    private var api: JSValue?
+    private var loadFailure: String?
+    private var sourcesFailure: String?
+
+    /// - Parameter resources: the folder that holds `citations.js`, `styles/`
+    ///   and `locales/`.
+    public init(resources: URL) throws {
+        let bundle = resources.appendingPathComponent("citations.js")
+        guard FileManager.default.isReadableFile(atPath: bundle.path) else {
+            throw CitationEngineError.bundleMissing(bundle.path)
+        }
+        self.resources = resources
+    }
+
+    /// A failure here gives a note in the next report.
+    public func setSources(_ sources: CitationSources) {
+        let json: String
+        do {
+            json = String(decoding: try JSONEncoder().encode(sources), as: UTF8.self)
+        } catch {
+            queue.sync { sourcesFailure = String(describing: error) }
+            return
+        }
+        queue.sync {
+            do {
+                _ = try autoreleasepool { try invoke("setSources", [json]) }
+                sourcesFailure = nil
+            } catch {
+                sourcesFailure = String(describing: error)
+            }
+        }
+    }
+
+    /// A failure gives an empty report with one note. The context stays usable.
+    public func analyse(_ source: String) -> CitationReport {
+        queue.sync {
+            do {
+                if let sourcesFailure { throw CitationEngineError.script(sourcesFailure) }
+                return try call("analyse", [source])
+            } catch {
+                return CitationReport(failure: String(describing: error), source: source)
+            }
+        }
+    }
+
+    public func readMeta(_ source: String) throws -> CitationMeta {
+        try queue.sync { try call("readMeta", [source]) }
+    }
+
+    /// Sets or removes one frontmatter key. A nil value removes the key.
+    /// - Parameter key: `bibliography`, `csl` or `references`.
+    public func setMeta(_ source: String, key: String, value: String?) throws -> String {
+        try queue.sync { try call("setMeta", [source, key, value ?? NSNull()]) }
+    }
+
+    public func checkStyle(_ xml: String) throws -> CitationStyleCheck {
+        try queue.sync { try call("checkStyle", [xml]) }
+    }
+
+    /// The text of a bundled style. These reads use no JavaScript.
+    public func bundledStyle(_ id: String) -> String? {
+        readResource("styles/\(id).csl", name: id)
+    }
+
+    /// The text of a bundled locale, for a tag such as `pt-PT`.
+    public func bundledLocale(_ tag: String) -> String? {
+        readResource("locales/locales-\(tag).xml", name: tag)
+    }
+
+    private func readResource(_ path: String, name: String) -> String? {
+        guard !name.contains("/") else { return nil }
+        return try? String(contentsOf: resources.appendingPathComponent(path), encoding: .utf8)
+    }
+
+    // MARK: On the queue
+
+    /// Each function of the JavaScript API gives JSON. The pool is here because
+    /// `queue.sync` can run on the caller's thread, which can have no pool.
+    private func call<Result: Decodable>(_ name: String, _ arguments: [Any]) throws -> Result {
+        try autoreleasepool {
+            let value = try invoke(name, arguments)
+            guard value.isString, let text = value.toString() else {
+                throw CitationEngineError.script("The citation code gave no text.")
+            }
+            do {
+                return try JSONDecoder().decode(Result.self, from: Data(text.utf8))
+            } catch {
+                throw CitationEngineError.script("The citation code gave text that cannot be read.")
+            }
+        }
+    }
+
+    private func invoke(_ name: String, _ arguments: [Any]) throws -> JSValue {
+        let (context, api) = try loaded()
+        context.exception = nil
+        let result = api.invokeMethod(name, withArguments: arguments)
+        if let exception = context.exception {
+            context.exception = nil
+            throw CitationEngineError.script("The citations could not be formatted: \(exception)")
+        }
+        guard let result else { throw CitationEngineError.script("The citation code gave no text.") }
+        return result
+    }
+
+    private func loaded() throws -> (JSContext, JSValue) {
+        if let context, let api { return (context, api) }
+        if let loadFailure { throw CitationEngineError.script(loadFailure) }
+        do {
+            let result = try load()
+            context = result.0
+            api = result.1
+            return result
+        } catch {
+            loadFailure = String(describing: error)
+            throw error
+        }
+    }
+
+    private func load() throws -> (JSContext, JSValue) {
+        let bundle = resources.appendingPathComponent("citations.js")
+        let script: String
+        do {
+            script = try String(contentsOf: bundle, encoding: .utf8)
+        } catch {
+            throw CitationEngineError.script("The citation code could not be read.")
+        }
+        guard let context = JSContext() else {
+            throw CitationEngineError.script("The citation code could not start.")
+        }
+        context.name = "Loomings citations"
+        context.evaluateScript(script, withSourceURL: bundle)
+        if let exception = context.exception {
+            throw CitationEngineError.script("The citation code could not start: \(exception)")
+        }
+        guard let api = context.objectForKeyedSubscript("LoomingsCitations"), api.isObject else {
+            throw CitationEngineError.script("The citation code could not start.")
+        }
+        return (context, api)
+    }
+}
+
+extension CitationReport {
+    /// The report of a failure: the session's empty report with one note.
+    init(failure message: String, source: String) {
+        citations = []
+        bibliography = []
+        bibliographyMarkdown = ""
+        library = []
+        notes = [Note(from: 0, to: 0, message: message, file: nil, line: 0)]
+        markdownSource = source
+    }
+}

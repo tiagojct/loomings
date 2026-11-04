@@ -228,3 +228,38 @@ decodes it from the rendered page instead).
 - The shelf looks a document up by identifier and ignores sidecars that name a file
   outside the shelf.
 - Mixed line endings are normalised to the first one found, with a test.
+
+## Citations in JavaScriptCore (2026-11-04)
+
+The citation code of `src/citations` runs as one bundle in JavaScriptCore
+(`macos/Resources/Citations/citations.js`, 614 kB, 188 kB gzip). Command:
+`swift run -c release --package-path macos LoomingsBench --citations`. Each row
+of the bench is one new engine. These are the medians of six engines on the machine
+above, APA, en-US.
+
+| Measurement | 1 entry, 1 citation | 200 entries, 60 citations |
+|---|---:|---:|
+| `CitationEngine.init` (finds the file) | 0.14 ms | 0.14 ms |
+| Bundle load (first call) | 28 ms | 29 ms |
+| First report (bibliography, first engine, render) | 1.60 s | 2.02 s |
+| Same text again (cached render) | 0.22 ms | 3.3 ms |
+| A new citation (render, same engine) | 5.9 ms | 406 ms |
+
+- Startup with no citations: unchanged. `LoomingsApp` does not link
+  `LoomingsCitations` yet, so the app has no JavaScriptCore dependency in this build.
+  When Task 11 links it, `init` costs 0.14 ms and the bundle stays unloaded until a
+  document has `bibliography:` or `references:`.
+- Startup with a bibliography: not an app measurement yet. The first report takes about
+  1.6 s to 2 s on the citation queue, so the citations stay literal for that time. Most
+  of it is the first citeproc engine.
+- The cost is once per engine setup. A change of style, locale or entries builds a new
+  engine, so it costs about the first engine time again.
+- Memory: the process footprint changes between 13 MB and 110 MB through these runs,
+  because the collector runs at different times. This is not a figure for one engine.
+- These runs use the JIT, because the ad-hoc build has no hardened runtime. A Developer
+  ID build with the hardened runtime needs the `com.apple.security.cs.allow-jit`
+  entitlement, or JavaScriptCore runs without the JIT. That build is not measured.
+- No time limit stops a script that does not end. It stops only the citation queue, not
+  the editor.
+- Licences: `LICENSE-citeproc` and `LICENSE-CSL.md` are next to the bundle. The
+  attribution in About is not done yet.

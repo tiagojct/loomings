@@ -149,6 +149,8 @@ swift test --package-path macos         # Swift Testing; CLT has no XCTest
 swift run -c release --package-path macos LoomingsBench
 
 node scripts/export-native-resources.mjs       # palettes + lessons + example
+npm run export:native                          # the same, and the citation bundle first
+node macos/scripts/render-citation-fixtures.mjs # citation report fixtures
 node macos/scripts/render-web-fixtures.mjs     # preview HTML fixtures
 node macos/scripts/render-share-fixtures.mjs   # cross-language share fixtures
 ```

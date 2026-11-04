@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc -p jsconfig.json",
-    "site": "npm run build && node scripts/serve-site.mjs"
+    "site": "npm run build && node scripts/serve-site.mjs",
+    "export:native": "vite build --config vite.citations.config.js && node scripts/export-native-resources.mjs"
   },
   "author": "Tiago Jacinto",
   "license": "MIT",

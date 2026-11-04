@@ -1,0 +1,703 @@
+{
+  "reports": [
+    {
+      "name": "apa-en-US",
+      "source": "---\ntitle: A test\nbibliography: refs.bib\nreference-section-title: References\n---\n# Título 🐋\n\nTexto 🌊 [@jacome2020] and [see @smith2019, p. 3, for more; @silva2021].\n\nThen @jacome2020 [p. 5] and [-@smith2019]. Mail a@b.pt and `[@code]` stay.\n\nUnknown [@nobody2000] and [@smith2019; @nobody2000].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "apa",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 103,
+            "to": 116,
+            "html": "(Jácome et al., 2020)",
+            "markdown": "(Jácome et al., 2020)",
+            "missing": []
+          },
+          {
+            "from": 121,
+            "to": 165,
+            "html": "(Silva, 2021; see Smith, 2019, p. 3 for more)",
+            "markdown": "(Silva, 2021; see Smith, 2019, p. 3 for more)",
+            "missing": []
+          },
+          {
+            "from": 173,
+            "to": 184,
+            "html": "Jácome et al. (2020)",
+            "markdown": "Jácome et al. (2020)",
+            "missing": []
+          },
+          {
+            "from": 196,
+            "to": 209,
+            "html": "(2019)",
+            "markdown": "(2019)",
+            "missing": []
+          },
+          {
+            "from": 252,
+            "to": 265,
+            "html": "[@nobody2000]",
+            "markdown": "[@nobody2000]",
+            "missing": [
+              "nobody2000"
+            ]
+          },
+          {
+            "from": 270,
+            "to": 295,
+            "html": "(Smith, 2019)",
+            "markdown": "(Smith, 2019)",
+            "missing": [
+              "nobody2000"
+            ]
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">Jácome, C., Almeida, R., &#38; Fonseca, J. A. (2020). Mobile health tools for COPD. <i>Journal of Tests</i>, <i>12</i>(3), 101–110. <a href=\"https://doi.org/10.1000/xyz\">https://doi.org/10.1000/xyz</a></div>",
+          "<div class=\"csl-entry\">Silva, A. (2021). Capítulo sobre espirometria. In R. Costa (Ed.), <i>Livro de fisiologia</i> (pp. 5–9). Porto Editora.</div>",
+          "<div class=\"csl-entry\">Smith, J. (2019). <i>A book on lung function</i>. Press.</div>"
+        ],
+        "bibliographyMarkdown": "Jácome, C., Almeida, R., & Fonseca, J. A. (2020). Mobile health tools for COPD. *Journal of Tests*, *12*(3), 101–110. https://doi.org/10.1000/xyz\n\nSilva, A. (2021). Capítulo sobre espirometria. In R. Costa (Ed.), *Livro de fisiologia* (pp. 5–9). Porto Editora.\n\nSmith, J. (2019). *A book on lung function*. Press.",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": true
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": true
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [
+          {
+            "from": 252,
+            "to": 265,
+            "message": "No entry called nobody2000."
+          },
+          {
+            "from": 270,
+            "to": 295,
+            "message": "No entry called nobody2000."
+          }
+        ],
+        "markdownSource": "---\ntitle: A test\nbibliography: refs.bib\nreference-section-title: References\n---\n# Título 🐋\n\nTexto 🌊 (Jácome et al., 2020) and (Silva, 2021; see Smith, 2019, p. 3 for more).\n\nThen Jácome et al. (2020) [p. 5] and (2019). Mail a@b.pt and `[@code]` stay.\n\nUnknown [@nobody2000] and (Smith, 2019).\n\n## References\n\nJácome, C., Almeida, R., & Fonseca, J. A. (2020). Mobile health tools for COPD. *Journal of Tests*, *12*(3), 101–110. https://doi.org/10.1000/xyz\n\nSilva, A. (2021). Capítulo sobre espirometria. In R. Costa (Ed.), *Livro de fisiologia* (pp. 5–9). Porto Editora.\n\nSmith, J. (2019). *A book on lung function*. Press."
+      }
+    },
+    {
+      "name": "vancouver-pt-PT",
+      "source": "---\nbibliography: refs.bib\ncsl: vancouver\nlang: pt-PT\nreference-section-title: Referências\n---\nUma frase [@silva2021]. Outra frase [@jacome2020, p. 7; @smith2019].\n\nVolta ao início [@silva2021].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "vancouver",
+        "locale": "pt-PT"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 105,
+            "to": 117,
+            "html": "(1)",
+            "markdown": "(1)",
+            "missing": []
+          },
+          {
+            "from": 131,
+            "to": 162,
+            "html": "(2,3)",
+            "markdown": "(2,3)",
+            "missing": []
+          },
+          {
+            "from": 181,
+            "to": 193,
+            "html": "(1)",
+            "markdown": "(1)",
+            "missing": []
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">\n    <div class=\"csl-left-margin\">1.</div><div class=\"csl-right-inline\">Silva A. Capítulo sobre espirometria. Em: Costa R, editor. Livro de fisiologia. Porto Editora; 2021. p. 5–9.</div>\n  </div>",
+          "<div class=\"csl-entry\">\n    <div class=\"csl-left-margin\">2.</div><div class=\"csl-right-inline\">Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. Journal of Tests. 2020;12(3):101–10. doi:<a href=\"https://doi.org/10.1000/xyz\">10.1000/xyz</a></div>\n  </div>",
+          "<div class=\"csl-entry\">\n    <div class=\"csl-left-margin\">3.</div><div class=\"csl-right-inline\">Smith J. A book on lung function. Porto: Press; 2019.</div>\n  </div>"
+        ],
+        "bibliographyMarkdown": "1\\. Silva A. Capítulo sobre espirometria. Em: Costa R, editor. Livro de fisiologia. Porto Editora; 2021. p. 5–9.\n\n2\\. Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. Journal of Tests. 2020;12(3):101–10. doi:[10.1000/xyz](https://doi.org/10.1000/xyz)\n\n3\\. Smith J. A book on lung function. Porto: Press; 2019.",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": true
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": true
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [],
+        "markdownSource": "---\nbibliography: refs.bib\ncsl: vancouver\nlang: pt-PT\nreference-section-title: Referências\n---\nUma frase (1). Outra frase (2,3).\n\nVolta ao início (1).\n\n## Referências\n\n1\\. Silva A. Capítulo sobre espirometria. Em: Costa R, editor. Livro de fisiologia. Porto Editora; 2021. p. 5–9.\n\n2\\. Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. Journal of Tests. 2020;12(3):101–10. doi:[10.1000/xyz](https://doi.org/10.1000/xyz)\n\n3\\. Smith J. A book on lung function. Porto: Press; 2019."
+      }
+    },
+    {
+      "name": "broken-entry",
+      "source": "---\nbibliography: broken.bib\n---\nFirst [@good2020], then [@after2021] and [@broken2020].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "broken.bib",
+            "text": "@article{good2020,\n  author = {Good, Ana},\n  title = {A good entry},\n  journal = {Journal},\n  year = {2020}\n}\n@article{broken2020,\n  author = {Bad, Rui\n  title = {An entry that is not closed\n@book{after2021,\n  author = {After, Eva},\n  title = {An entry after the bad one},\n  publisher = {Press},\n  year = {2021}\n}\n"
+          }
+        ],
+        "style": "apa",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 39,
+            "to": 50,
+            "html": "(Good, 2020)",
+            "markdown": "(Good, 2020)",
+            "missing": []
+          },
+          {
+            "from": 57,
+            "to": 69,
+            "html": "(After, 2021)",
+            "markdown": "(After, 2021)",
+            "missing": []
+          },
+          {
+            "from": 74,
+            "to": 87,
+            "html": "[@broken2020]",
+            "markdown": "[@broken2020]",
+            "missing": [
+              "broken2020"
+            ]
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">After, E. (2021). <i>An entry after the bad one</i>. Press.</div>",
+          "<div class=\"csl-entry\">Good, A. (2020). A good entry. <i>Journal</i>.</div>"
+        ],
+        "bibliographyMarkdown": "After, E. (2021). *An entry after the bad one*. Press.\n\nGood, A. (2020). A good entry. *Journal*.",
+        "library": [
+          {
+            "key": "after2021",
+            "authors": "After",
+            "year": "2021",
+            "title": "An entry after the bad one",
+            "cited": true
+          },
+          {
+            "key": "good2020",
+            "authors": "Good",
+            "year": "2020",
+            "title": "A good entry",
+            "cited": true
+          }
+        ],
+        "notes": [
+          {
+            "from": 0,
+            "to": 0,
+            "file": "broken.bib",
+            "line": 6,
+            "message": "Entry broken2020 could not be read: a brace is not closed."
+          },
+          {
+            "from": 74,
+            "to": 87,
+            "message": "No entry called broken2020."
+          }
+        ],
+        "markdownSource": "---\nbibliography: broken.bib\n---\nFirst (Good, 2020), then (After, 2021) and [@broken2020].\n\nAfter, E. (2021). *An entry after the bad one*. Press.\n\nGood, A. (2020). A good entry. *Journal*."
+      }
+    },
+    {
+      "name": "dependent-style",
+      "source": "---\nbibliography: refs.bib\ncsl: a-dependent-journal.csl\n---\nA [@smith2019].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "styleXml": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<style xmlns=\"http://purl.org/net/xbiblio/csl\" version=\"1.0\" default-locale=\"en-US\">\n  <info>\n    <title>A dependent journal</title>\n    <id>http://www.zotero.org/styles/a-dependent-journal</id>\n    <link href=\"http://www.zotero.org/styles/a-dependent-journal\" rel=\"self\"/>\n    <link href=\"http://www.zotero.org/styles/apa\" rel=\"independent-parent\"/>\n  </info>\n</style>\n",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 62,
+            "to": 74,
+            "html": "[@smith2019]",
+            "markdown": "[@smith2019]",
+            "missing": []
+          }
+        ],
+        "bibliography": [],
+        "bibliographyMarkdown": "",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": false
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": false
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [
+          {
+            "from": 0,
+            "to": 0,
+            "file": "a-dependent-journal.csl",
+            "line": 0,
+            "message": "This style depends on apa. Add that file."
+          }
+        ],
+        "markdownSource": "---\nbibliography: refs.bib\ncsl: a-dependent-journal.csl\n---\nA [@smith2019].\n"
+      }
+    },
+    {
+      "name": "missing-file",
+      "source": "---\nbibliography: [refs.bib, gone.bib]\n---\nA [@smith2019].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "apa",
+        "locale": "en-US",
+        "missing": [
+          "gone.bib"
+        ]
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 45,
+            "to": 57,
+            "html": "(Smith, 2019)",
+            "markdown": "(Smith, 2019)",
+            "missing": []
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">Smith, J. (2019). <i>A book on lung function</i>. Press.</div>"
+        ],
+        "bibliographyMarkdown": "Smith, J. (2019). *A book on lung function*. Press.",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": false
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": false
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [
+          {
+            "from": 0,
+            "to": 0,
+            "file": "gone.bib",
+            "line": 0,
+            "message": "The file gone.bib is missing."
+          }
+        ],
+        "markdownSource": "---\nbibliography: [refs.bib, gone.bib]\n---\nA (Smith, 2019).\n\nSmith, J. (2019). *A book on lung function*. Press."
+      }
+    },
+    {
+      "name": "style-not-found",
+      "source": "---\nbibliography: refs.bib\ncsl: nowhere\n---\nA [@smith2019].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "apa",
+        "locale": "en-US",
+        "missing": [
+          "nowhere"
+        ],
+        "styleError": "The style nowhere was not found. The default style is chicago-author-date."
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 46,
+            "to": 58,
+            "html": "[@smith2019]",
+            "markdown": "[@smith2019]",
+            "missing": []
+          }
+        ],
+        "bibliography": [],
+        "bibliographyMarkdown": "",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": false
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": false
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [
+          {
+            "from": 0,
+            "to": 0,
+            "file": "nowhere",
+            "line": 0,
+            "message": "The file nowhere is missing."
+          },
+          {
+            "from": 0,
+            "to": 0,
+            "file": "nowhere",
+            "line": 0,
+            "message": "The style nowhere was not found. The default style is chicago-author-date."
+          }
+        ],
+        "markdownSource": "---\nbibliography: refs.bib\ncsl: nowhere\n---\nA [@smith2019].\n"
+      }
+    },
+    {
+      "name": "references-only",
+      "source": "---\nreferences: [{\"id\":\"inline2022\",\"type\":\"article-journal\",\"title\":\"Inline entry\",\"author\":[{\"family\":\"Rocha\",\"given\":\"Eva\"}],\"issued\":{\"date-parts\":[[2022]]},\"container-title\":\"Revista\"}]\n---\nInline [@inline2022].\n",
+      "sources": {
+        "bibs": [],
+        "style": "apa",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 202,
+            "to": 215,
+            "html": "(Rocha, 2022)",
+            "markdown": "(Rocha, 2022)",
+            "missing": []
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">Rocha, E. (2022). Inline entry. <i>Revista</i>.</div>"
+        ],
+        "bibliographyMarkdown": "Rocha, E. (2022). Inline entry. *Revista*.",
+        "library": [
+          {
+            "key": "inline2022",
+            "authors": "Rocha",
+            "year": "2022",
+            "title": "Inline entry",
+            "cited": true
+          }
+        ],
+        "notes": [],
+        "markdownSource": "---\nreferences: [{\"id\":\"inline2022\",\"type\":\"article-journal\",\"title\":\"Inline entry\",\"author\":[{\"family\":\"Rocha\",\"given\":\"Eva\"}],\"issued\":{\"date-parts\":[[2022]]},\"container-title\":\"Revista\"}]\n---\nInline (Rocha, 2022).\n\nRocha, E. (2022). Inline entry. *Revista*."
+      }
+    },
+    {
+      "name": "dropped-references",
+      "source": "---\nreferences: not a list\n---\nNo entries [@a].\n",
+      "sources": {
+        "bibs": [],
+        "style": "apa",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 42,
+            "to": 46,
+            "html": "[@a]",
+            "markdown": "[@a]",
+            "missing": [
+              "a"
+            ]
+          }
+        ],
+        "bibliography": [],
+        "bibliographyMarkdown": "",
+        "library": [],
+        "notes": [
+          {
+            "from": 0,
+            "to": 0,
+            "line": 0,
+            "message": "The references line is not a JSON list. It is not used."
+          },
+          {
+            "from": 42,
+            "to": 46,
+            "message": "No entry called a."
+          }
+        ],
+        "markdownSource": "---\nreferences: not a list\n---\nNo entries [@a].\n"
+      }
+    },
+    {
+      "name": "no-frontmatter",
+      "source": "# A plain document\n\nIt has [@a] and no frontmatter.\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "apa",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [],
+        "bibliography": [],
+        "bibliographyMarkdown": "",
+        "library": [],
+        "notes": [],
+        "markdownSource": "# A plain document\n\nIt has [@a] and no frontmatter.\n"
+      }
+    }
+  ],
+  "meta": [
+    {
+      "source": "No frontmatter.\n",
+      "meta": {
+        "bibliography": [],
+        "csl": null,
+        "lang": null,
+        "title": null,
+        "references": [],
+        "referencesDropped": 0
+      }
+    },
+    {
+      "source": "---\nbibliography: [a.bib, \"b c.bib\"]\ncsl: apa\nlang: pt-PT\nreference-section-title: \"Referências\"\n---\nBody.\n",
+      "meta": {
+        "bibliography": [
+          "a.bib",
+          "b c.bib"
+        ],
+        "csl": "apa",
+        "lang": "pt-PT",
+        "title": "Referências",
+        "references": [],
+        "referencesDropped": 0
+      }
+    },
+    {
+      "source": "---\nbibliography:\n  - a.bib\n  - b.bib\nreferences: [{\"id\":\"one\"}, {\"title\":\"no id\"}]\n---\nBody.\n",
+      "meta": {
+        "bibliography": [
+          "a.bib",
+          "b.bib"
+        ],
+        "csl": null,
+        "lang": null,
+        "title": null,
+        "references": [
+          {
+            "id": "one"
+          }
+        ],
+        "referencesDropped": 1
+      }
+    },
+    {
+      "source": "---\nreferences: not a list\n---\nBody.\n",
+      "meta": {
+        "bibliography": [],
+        "csl": null,
+        "lang": null,
+        "title": null,
+        "references": [],
+        "referencesDropped": -1
+      }
+    }
+  ],
+  "edits": [
+    {
+      "source": "Body.\n",
+      "key": "bibliography",
+      "value": "refs.bib",
+      "result": "---\nbibliography: refs.bib\n---\nBody.\n"
+    },
+    {
+      "source": "---\ncsl: apa\n---\nBody.\n",
+      "key": "csl",
+      "value": "vancouver",
+      "result": "---\ncsl: vancouver\n---\nBody.\n"
+    },
+    {
+      "source": "---\ncsl: apa\nlang: pt-PT\n---\nBody.\n",
+      "key": "csl",
+      "value": null,
+      "result": "---\nlang: pt-PT\n---\nBody.\n"
+    },
+    {
+      "source": "---\r\ntitle: Olá\r\n---\r\nBody.\r\n",
+      "key": "bibliography",
+      "value": "[a.bib, b.bib]",
+      "result": "---\r\ntitle: Olá\r\nbibliography: [a.bib, b.bib]\r\n---\r\nBody.\r\n"
+    },
+    {
+      "source": "---\ncsl: apa\n---\n",
+      "key": "references",
+      "value": "[{\"id\":\"one\"}]",
+      "result": "---\ncsl: apa\nreferences: [{\"id\":\"one\"}]\n---\n"
+    }
+  ],
+  "styles": [
+    {
+      "xml": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<style xmlns=\"http://purl.org/net/xbiblio/csl\" version=\"1.0\" default-locale=\"en-US\">\n  <info>\n    <title>A dependent journal</title>\n    <id>http://www.zotero.org/styles/a-dependent-journal</id>\n    <link href=\"http://www.zotero.org/styles/a-dependent-journal\" rel=\"self\"/>\n    <link href=\"http://www.zotero.org/styles/apa\" rel=\"independent-parent\"/>\n  </info>\n</style>\n",
+      "result": {
+        "ok": false,
+        "reason": "dependent",
+        "parent": "apa"
+      }
+    },
+    {
+      "xml": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<style xmlns=\"http://purl.org/net/xbiblio/csl\" class=\"in-text\" delimiter-precedes-last=\"always\" demote-non-dropping-particle=\"sort-only\" initialize-with=\"\" initialize-with-hyphen=\"false\" name-as-sort-order=\"all\" name-delimiter=\", \" names-delimiter=\", \" page-range-format=\"minimal\" sort-separator=\" \" version=\"1.0\">\n  <!-- This file was generated by the Style Variant Builder <https://github.com/citation-style-language/style-variant-builder>. To contribute changes, modify the template and regenerate variants. -->\n  <info>\n    <title>NLM/Vancouver: Citing Medicine 2nd edition (citation-sequence)</title>\n    <title-short>National Library of Medicine, ANSI/NISO Z39.29-2005 (R2010), ICMJE Recommendations/URMs (C-S)</title-short>\n    <id>http://www.zotero.org/styles/nlm-citation-sequence</id>\n    <link href=\"http://www.zotero.org/styles/nlm-citation-sequence\" rel=\"self\"/>\n    <link href=\"https://www.nlm.nih.gov/citingmedicine\" rel=\"documentation\"/>\n    <link href=\"https://www.nlm.nih.gov/bsd/uniform_requirements.html\" rel=\"documentation\"/>\n    <link href=\"https://www.icmje.org/recommendations/\" rel=\"documentation\"/>\n    <author>\n      <name>Michael Berkowitz</name>\n      <email>mberkowi@gmu.edu</email>\n    </author>\n    <author>\n      <name>Andrew Dunning</name>\n      <uri>https://orcid.org/0000-0003-0464-5036</uri>\n    </author>\n    <contributor>\n      <name>Petr Hlustik</name>\n      <uri>https://orcid.org/0000-0002-1951-0671</uri>\n    </contributor>\n    <contributor>\n      <name>Sebastian Karcher</name>\n      <uri>https://orcid.org/0000-0001-8249-7388</uri>\n    </contributor>\n    <contributor>\n      <name>Charles Parnot</name>\n      <uri>https://orcid.org/0000-0002-7346-5883</uri>\n    </contributor>\n    <contributor>\n      <name>Sean Takats</name>\n      <uri>https://orcid.org/0000-0002-7851-5069</uri>\n    </contributor>\n    <category citation-format=\"numeric\"/>\n    <category field=\"generic-base\"/>\n    <category field=\"medicine\"/>\n    <category field=\"science\"/>\n    <summary>Citing Medicine: The NLM Style Guide for Authors, Editors, and Publishers, 2nd edition (2015), based on ANSI/NISO Z39.29-2005 (R2010); citation-sequence system.</summary>\n    <updated>2026-01-07T00:00:00+00:00</updated>\n    <rights license=\"http://creativecommons.org/licenses/by-sa/3.0/\">This work is licensed under a Creative Commons Attribution-ShareAlike 3.0 License</rights>\n  </info>\n  <locale xml:lang=\"en\">\n    <date delimiter=\" \" form=\"text\">\n      <date-part name=\"year\"/>\n      <date-part form=\"short\" name=\"month\" strip-periods=\"true\"/>\n      <date-part name=\"day\"/>\n    </date>\n    <terms>\n      <term name=\"available at\">available from</term>\n      <term name=\"collection-editor\">\n        <single>editor</single>\n        <multiple>editors</multiple>\n      </term>\n      <term form=\"short\" name=\"month-06\">Jun.</term>\n      <term form=\"short\" name=\"month-07\">Jul.</term>\n      <term form=\"short\" name=\"month-09\">Sep.</term>\n      <term name=\"presented at\">presented at</term>\n      <term form=\"short\" name=\"section\">\n        <single>sect.</single>\n        <multiple>sects.</multiple>\n      </term>\n      <term form=\"short\" name=\"supplement\">\n        <single>suppl.</single>\n        <multiple>suppls.</multiple>\n      </term>\n    </terms>\n  </locale>\n  <locale xml:lang=\"fr\">\n    <date delimiter=\" \" form=\"text\">\n      <date-part name=\"day\"/>\n      <date-part form=\"short\" name=\"month\" strip-periods=\"true\"/>\n      <date-part name=\"year\"/>\n    </date>\n  </locale>\n  <!-- Variable labels -->\n  <macro name=\"label-collection-number\">\n    <group delimiter=\" \">\n      <choose>\n        <if is-numeric=\"collection-number\">\n          <label form=\"short\" variable=\"collection-number\"/>\n        </if>\n      </choose>\n      <text variable=\"collection-number\"/>\n    </group>\n  </macro>\n  <macro name=\"label-edition\">\n    <group delimiter=\" \">\n      <choose>\n        <if is-numeric=\"edition\">\n          <number form=\"ordinal\" variable=\"edition\"/>\n          <label form=\"short\" variable=\"edition\"/>\n        </if>\n        <else>\n          <text variable=\"edition\"/>\n        </else>\n      </choose>\n    </group>\n  </macro>\n  <macro name=\"label-number\">\n    <group delimiter=\": \">\n      <choose>\n        <if type=\"standard\"/>\n        <else-if is-numeric=\"number\" match=\"any\" type=\"legislation patent regulation\">\n          <label form=\"short\" variable=\"number\"/>\n        </else-if>\n      </choose>\n      <text variable=\"number\"/>\n    </group>\n  </macro>\n  <macro name=\"label-number-of-pages\">\n    <group delimiter=\" \">\n      <text variable=\"number-of-pages\"/>\n      <choose>\n        <if is-numeric=\"number-of-pages\">\n          <label form=\"short\" plural=\"never\" variable=\"number-of-pages\"/>\n        </if>\n      </choose>\n    </group>\n  </macro>\n  <macro name=\"label-page\">\n    <group delimiter=\" \">\n      <label form=\"short\" plural=\"never\" variable=\"page\"/>\n      <text variable=\"page\"/>\n    </group>\n  </macro>\n  <macro name=\"label-part-number-capitalized\">\n    <group delimiter=\" \">\n      <choose>\n        <if is-numeric=\"part-number\">\n          <!-- TODO: Replace with `part-number` label when CSL provides one -->\n          <text form=\"short\" term=\"part\" text-case=\"capitalize-first\"/>\n        </if>\n      </choose>\n      <text variable=\"part-number\"/>\n    </group>\n  </macro>\n  <macro name=\"label-supplement-number\">\n    <group delimiter=\" \">\n      <choose>\n        <if is-numeric=\"supplement-number\">\n          <!-- TODO: Replace with `supplement-number` label when CSL provides one -->\n          <text form=\"short\" strip-periods=\"true\" term=\"supplement\" text-case=\"capitalize-first\"/>\n        </if>\n      </choose>\n      <text text-case=\"capitalize-first\" variable=\"supplement-number\"/>\n    </group>\n  </macro>\n  <macro name=\"label-volume-capitalized\">\n    <group delimiter=\" \">\n      <choose>\n        <if is-numeric=\"volume\">\n          <label form=\"short\" text-case=\"capitalize-first\" variable=\"volume\"/>\n        </if>\n      </choose>\n      <text variable=\"volume\"/>\n    </group>\n  </macro>\n  <macro name=\"author\">\n    <names variable=\"author\">\n      <label prefix=\", \"/>\n      <substitute>\n        <names variable=\"editor-translator\"/>\n        <names variable=\"editor translator\"/>\n        <names variable=\"editor\"/>\n        <names variable=\"collection-editor\"/>\n      </substitute>\n    </names>\n  </macro>\n  <macro name=\"title\">\n    <choose>\n      <if type=\"webpage\" variable=\"container-title\">\n        <!-- `webpage` listed under `container-title` (Citing Medicine, ch. 25) -->\n        <text variable=\"container-title\"/>\n      </if>\n      <else>\n        <text variable=\"title\"/>\n      </else>\n    </choose>\n  </macro>\n  <macro name=\"content-type\">\n    <text variable=\"genre\"/>\n  </macro>\n  <macro name=\"type-of-medium\">\n    <choose>\n      <if variable=\"medium\">\n        <text text-case=\"capitalize-first\" variable=\"medium\"/>\n      </if>\n      <else-if match=\"any\" type=\"chapter entry-dictionary entry-encyclopedia paper-conference\"/>\n      <else-if variable=\"URL\">\n        <text term=\"internet\" text-case=\"capitalize-first\"/>\n      </else-if>\n    </choose>\n  </macro>\n  <macro name=\"container-preposition\">\n    <choose>\n      <if match=\"any\" type=\"chapter paper-conference entry-dictionary entry-encyclopedia\">\n        <text term=\"in\" text-case=\"capitalize-first\"/>\n      </if>\n    </choose>\n  </macro>\n  <macro name=\"secondary-authors\">\n    <names variable=\"editor\">\n      <label prefix=\", \"/>\n    </names>\n  </macro>\n  <macro name=\"container-title\">\n    <group delimiter=\", \">\n      <choose>\n        <if type=\"webpage\"/>\n        <else-if variable=\"container-title\">\n          <group delimiter=\". \">\n            <group delimiter=\" \">\n              <choose>\n                <if match=\"any\" type=\"article-journal review review-book\">\n                  <text form=\"short\" strip-periods=\"true\" variable=\"container-title\"/>\n                </if>\n                <else>\n                  <text variable=\"container-title\"/>\n                </else>\n              </choose>\n              <choose>\n                <if type=\"article-journal\" variable=\"DOI\"/>\n                <else-if type=\"article-journal\" variable=\"PMID\"/>\n                <else-if type=\"article-journal\" variable=\"PMCID\"/>\n                <else-if variable=\"URL\">\n                  <text prefix=\"[\" suffix=\"]\" term=\"internet\" text-case=\"capitalize-first\"/>\n                </else-if>\n              </choose>\n            </group>\n            <text macro=\"label-edition\"/>\n          </group>\n        </else-if>\n        <!-- TODO: add `event-name` and `event-place` -->\n        <else-if match=\"any\" type=\"bill legislation\">\n          <group delimiter=\". \">\n            <text variable=\"container-title\"/>\n            <group delimiter=\" \">\n              <text form=\"short\" term=\"section\" text-case=\"capitalize-first\"/>\n              <text variable=\"section\"/>\n            </group>\n          </group>\n          <text variable=\"number\"/>\n        </else-if>\n        <else-if type=\"speech\">\n          <group delimiter=\": \">\n            <group delimiter=\" \">\n              <text text-case=\"capitalize-first\" variable=\"genre\"/>\n              <text term=\"presented at\"/>\n            </group>\n            <text variable=\"event\"/>\n          </group>\n        </else-if>\n        <else>\n          <group delimiter=\", \">\n            <text macro=\"label-volume-capitalized\"/>\n            <text variable=\"volume-title\"/>\n          </group>\n          <group delimiter=\", \">\n            <text macro=\"label-part-number-capitalized\"/>\n            <text variable=\"part-title\"/>\n          </group>\n        </else>\n      </choose>\n    </group>\n  </macro>\n  <macro name=\"place-of-publication\">\n    <choose>\n      <if type=\"thesis\">\n        <text prefix=\"[\" suffix=\"]\" variable=\"publisher-place\"/>\n      </if>\n      <else-if type=\"speech\"/>\n      <else>\n        <text variable=\"publisher-place\"/>\n      </else>\n    </choose>\n  </macro>\n  <macro name=\"publisher\">\n    <choose>\n      <!-- discard publisher for serial publications -->\n      <if match=\"none\" type=\"article-journal article-magazine article-newspaper periodical post-weblog review review-book\">\n        <group delimiter=\": \">\n          <text macro=\"place-of-publication\"/>\n          <text variable=\"publisher\"/>\n        </group>\n      </if>\n    </choose>\n  </macro>\n  <macro name=\"date\">\n    <group delimiter=\" \">\n      <choose>\n        <if match=\"any\" type=\"article-journal article-magazine article-newspaper periodical post-weblog review review-book\">\n          <group delimiter=\":\">\n            <group delimiter=\" \">\n              <date form=\"text\" variable=\"issued\"/>\n              <choose>\n                <if type=\"article-journal\" variable=\"DOI\"/>\n                <else-if type=\"article-journal\" variable=\"PMID\"/>\n                <else-if type=\"article-journal\" variable=\"PMCID\"/>\n                <else>\n                  <text macro=\"date-of-citation\"/>\n                </else>\n              </choose>\n            </group>\n            <choose>\n              <if type=\"article-newspaper\">\n                <text variable=\"page\"/>\n              </if>\n            </choose>\n          </group>\n        </if>\n        <else-if match=\"any\" type=\"bill legislation\">\n          <date form=\"text\" variable=\"issued\"/>\n        </else-if>\n        <else-if type=\"report\">\n          <date date-parts=\"year-month\" form=\"text\" variable=\"issued\"/>\n          <text macro=\"date-of-citation\"/>\n        </else-if>\n        <else-if type=\"patent\">\n          <group delimiter=\", \">\n            <text variable=\"number\"/>\n            <date date-parts=\"year\" form=\"numeric\" variable=\"issued\"/>\n          </group>\n          <text macro=\"date-of-citation\"/>\n        </else-if>\n        <else-if type=\"speech\">\n          <group delimiter=\"; \">\n            <group delimiter=\" \">\n              <date form=\"text\" variable=\"issued\"/>\n              <text macro=\"date-of-citation\"/>\n            </group>\n            <text variable=\"event-place\"/>\n          </group>\n        </else-if>\n        <else>\n          <date date-parts=\"year\" form=\"numeric\" variable=\"issued\"/>\n          <text macro=\"date-of-citation\"/>\n        </else>\n      </choose>\n    </group>\n  </macro>\n  <macro name=\"identifier-serial\">\n    <choose>\n      <if match=\"any\" type=\"article-journal article-magazine periodical post-weblog review review-book\">\n        <group delimiter=\":\">\n          <group>\n            <text variable=\"collection-title\"/>\n            <text variable=\"volume\"/>\n            <group delimiter=\" \" prefix=\"(\" suffix=\")\">\n              <text variable=\"issue\"/>\n              <text macro=\"label-supplement-number\"/>\n            </group>\n          </group>\n          <text macro=\"location-pagination-serial\"/>\n        </group>\n      </if>\n    </choose>\n  </macro>\n  <macro name=\"date-of-citation\">\n    <choose>\n      <if variable=\"URL\">\n        <group delimiter=\" \" prefix=\"[\" suffix=\"]\">\n          <text term=\"cited\"/>\n          <date form=\"text\" variable=\"accessed\"/>\n        </group>\n      </if>\n    </choose>\n  </macro>\n  <macro name=\"location-pagination-monographic\">\n    <group delimiter=\" \">\n      <choose>\n        <if match=\"any\" type=\"article-journal article-magazine article-newspaper review review-book\"/>\n        <else-if type=\"book\">\n          <text macro=\"label-number-of-pages\"/>\n        </else-if>\n        <else>\n          <text macro=\"label-page\"/>\n        </else>\n      </choose>\n    </group>\n  </macro>\n  <macro name=\"location-pagination-serial\">\n    <choose>\n      <if variable=\"number\">\n        <text variable=\"number\"/>\n      </if>\n      <else>\n        <text variable=\"page\"/>\n      </else>\n    </choose>\n  </macro>\n  <macro name=\"webpage-part\">\n    <choose>\n      <if type=\"webpage\" variable=\"container-title\">\n        <text variable=\"title\"/>\n      </if>\n    </choose>\n  </macro>\n  <macro name=\"series\">\n    <choose>\n      <if match=\"any\" type=\"article-journal article-magazine article-newspaper periodical post-weblog review review-book\"/>\n      <else-if variable=\"collection-title\">\n        <group delimiter=\". \" prefix=\"(\" suffix=\")\">\n          <names variable=\"collection-editor\">\n            <label prefix=\", \"/>\n          </names>\n          <group delimiter=\"; \">\n            <text variable=\"collection-title\"/>\n            <text macro=\"label-collection-number\"/>\n          </group>\n        </group>\n      </else-if>\n    </choose>\n  </macro>\n  <macro name=\"report-number\">\n    <choose>\n      <if type=\"report\" variable=\"number\">\n        <group delimiter=\" \">\n          <choose>\n            <if variable=\"genre\">\n              <text text-case=\"capitalize-first\" variable=\"genre\"/>\n            </if>\n            <else>\n              <text term=\"report\" text-case=\"capitalize-first\"/>\n            </else>\n          </choose>\n          <text macro=\"label-number\"/>\n        </group>\n      </if>\n    </choose>\n  </macro>\n  <macro name=\"availability\">\n    <group delimiter=\". \">\n      <group delimiter=\": \">\n        <text text-case=\"capitalize-first\" value=\"located at\"/>\n        <group delimiter=\"; \">\n          <group delimiter=\", \">\n            <text variable=\"archive_collection\"/>\n            <text variable=\"archive\"/>\n            <text variable=\"archive-place\"/>\n          </group>\n          <text variable=\"archive_location\"/>\n        </group>\n      </group>\n      <group delimiter=\" \">\n        <choose>\n          <if type=\"article-journal\" variable=\"DOI\"/>\n          <else-if type=\"article-journal\" variable=\"PMID\"/>\n          <else-if type=\"article-journal\" variable=\"PMCID\"/>\n          <else>\n            <group delimiter=\": \">\n              <text term=\"available at\" text-case=\"capitalize-first\"/>\n              <text variable=\"URL\"/>\n            </group>\n          </else>\n        </choose>\n        <text prefix=\"doi:\" variable=\"DOI\"/>\n      </group>\n    </group>\n  </macro>\n  <macro name=\"notes\">\n    <group delimiter=\". \" suffix=\".\">\n      <group delimiter=\"; \">\n        <group delimiter=\": \">\n          <text value=\"PubMed PMID\"/>\n          <text variable=\"PMID\"/>\n        </group>\n        <group delimiter=\": \">\n          <text value=\"PubMed Central PMCID\"/>\n          <text variable=\"PMCID\"/>\n        </group>\n      </group>\n      <text variable=\"references\"/>\n    </group>\n  </macro>\n  <citation collapse=\"citation-number\">\n    <sort>\n      <key variable=\"citation-number\"/>\n    </sort>\n    <layout delimiter=\",\" prefix=\"(\" suffix=\")\">\n      <text variable=\"citation-number\"/>\n    </layout>\n  </citation>\n  <macro name=\"bibliography\">\n    <group delimiter=\" \">\n      <group delimiter=\". \" suffix=\".\">\n        <text macro=\"author\"/>\n        <group delimiter=\" \">\n          <text macro=\"title\"/>\n          <text macro=\"content-type\" prefix=\"[\" suffix=\"]\"/>\n          <choose>\n            <if type=\"webpage\" variable=\"container-title\">\n              <text macro=\"type-of-medium\" prefix=\"[\" suffix=\"]\"/>\n            </if>\n            <else-if match=\"none\" variable=\"container-title\">\n              <text macro=\"type-of-medium\" prefix=\"[\" suffix=\"]\"/>\n            </else-if>\n          </choose>\n        </group>\n        <choose>\n          <if match=\"none\" variable=\"container-title\">\n            <text macro=\"label-edition\"/>\n          </if>\n        </choose>\n        <group delimiter=\": \">\n          <text macro=\"container-preposition\"/>\n          <group delimiter=\". \">\n            <text macro=\"secondary-authors\"/>\n            <text macro=\"container-title\"/>\n          </group>\n        </group>\n        <group delimiter=\"; \">\n          <text macro=\"publisher\"/>\n          <group delimiter=\";\">\n            <text macro=\"date\"/>\n            <text macro=\"identifier-serial\"/>\n          </group>\n        </group>\n        <text macro=\"location-pagination-monographic\"/>\n        <text macro=\"webpage-part\"/>\n        <text macro=\"series\"/>\n        <text macro=\"report-number\"/>\n      </group>\n      <text macro=\"availability\"/>\n      <text macro=\"notes\"/>\n    </group>\n  </macro>\n  <bibliography et-al-min=\"7\" et-al-use-first=\"6\" second-field-align=\"flush\">\n    <layout>\n      <text suffix=\".\" variable=\"citation-number\"/>\n      <text macro=\"bibliography\"/>\n    </layout>\n  </bibliography>\n</style>\n",
+      "result": {
+        "ok": true,
+        "title": "NLM/Vancouver: Citing Medicine 2nd edition (citation-sequence)"
+      }
+    },
+    {
+      "xml": "not a style",
+      "result": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    },
+    {
+      "xml": "<style><info></style>",
+      "result": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    }
+  ]
+}
