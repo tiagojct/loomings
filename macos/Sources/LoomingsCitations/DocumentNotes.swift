@@ -60,12 +60,20 @@ extension CitationReport {
 
 /// The name of a chosen file for the frontmatter.
 public enum CitationFileName {
-    /// A name from `folder` when the file is in it, else the absolute path.
+    /// A path from `folder`, with `../` when the file is outside it. With no
+    /// folder, or when the two share only the root, the absolute path. This
+    /// is the rule of `ImageLink.destination`, with no percent encoding: the
+    /// frontmatter is not a URL. A bare name has no `./`.
     public static func value(for file: URL, folder: URL?) -> String {
-        let path = file.standardizedFileURL.path
-        guard let folder else { return path }
-        let base = folder.standardizedFileURL.path
-        let prefix = base.hasSuffix("/") ? base : base + "/"
-        return path.hasPrefix(prefix) ? String(path.dropFirst(prefix.count)) : path
+        let target = file.standardizedFileURL.resolvingSymlinksInPath()
+        guard let folder else { return target.path }
+        let path = target.pathComponents
+        let base = folder.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        var shared = 0
+        while shared < min(path.count, base.count), path[shared] == base[shared] {
+            shared += 1
+        }
+        guard shared > 1 else { return target.path }
+        return (Array(repeating: "..", count: base.count - shared) + path[shared...]).joined(separator: "/")
     }
 }

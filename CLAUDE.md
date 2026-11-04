@@ -153,6 +153,14 @@ release numbers.
   snapshot yields. `Tests/LoomingsTeachingTests/Fixtures/*.json` are the
   contract the web port must pass too. Lesson checks live in
   `lessons/checks.json` (exported with the lessons).
+- `Sources/LoomingsCitations` — runs the bundle of `src/citations` in
+  JavaScriptCore on a private queue (`CitationEngine`), so the citation rules
+  are not repeated in Swift. An engine call waits: do not call it from the main
+  thread. `CitationGate` keeps JavaScript away from a document with no
+  `bibliography:` or `references:` key. `CitationSourceReader` reads the files
+  that the plan of the citation code names. `ReferenceList` is the one rule that
+  is in both languages: the filter of the References view runs on each key, and
+  the `filters` fixture keeps it the same as `filterLibrary`.
 - `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
   app-owned handler, snapshot, visible-region styling, footprint) over
   10 KB–10 MB corpora.
@@ -286,6 +294,32 @@ Stage 2 decisions worth preserving:
   preview's URL filter refuses a bare name, and encodes only what would end
   the destination, so accented names stay readable. Web documents have no
   folder, so this is native only.
+- Citation flow: `CitationController` owns one engine for each window. It
+  asks for a report after a pause, on its own queue, and never joins the parse.
+  The preview, the export, the marks and the References view read the report.
+  A frontmatter change or a citation insertion goes through
+  `CitationController.change`: the work runs on the queue, then the window
+  applies one undoable edit, and starts again if the writer typed.
+- Citation resources: `macos/Resources/Citations` holds `citations.js`, the
+  styles and locales, the licences and `styles.json` (the titles of the
+  References menu, because the menu needs them before JavaScript runs). All of
+  it comes from the web code. After a change in `src/citations/`, run
+  `npm run export:native`, then `node macos/scripts/render-citation-fixtures.mjs`.
+- References menu: its items go to the first responder, so a window with no
+  editor leaves them disabled. The checked items come from the citation queue
+  in `menuWillOpen`, so the first opening for a text gets its marks a moment
+  later, and it starts an engine for a document with no citations. Do not use
+  `menuNeedsUpdate` for this: it also runs for each key equivalent.
+- The right column (`rightColumn`) holds the preview and `ReferencesView`.
+  `wantsReferences` is per window and it stays through mode changes. While the
+  library shows, the preview does not render and has no sync or pairing. The
+  command does not move the divider. The column is hidden before the first
+  layout: with it, the split view gave it all the width, and the editor scrolled
+  sideways. In `ReferencesView`, each width constraint stays below the split
+  view's holding priority (250): a stronger one moves the divider, and one above
+  500 shrinks the window. `--snapshot` with
+  `-LoomingsSnapshotReferences YES` writes `references.png` and
+  `references-page.png`.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).

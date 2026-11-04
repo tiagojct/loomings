@@ -10,7 +10,9 @@ import PDFKit
 /// `-LoomingsSnapshotWidth 640` sets the window width;
 /// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split;
 /// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption;
-/// `-LoomingsSnapshotCompareWith <file>` also writes compare.png.
+/// `-LoomingsSnapshotCompareWith <file>` also writes compare.png;
+/// `-LoomingsSnapshotReferences YES` also writes references.png, Split with the library,
+/// and references-page.png, Preview with the library.
 /// The input file is the base for relative images and bibliographies. The
 /// document stays untitled, so nothing writes to that file.
 /// Writes write.png, split.png and preview.png, then exits.
@@ -60,14 +62,20 @@ enum Snapshot {
                 controller.pairBothForSnapshot(editorLocation: pairLocation)
                 settle(0.3)
             }
-            guard let frame = window.contentView?.superview else { continue }
-            guard let bitmap = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { continue }
-            frame.cacheDisplay(in: frame.bounds, to: bitmap)
-            if let png = bitmap.representation(using: .png, properties: [:]) {
-                try? png.write(to: output.appendingPathComponent("\(name).png"))
-                print(output.appendingPathComponent("\(name).png").path)
-            }
+            write(window, to: output.appendingPathComponent("\(name).png"))
         }
+        // The library, in the two places that show it.
+        if UserDefaults.standard.bool(forKey: "LoomingsSnapshotReferences") {
+            controller.setViewMode(.split)
+            controller.toggleReferences(nil)
+            settle(1.2)
+            write(window, to: output.appendingPathComponent("references.png"))
+            controller.setViewMode(.preview)
+            settle(1.2)
+            write(window, to: output.appendingPathComponent("references-page.png"))
+            controller.toggleReferences(nil)
+        }
+
         // Compare With, against another file.
         if let other = UserDefaults.standard.string(forKey: "LoomingsSnapshotCompareWith"),
            let otherText = try? String(contentsOfFile: other, encoding: .utf8) {
@@ -98,6 +106,16 @@ enum Snapshot {
         controller.editor.setText("")
         window.close()
         return 0
+    }
+
+    private static func write(_ window: NSWindow, to url: URL) {
+        guard let frame = window.contentView?.superview,
+              let bitmap = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
+        frame.cacheDisplay(in: frame.bounds, to: bitmap)
+        if let png = bitmap.representation(using: .png, properties: [:]) {
+            try? png.write(to: url)
+            print(url.path)
+        }
     }
 
     /// The first report takes about 2 s. A shot must not show literal keys.

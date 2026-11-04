@@ -10,7 +10,7 @@ import { escapeHtml } from '../html.js';
 import { frontmatterLines, splitLines } from '../teaching/parse.js';
 import { setCitationMeta } from './frontmatter.js';
 import { scanCitations } from './scan.js';
-import { BUNDLED_LOCALES, BUNDLED_STYLES, DEFAULT_STYLE, fileBaseName, localeFor } from './style.js';
+import { BUNDLED_LOCALES, BUNDLED_STYLES, DEFAULT_STYLE, LOCALE_LABELS, fileBaseName, localeFor } from './style.js';
 
 /**
  * @typedef {import('./session.js').CitationReport} CitationReport
@@ -20,13 +20,6 @@ import { BUNDLED_LOCALES, BUNDLED_STYLES, DEFAULT_STYLE, fileBaseName, localeFor
  */
 
 const MAX_ROWS = 200;
-
-const LANGUAGE_LABELS = /** @type {Record<string, string>} */ ({
-  'en-US': 'English (US)',
-  'en-GB': 'English (UK)',
-  'pt-PT': 'Português (Portugal)',
-  'es-ES': 'Español (España)',
-});
 
 /**
  * The entries with every word of the query in the key, the authors, the year
@@ -194,6 +187,18 @@ export function toggleBibliography(list, name) {
   return bibliographyValue(others.length < list.length ? others : [...list, name]);
 }
 
+/**
+ * The value of `bibliography` after the native app chooses a file. A path
+ * names one file, so a name stays in the list, and a new one goes at the end.
+ *
+ * @param {string[]} list  the names in the frontmatter
+ * @param {string} path
+ * @returns {string|null}
+ */
+export function withBibliography(list, path) {
+  return bibliographyValue(list.includes(path) ? list : [...list, path]);
+}
+
 /** The value of `bibliography` for these names. */
 function bibliographyValue(/** @type {string[]} */ names) {
   if (!names.length) return null;
@@ -239,7 +244,7 @@ export function styleChoices(meta, files) {
  */
 export function languageChoices(meta) {
   const wanted = localeFor(meta.lang);
-  return BUNDLED_LOCALES.map((value) => ({ value, label: LANGUAGE_LABELS[value] ?? value, checked: value === wanted }));
+  return BUNDLED_LOCALES.map((value) => ({ value, label: LOCALE_LABELS[value] ?? value, checked: value === wanted }));
 }
 
 /**

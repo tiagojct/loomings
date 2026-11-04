@@ -81,10 +81,16 @@ struct CitationFileNameTests {
         #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/a/paper/data/refs.bib"), folder: folder) == "data/refs.bib")
     }
 
-    @Test("A file outside the folder, or no folder, gives an absolute path")
+    @Test("A file in a near folder climbs from the folder, with no percent encoding")
+    func climbs() {
+        #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/a/refs.bib"), folder: folder) == "../refs.bib")
+        #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/a/paper2/refs.bib"), folder: folder) == "../paper2/refs.bib")
+        #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/b/my refs/refs (1).bib"), folder: folder) == "../../b/my refs/refs (1).bib")
+    }
+
+    @Test("A file that shares only the root, or no folder, gives an absolute path")
     func absolute() {
-        #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/a/other/refs.bib"), folder: folder) == "/Users/a/other/refs.bib")
-        #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/a/paper2/refs.bib"), folder: folder) == "/Users/a/paper2/refs.bib")
+        #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Volumes/d/refs.bib"), folder: folder) == "/Volumes/d/refs.bib")
         #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/a/paper/refs.bib"), folder: nil) == "/Users/a/paper/refs.bib")
     }
 }

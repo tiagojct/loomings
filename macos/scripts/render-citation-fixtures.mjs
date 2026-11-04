@@ -7,6 +7,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCitationMeta, setCitationMeta } from '../../src/citations/frontmatter.js';
 import { planNativeSources } from '../../src/citations/library.js';
+import { filterLibrary } from '../../src/citations/panel.js';
 import { createSession } from '../../src/citations/session.js';
 import { checkStyle } from '../../src/citations/style.js';
 
@@ -218,12 +219,22 @@ const plans = [
   { request: { bibliography: ['latin.bib'], csl: 'own.csl', lang: null }, known: { files: [{ name: 'own.csl', kind: 'csl', text: OWN_STYLE }], tried: ['latin.bib', 'own.csl'], unreadable: ['latin.bib'] } },
 ];
 
+// The Swift filter must give the same keys as filterLibrary.
+const library = [
+  { key: 'jacome2020', authors: 'Jácome, Almeida', year: '2020', title: 'Saúde e ciência' },
+  { key: 'smith2019', authors: 'Smith', year: '2019', title: 'A book on lung function' },
+  { key: 'muller2001', authors: 'Müller', year: '2001', title: 'Über die Lunge' },
+  { key: 'nguyen2015', authors: 'Nguyễn', year: '2015', title: '' },
+];
+const filterQueries = ['', '   ', 'jacome', 'JÁCOME', 'saude ciencia', 'CIÊNCIA 2020', '2019', 'lung  function', 'muller', 'uber', 'nguyen', 'absent', 'smith absent'];
+
 const out = {
   plans: plans.map((p) => ({ ...p, plan: planNativeSources(p.request, p.known) })),
   reports: cases.map((c) => ({ ...c, report: report(c) })),
   meta: metaSources.map((source) => ({ source, meta: readCitationMeta(source) })),
   edits: edits.map((e) => ({ ...e, result: setCitationMeta(e.source, e.key, e.value) })),
   styles: styles.map((xml) => ({ xml, result: checkStyle(xml) })),
+  filters: { library, cases: filterQueries.map((query) => ({ query, keys: filterLibrary(library, query).map((e) => e.key) })) },
 };
 
 writeFileSync(join(fixtures, 'citation-fixtures.json'), JSON.stringify(out, null, 2) + '\n');

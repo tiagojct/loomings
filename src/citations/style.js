@@ -15,6 +15,12 @@ export const BUNDLED_STYLES = [
 export const DEFAULT_STYLE = 'chicago-author-date';
 export const BUNDLED_LOCALES = ['en-US', 'en-GB', 'pt-PT', 'es-ES'];
 export const DEFAULT_LOCALE = 'en-US';
+export const LOCALE_LABELS = /** @type {Record<string, string>} */ ({
+  'en-US': 'English (US)',
+  'en-GB': 'English (UK)',
+  'pt-PT': 'Português (Portugal)',
+  'es-ES': 'Español (España)',
+});
 
 /**
  * The name that matches a frontmatter value to a stored or bundled file: no

@@ -107,12 +107,12 @@ final class CitationController {
     /// than the editor's text.
     var latestResult: (source: String, report: CitationReport)? { latest }
 
-    /// Runs `edit` on the citation queue, and gives the changed text to
-    /// `completion` on the main actor. The text in the editor stays as it is.
-    func change(
+    /// Runs `edit` on the citation queue, and gives its result to `completion`
+    /// on the main actor. The text in the editor stays as it is.
+    func change<Value: Sendable>(
         source: String,
-        with edit: @escaping TextEdit,
-        completion: @escaping (Result<String, Error>) -> Void
+        with edit: @escaping @Sendable (any CitationEngineProtocol, String) throws -> Value,
+        completion: @escaping (Result<Value, Error>) -> Void
     ) {
         let worker = self.worker
         worker.queue.async {

@@ -1,4 +1,5 @@
 import AppKit
+import LoomingsCitations
 import LoomingsDocuments
 import LoomingsEditor
 import LoomingsShare
@@ -12,6 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var shelfMenu: NSMenu?
     private var outlineMenu: NSMenu?
     private var compareMenu: NSMenu?
+    private var referencesMenu: NSMenu?
+    private var citationStyleMenu: NSMenu?
+    private var citationLanguageMenu: NSMenu?
     private var learnItems: [LearnItem] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -80,6 +84,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     // MARK: - Menu
 
     private func buildMenu() {
+        let mainMenu = makeMainMenu()
+        NSApp.windowsMenu = mainMenu.items.last?.submenu
+        NSApp.mainMenu = mainMenu
+    }
+
+    func makeMainMenu() -> NSMenu {
         let mainMenu = NSMenu()
 
         let appMenuItem = NSMenuItem()
@@ -98,6 +108,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         mainMenu.addItem(formatMenuItem)
         formatMenuItem.submenu = makeFormatMenu()
 
+        let referencesMenuItem = NSMenuItem()
+        mainMenu.addItem(referencesMenuItem)
+        referencesMenuItem.submenu = makeReferencesMenu()
+
         let themeMenuItem = NSMenuItem()
         mainMenu.addItem(themeMenuItem)
         themeMenuItem.submenu = makeThemeMenu()
@@ -113,9 +127,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let windowMenuItem = NSMenuItem()
         mainMenu.addItem(windowMenuItem)
         windowMenuItem.submenu = makeWindowMenu()
-        NSApp.windowsMenu = windowMenuItem.submenu
 
-        NSApp.mainMenu = mainMenu
+        return mainMenu
     }
 
     private func makeAppMenu() -> NSMenu {
@@ -535,6 +548,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
             MIT licensed. Colours from Ensigns (ensigns.tiagojacinto.eu, CC BY 4.0).
             Typefaces: JetBrains Mono and Source Serif 4 (SIL Open Font License).
+            Citations by citeproc-js (CPAL) and citation-js (MIT). Citation styles
+            and locales from the CSL project (CC BY-SA 3.0).
 
             loomings.tiagojacinto.eu
             github.com/tiagojct/loomings
@@ -575,6 +590,69 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             withTitle: "Link",
             action: #selector(EditorWindowController.insertLink(_:)),
             keyEquivalent: "k"
+        )
+        return menu
+    }
+
+    /// The target of each item is the first responder, so a window with no
+    /// editor leaves them disabled. The titles come from the web code, through
+    /// `styles.json`.
+    private func makeReferencesMenu() -> NSMenu {
+        let menu = NSMenu(title: "References")
+        menu.delegate = self
+        referencesMenu = menu
+        let choices = Bundle.main.resourceURL.flatMap {
+            try? CitationMenuChoices(resources: $0.appendingPathComponent("Citations"))
+        }
+
+        menu.addItem(
+            withTitle: "Choose Bibliography\u{2026}",
+            action: #selector(EditorWindowController.chooseBibliography(_:)),
+            keyEquivalent: ""
+        )
+
+        let styles = NSMenu(title: "Citation Style")
+        citationStyleMenu = styles
+        for style in choices?.styles ?? [] {
+            let item = NSMenuItem(
+                title: style.title,
+                action: #selector(EditorWindowController.chooseBundledStyle(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = style.id
+            styles.addItem(item)
+        }
+        if choices != nil { styles.addItem(.separator()) }
+        styles.addItem(
+            withTitle: "Choose File\u{2026}",
+            action: #selector(EditorWindowController.chooseStyleFile(_:)),
+            keyEquivalent: ""
+        )
+        let stylesItem = NSMenuItem(title: "Citation Style", action: nil, keyEquivalent: "")
+        stylesItem.submenu = styles
+        menu.addItem(stylesItem)
+
+        let languages = NSMenu(title: "Language")
+        citationLanguageMenu = languages
+        for language in choices?.languages ?? [] {
+            let item = NSMenuItem(
+                title: language.label,
+                action: #selector(EditorWindowController.chooseLanguage(_:)),
+                keyEquivalent: ""
+            )
+            item.representedObject = language.id
+            languages.addItem(item)
+        }
+        let languagesItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
+        languagesItem.submenu = languages
+        languagesItem.isHidden = choices == nil
+        menu.addItem(languagesItem)
+        menu.addItem(.separator())
+
+        menu.addItem(
+            withTitle: "Show References",
+            action: #selector(EditorWindowController.toggleReferences(_:)),
+            keyEquivalent: ""
         )
         return menu
     }
@@ -753,6 +831,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     }
 
     // MARK: - Dynamic menus
+
+    /// Not `menuNeedsUpdate`: that also runs for each key equivalent, and this
+    /// asks the citation queue. The answer can come while the menu is open.
+    func menuWillOpen(_ menu: NSMenu) {
+        guard menu === referencesMenu else { return }
+        let window = NSApp.keyWindow ?? NSApp.mainWindow
+        (window?.windowController as? EditorWindowController)?.refreshReferenceChoices { [weak self] in
+            self?.citationStyleMenu?.update()
+            self?.citationLanguageMenu?.update()
+        }
+    }
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         if menu === recentMenu {

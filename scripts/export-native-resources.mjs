@@ -7,6 +7,7 @@ import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles } from '../src/palettes.js';
+import { BUNDLED_LOCALES, BUNDLED_STYLES, LOCALE_LABELS } from '../src/citations/style.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const resources = join(root, 'macos', 'Resources');
@@ -39,6 +40,15 @@ cpSync(join(root, 'src', 'citations', 'styles'), join(citations, 'styles'), { re
 cpSync(join(root, 'src', 'citations', 'locales'), join(citations, 'locales'), { recursive: true });
 cpSync(join(root, 'src', 'citations', 'LICENSE-CSL.md'), join(citations, 'LICENSE-CSL.md'));
 cpSync(join(root, 'node_modules', 'citeproc', 'LICENSE'), join(citations, 'LICENSE-citeproc'));
+cpSync(join(root, 'public', 'licenses', 'citation-js-LICENSE.txt'), join(citations, 'LICENSE-citation-js'));
+// The titles for the native menu. The menu needs them before JavaScript runs.
+writeFileSync(
+  join(citations, 'styles.json'),
+  JSON.stringify({
+    styles: BUNDLED_STYLES,
+    languages: BUNDLED_LOCALES.map((id) => ({ id, label: LOCALE_LABELS[id] ?? id })),
+  }, null, 2) + '\n'
+);
 if (existsSync(bundle)) {
   cpSync(bundle, join(citations, 'citations.js'));
   console.log('exported Citations/ with the bundle');

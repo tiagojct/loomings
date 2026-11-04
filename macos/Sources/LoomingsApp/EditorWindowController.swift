@@ -30,6 +30,9 @@ final class EditorWindowController: NSWindowController,
     private let scrollView = DocumentScrollView()
     private let previewScrollView = NSScrollView()
     private let previewTextView = PreviewTextView()
+    /// The right pane of Split, and the page of Preview: the preview or the library.
+    private let rightColumn = NSView()
+    private let referencesView = ReferencesView()
     private let splitView = ThemedSplitView()
     private let statusBar = StatusBarView()
     private var statusHeightConstraint: NSLayoutConstraint!
@@ -203,8 +206,23 @@ final class EditorWindowController: NSWindowController,
         splitView.dividerStyle = .thin
         splitView.delegate = self
         splitView.translatesAutoresizingMaskIntoConstraints = false
+        rightColumn.translatesAutoresizingMaskIntoConstraints = false
+        referencesView.translatesAutoresizingMaskIntoConstraints = false
+        for view in [previewScrollView, referencesView] as [NSView] {
+            rightColumn.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.topAnchor.constraint(equalTo: rightColumn.topAnchor),
+                view.bottomAnchor.constraint(equalTo: rightColumn.bottomAnchor),
+                view.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
+            ])
+        }
+
+        // A window starts in Write. With the column in the first layout, the
+        // split view can give it all the width, and the editor scrolls sideways.
+        rightColumn.isHidden = true
         splitView.addArrangedSubview(scrollView)
-        splitView.addArrangedSubview(previewScrollView)
+        splitView.addArrangedSubview(rightColumn)
 
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(splitView)
@@ -265,6 +283,12 @@ final class EditorWindowController: NSWindowController,
         citations.onReport = { [weak self] report in
             self?.apply(report)
         }
+        referencesView.onInsert = { [weak self] key in
+            self?.insertCitation(key: key)
+        }
+        referencesView.onLeave = { [weak self] in
+            self?.leaveReferences()
+        }
         refreshCompanion()
         statusBar.onExerciseClick = { [weak self] in
             self?.showChecklist()
@@ -288,6 +312,7 @@ final class EditorWindowController: NSWindowController,
 
     func updateCitations() {
         citations.update(source: editor.source, documentURL: loomingsDocument?.citationDocumentURL)
+        updateLibrary()
         guard citations.isActive else {
             editor.clearCitations()
             updateNoteCount()
@@ -303,6 +328,7 @@ final class EditorWindowController: NSWindowController,
 
     private func apply(_ report: CitationReport) {
         refreshPreview()
+        updateLibrary()
         applyMarks(of: report, keys: report.library.map {
             CitationCompletion(key: $0.key, authors: $0.authors, year: $0.year, title: $0.title)
         })
@@ -369,6 +395,216 @@ final class EditorWindowController: NSWindowController,
         }
     }
 
+    // MARK: - References menu
+
+    /// Why a chosen file cannot be used.
+    private enum CitationChoiceError: Error, CustomStringConvertible {
+        case style(String)
+
+        var description: String {
+            switch self {
+            case .style(let reason): return reason
+            }
+        }
+    }
+
+    /// The folder for a chosen file. An untitled or shelf document has none,
+    /// so its paths are absolute.
+    private var citationFolder: URL? {
+        loomingsDocument?.citationDocumentURL?.deletingLastPathComponent()
+    }
+
+    private func chooseFile(type: String, message: String, then use: @escaping (URL) -> Void) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: type)].compactMap { $0 }
+        panel.allowsOtherFileTypes = true
+        panel.message = message
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else { return }
+            use(url)
+        }
+    }
+
+    @objc func chooseBibliography(_ sender: Any?) {
+        chooseFile(type: "bib", message: "Choose a BibTeX file for this document.") { [weak self] url in
+            self?.addBibliography(url)
+        }
+    }
+
+    /// Adds the file to `bibliography`. The frontmatter comes when it is needed.
+    func addBibliography(_ url: URL) {
+        let path = CitationFileName.value(for: url, folder: citationFolder)
+        changeFrontmatter { engine, source in
+            try engine.addBibliography(source, path: path)
+        }
+    }
+
+    @objc func chooseBundledStyle(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        setChoice(key: "csl", value: id) { $0.style }
+    }
+
+    @objc func chooseLanguage(_ sender: NSMenuItem) {
+        guard let tag = sender.representedObject as? String else { return }
+        setChoice(key: "lang", value: tag) { $0.language }
+    }
+
+    /// A choice that is on stays on: with no `csl:` the default style is on,
+    /// and a click must write nothing.
+    private func setChoice(key: String, value: String, current: @escaping @Sendable (CitationChoices) -> String?) {
+        changeFrontmatter { engine, source in
+            current(try engine.referenceChoices(source)) == value
+                ? source
+                : try engine.setMeta(source, key: key, value: value)
+        }
+    }
+
+    @objc func chooseStyleFile(_ sender: Any?) {
+        chooseFile(type: "csl", message: "Choose a CSL style for this document.") { [weak self] url in
+            self?.useStyleFile(url)
+        }
+    }
+
+    /// Sets the style file. The plan of the citation code reads the file as a
+    /// document would: a dependent style with no parent gives a sheet, and
+    /// nothing is written.
+    func useStyleFile(_ url: URL) {
+        let folder = citationFolder
+        let path = CitationFileName.value(for: url, folder: folder)
+        changeFrontmatter { engine, source in
+            let request = CitationSourceRequest(bibliography: [], csl: path, lang: nil)
+            let load = try CitationSourceReader.load(request, folder: folder, engine: engine)
+            if let reason = load.sources.styleError { throw CitationChoiceError.style(reason) }
+            return try engine.setMeta(source, key: "csl", value: path)
+        }
+    }
+
+    /// The checked items for one text. The answer comes from the citation
+    /// queue, so a menu that opens for a new text gets its marks a moment later.
+    private var referenceChoices: (source: String, choices: CitationChoices)?
+
+    private var currentChoices: CitationChoices? {
+        guard let referenceChoices, (referenceChoices.source as NSString).isEqual(to: editor.source) else { return nil }
+        return referenceChoices.choices
+    }
+
+    /// Calls `done` when the menu can show the marks of the current text. The
+    /// first call for a document with no citations starts its engine.
+    func refreshReferenceChoices(then done: @escaping () -> Void) {
+        guard currentChoices == nil else {
+            done()
+            return
+        }
+        let source = editor.source
+        citations.change(source: source) { engine, text in
+            try engine.referenceChoices(text)
+        } completion: { [weak self] result in
+            guard let self, case .success(let choices) = result else { return }
+            self.referenceChoices = (source, choices)
+            done()
+        }
+    }
+
+    // MARK: - References column
+
+    /// The writer asked for the library. The state is per window.
+    private var wantsReferences = false
+
+    /// The right column shows the library in place of the preview.
+    private var isLibraryShown: Bool { wantsReferences && viewMode != .write }
+
+    /// Write goes to Split first, and the command then only shows the library.
+    @objc func toggleReferences(_ sender: Any?) {
+        wantsReferences = viewMode == .write ? true : !wantsReferences
+        if viewMode == .write {
+            setViewMode(.split)
+        } else {
+            applyRightColumn()
+        }
+        if isLibraryShown {
+            window?.makeFirstResponder(referencesView.filterField)
+        } else {
+            refreshPreview()
+            layoutPreview()
+            leaveReferences()
+        }
+    }
+
+    private func leaveReferences() {
+        window?.makeFirstResponder(viewMode == .preview ? previewTextView : editor.textView)
+    }
+
+    /// Puts the preview or the library in the right column. The divider stays
+    /// where the writer put it.
+    private func applyRightColumn() {
+        let showRight = viewMode != .write
+        let showLibrary = isLibraryShown
+        clearPairing()
+        rightColumn.isHidden = !showRight
+        previewScrollView.isHidden = !showRight || showLibrary
+        referencesView.isHidden = !showLibrary
+        updateLibrary()
+    }
+
+    private func updateLibrary() {
+        guard isLibraryShown else { return }
+        referencesView.update(
+            report: citations.latestResult?.report,
+            waiting: citations.isActive && citations.latestResult == nil
+        )
+    }
+
+    /// Inserts a citation of `key` at the end of the selection, by the rule of
+    /// the citation code: one edit, one Undo. The focus goes back to the
+    /// editor. From Preview, the editor comes back first, as on the web.
+    func insertCitation(key: String) {
+        if viewMode == .preview { setViewMode(.write) }
+        let source = editor.source
+        let position = NSMaxRange(editor.textView.selectedRange())
+        citations.change(source: source) { engine, text in
+            try engine.insertCitation(text, position: position, key: key)
+        } completion: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let insertion):
+                // The writer can type or move the caret during the work.
+                guard self.editor.source == source,
+                      NSMaxRange(self.editor.textView.selectedRange()) == position else {
+                    self.insertCitation(key: key)
+                    return
+                }
+                self.place(insertion)
+            case .failure(let error):
+                let alert = NSAlert()
+                alert.messageText = "The citation could not be inserted."
+                alert.informativeText = String(describing: error)
+                self.present(alert)
+            }
+        }
+    }
+
+    private func place(_ insertion: CitationInsertion) {
+        let textView = editor.textView
+        let range = NSRange(location: insertion.from, length: 0)
+        textView.breakUndoCoalescing()
+        guard editor.replace(range: range, with: insertion.insert) else { return }
+        textView.breakUndoCoalescing()
+        let caret = NSRange(location: insertion.from + (insertion.insert as NSString).length, length: 0)
+        textView.setSelectedRange(caret)
+        textView.scrollRangeToVisible(caret)
+        window?.makeFirstResponder(textView)
+    }
+
+    var isLibraryShownForTesting: Bool { isLibraryShown && !referencesView.isHidden }
+    /// The left edge of the editor pane, and of the page in it.
+    var editorEdgesForTesting: (pane: CGFloat, page: CGFloat) { (scrollView.frame.minX, scrollView.contentView.bounds.minX) }
+    /// The widths of the editor and the right column.
+    var columnWidthsForTesting: (editor: CGFloat, right: CGFloat) { (scrollView.frame.width, rightColumn.frame.width) }
+    var referencesViewForTesting: ReferencesView { referencesView }
+    /// The last sheet of a refused choice.
+    private(set) var choiceAlertForTesting: NSAlert?
+
     /// Applies `edit` as one undoable edit that covers only the text that
     /// differs, so the caret and the rest of the document stay in place. When
     /// the writer types during the work, the work starts again on the new text.
@@ -388,8 +624,11 @@ final class EditorWindowController: NSWindowController,
                 self.editor.textView.breakUndoCoalescing()
             case .failure(let error):
                 let alert = NSAlert()
-                alert.messageText = "The frontmatter could not be changed."
+                alert.messageText = error is CitationChoiceError
+                    ? "This style cannot be used."
+                    : "The frontmatter could not be changed."
                 alert.informativeText = String(describing: error)
+                self.choiceAlertForTesting = alert
                 self.present(alert)
             }
         }
@@ -849,7 +1088,7 @@ final class EditorWindowController: NSWindowController,
 
     /// Split view only: the source under the pointer lights its preview block.
     private func pair(editorLocation location: Int?) {
-        guard viewMode == .split, let location else {
+        guard viewMode == .split, !isLibraryShown, let location else {
             previewTextView.highlightedBlockIndex = nil
             return
         }
@@ -861,7 +1100,7 @@ final class EditorWindowController: NSWindowController,
 
     /// Split view only: the preview block under the pointer lights its source.
     private func pair(previewBlock block: PreviewBlock?) {
-        guard viewMode == .split else {
+        guard viewMode == .split, !isLibraryShown else {
             editor.pairedRange = nil
             return
         }
@@ -904,7 +1143,7 @@ final class EditorWindowController: NSWindowController,
         let showPreview = viewMode != .write
 
         scrollView.isHidden = !showEditor
-        previewScrollView.isHidden = !showPreview
+        applyRightColumn()
         modeSwitch?.selectedIndex = viewMode.rawValue
         splitView.adjustSubviews()
 
@@ -963,7 +1202,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func schedulePreviewUpdate() {
-        guard viewMode != .write else { return }
+        guard viewMode != .write, !isLibraryShown else { return }
         previewWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in
             self?.refreshPreview()
@@ -973,7 +1212,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func refreshPreview() {
-        guard viewMode != .write else { return }
+        guard viewMode != .write, !isLibraryShown else { return }
         let source = editor.source
         var markdown = source
         switch citations.previewText(for: source) {
@@ -1013,7 +1252,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func syncPreviewToEditor() {
-        guard viewMode == .split, !isLocked(by: "preview") else { return }
+        guard viewMode == .split, !isLibraryShown, !isLocked(by: "preview") else { return }
         let visible = editor.visibleCharacterRange()
         let starts = editor.analysis.lineStarts
         guard !starts.isEmpty else { return }
@@ -1032,7 +1271,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func syncEditorToPreview() {
-        guard viewMode == .split, !isLocked(by: "editor") else { return }
+        guard viewMode == .split, !isLibraryShown, !isLocked(by: "editor") else { return }
         guard let line = previewTextView.topSourceLine() else { return }
         lockSync("preview")
         editor.scrollToLine(Int(floor(max(0, line))) + 1)
@@ -1067,6 +1306,7 @@ final class EditorWindowController: NSWindowController,
         let resolved = ThemeManager.shared.resolved()
         editor.applyPalette(resolved)
         previewTextView.applyTheme(previewTheme(resolved))
+        referencesView.apply(palette: resolved, textSize: isProjectorMode ? ProjectorMode.referencesTextSize : 13)
         markupOverlay.applyPalette(resolved)
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
@@ -1395,6 +1635,22 @@ final class EditorWindowController: NSWindowController,
             return saved
         case #selector(replayWritingHistory(_:)), #selector(deleteWritingHistory(_:)):
             return history.hasHistory(fileURL: loomingsDocument?.fileURL)
+        case #selector(chooseBundledStyle(_:)):
+            let choices = currentChoices
+            menuItem.state = choices != nil && choices?.style == menuItem.representedObject as? String ? .on : .off
+            return window?.attachedSheet == nil
+        case #selector(chooseStyleFile(_:)):
+            let choices = currentChoices
+            menuItem.state = choices != nil && choices?.style == nil ? .on : .off
+            return window?.attachedSheet == nil
+        case #selector(chooseLanguage(_:)):
+            let choices = currentChoices
+            menuItem.state = choices != nil && choices?.language == menuItem.representedObject as? String ? .on : .off
+            return window?.attachedSheet == nil
+        case #selector(chooseBibliography(_:)):
+            return window?.attachedSheet == nil
+        case #selector(toggleReferences(_:)):
+            menuItem.state = isLibraryShown ? .on : .off
         default:
             return true
         }

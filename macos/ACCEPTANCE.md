@@ -81,6 +81,12 @@ removed afterwards.
 | Share links `#d=p.` / `#d=z.` | Yes | Raw DEFLATE, limits, Node↔Swift tests |
 | Share link copy/open and family/mode import | Yes | Copy tested; Open Share Link modal not automated |
 | About and Ensigns attribution | Yes | About panel |
+| Citations and reference list in preview, print and HTML export | Yes | One JS implementation in JavaScriptCore; report fixtures; self-test |
+| Citation marks, notes and `@` completion | Yes | Self-test with the real list |
+| References menu: bibliography, style, language | Yes | Self-test: one edit and one Undo for each choice; the file panels are not automated |
+| Library view, filter, `[@key]` insertion | Yes | The `filters` and `insertCitation` rules match the web; self-test with Return and the field; double click reaches the same path, the real click is not automated |
+| VoiceOver labels of the References view | Yes | Self-test reads the labels and roles through the accessibility API; not checked by ear |
+| References tabs | Different | A menu toggle, not tabs. The state is per window, and the column also takes the place of the preview in Preview |
 
 ## Verification
 
@@ -276,5 +282,5 @@ above, APA, en-US.
   entitlement, or JavaScriptCore runs without the JIT. That build is not measured.
 - No time limit stops a script that does not end. It stops only the citation queue, not
   the editor.
-- Licences: `LICENSE-citeproc` and `LICENSE-CSL.md` are next to the bundle. The
-  attribution in About is not done yet.
+- Licences: `LICENSE-citeproc`, `LICENSE-citation-js` and `LICENSE-CSL.md` are next to
+  the bundle. About has the attribution.

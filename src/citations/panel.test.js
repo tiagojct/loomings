@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
 import {
   filterLibrary, insertCitation, renderLibrary, bibliographyChoices, toggleBibliography, fileChange, styleChoices,
-  languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView,
+  languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView, withBibliography,
 } from './panel.js';
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { BUNDLED_STYLES } from './style.js';
@@ -270,6 +270,30 @@ describe('the menu choices', () => {
     expect(checked('pt-PT')).toEqual(['pt-PT']);
     expect(checked('pt')).toEqual(['pt-PT']);
     expect(languageChoices(META).map((l) => l.value)).toEqual(['en-US', 'en-GB', 'pt-PT', 'es-ES']);
+  });
+});
+
+describe('withBibliography', () => {
+  it('gives the name for the first file', () => {
+    expect(withBibliography([], 'refs.bib')).toBe('refs.bib');
+  });
+
+  it('gives a flow list for a second file', () => {
+    expect(withBibliography(['refs.bib'], '../shared/more.bib')).toBe('[refs.bib, ../shared/more.bib]');
+  });
+
+  it('keeps two files with one base name: a path names one file', () => {
+    expect(withBibliography(['a/refs.bib'], 'b/refs.bib')).toBe('[a/refs.bib, b/refs.bib]');
+  });
+
+  it('adds nothing for a file that is in the list', () => {
+    expect(withBibliography(['a.bib', 'b.bib'], 'a.bib')).toBe('[a.bib, b.bib]');
+  });
+
+  it('writes a value that setCitationMeta keeps as a list', () => {
+    const value = withBibliography(['my refs.bib'], "/tmp/o'brien, x.bib");
+    const text = setCitationMeta('', 'bibliography', value);
+    expect(readCitationMeta(text).bibliography).toEqual(['my refs.bib', "/tmp/o'brien, x.bib"]);
   });
 });
 

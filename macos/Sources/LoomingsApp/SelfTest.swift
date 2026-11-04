@@ -985,6 +985,11 @@ enum SelfTest {
             try checkNotesMerge(check, folder: root.appendingPathComponent("merge"))
             try checkMissingFileNote(check, folder: root.appendingPathComponent("missing"))
             try inRunningApp { try checkCompletionList(check, folder: root.appendingPathComponent("completion")) }
+            checkReferencesMenuItems(check)
+            try checkReferenceChoices(check, folder: root.appendingPathComponent("choices/paper"))
+            try checkReferenceRefusals(check, folder: root.appendingPathComponent("refusals"))
+            try checkReferencesColumn(check, folder: root.appendingPathComponent("column"))
+            try checkReferenceInsertion(check, folder: root.appendingPathComponent("insertion"))
         } catch {
             check(false, "citation setup (\(error))")
         }
@@ -1430,6 +1435,467 @@ enum SelfTest {
         check(editor.source.contains("bibliography: refs.bib"), "Redo puts it back")
     }
 
+    // MARK: - References
+
+    private static let moreBib = """
+    @article{jacome2021,
+      author = {J\\'{a}come, Cristina},
+      title = {Sa\\'{u}de em casa},
+      journal = {Journal of Tests},
+      year = {2021}
+    }
+
+    """
+
+    private static func referencesMenu() -> NSMenu? {
+        AppDelegate().makeMainMenu().items.first { $0.submenu?.title == "References" }?.submenu
+    }
+
+    private static func item(_ menu: NSMenu?, _ title: String) -> NSMenuItem? {
+        for item in menu?.items ?? [] {
+            if item.title == title { return item }
+            if let found = Self.item(item.submenu, title) { return found }
+        }
+        return nil
+    }
+
+    /// True when a window with this responder chain handles the action.
+    private static func handles(_ window: NSWindow, _ action: Selector) -> Bool {
+        var responder: NSResponder? = window.firstResponder
+        while let current = responder {
+            if current.responds(to: action) { return true }
+            responder = current.nextResponder
+        }
+        return (window.delegate as AnyObject?)?.responds(to: action) ?? false
+    }
+
+    private static func checkReferencesMenuItems(_ check: (Bool, String) -> Void) {
+        let titles = AppDelegate().makeMainMenu().items.compactMap(\.submenu?.title)
+        let format = titles.firstIndex(of: "Format") ?? -1
+        check(titles.indices.contains(format + 2) && titles[format + 1] == "References" && titles[format + 2] == "Theme", "References is between Format and Theme: \(titles)")
+        let menu = referencesMenu()
+        check(
+            menu?.items.map(\.title) == ["Choose Bibliography\u{2026}", "Citation Style", "Language", "", "Show References"],
+            "the References menu has its items"
+        )
+        let styles = item(menu, "Citation Style")?.submenu
+        check(styles?.items.first?.title == "Chicago (author-date)", "the style titles come from the shared list")
+        check(styles?.items.count == 7, "five styles, a separator and a file")
+        check(styles?.items.last?.title == "Choose File\u{2026}", "the file comes after the styles")
+        check(
+            item(menu, "Language")?.submenu?.items.compactMap { $0.representedObject as? String } == ["en-US", "en-GB", "pt-PT", "es-ES"],
+            "the menu has the four languages"
+        )
+        check(
+            menu?.items.filter { $0.action != nil && !$0.hasSubmenu }.allSatisfy { $0.target == nil } == true,
+            "the items go to the first responder"
+        )
+    }
+
+    private static func checkReferenceChoices(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = "Plain text.\n"
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        let editor = controller.editor
+        let undo = editor.textView.undoManager
+        let menu = referencesMenu()
+
+        // The first choice makes the frontmatter: one edit, one Undo.
+        let caret = (text as NSString).range(of: "text").location
+        editor.textView.setSelectedRange(NSRange(location: caret, length: 0))
+        let before = editor.revision
+        controller.addBibliography(folder.appendingPathComponent("refs.bib"))
+        check(pump(timeout: 15) { editor.source == "---\nbibliography: refs.bib\n---\nPlain text.\n" }, "a bibliography makes the frontmatter: \(editor.source)")
+        check(editor.revision == before + 1, "the choice is one edit")
+        let shifted = (editor.source as NSString).range(of: "text").location
+        check(editor.textView.selectedRange().location == shifted, "the caret stays on its word")
+        undo?.undo()
+        check(editor.source == text, "one Undo takes the bibliography back")
+        undo?.redo()
+        check(editor.source.hasPrefix("---\nbibliography: refs.bib\n"), "Redo puts the bibliography back")
+
+        // A file in a folder next to the document's folder.
+        let shared = folder.deletingLastPathComponent().appendingPathComponent("shared/more.bib")
+        try FileManager.default.createDirectory(at: shared.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(moreBib.utf8).write(to: shared)
+        controller.addBibliography(shared)
+        let flow = "bibliography: [refs.bib, ../shared/more.bib]\n"
+        check(pump(timeout: 5) { editor.source.contains(flow) }, "a second file gives a flow list: \(editor.source)")
+        let read = pump(timeout: 15) {
+            controller.citations.report(for: editor.source)?.library.map(\.key).sorted() == ["jacome2021", "silva2020"]
+        }
+        check(read, "the citation code reads a path with ../")
+        undo?.undo()
+        check(editor.source.contains("bibliography: refs.bib\n"), "one Undo takes the second file back")
+        undo?.redo()
+        let same = editor.source
+        controller.addBibliography(shared)
+        _ = pump(timeout: 0.5) { false }
+        check(editor.source == same, "a file in the list changes nothing")
+
+        // The marks of the menu follow the text.
+        var ready = false
+        controller.refreshReferenceChoices { ready = true }
+        check(pump(timeout: 5) { ready }, "the menu gets its marks")
+        let apa = item(menu, "APA")
+        let chicago = item(menu, "Chicago (author-date)")
+        let portuguese = item(menu, "Portugu\u{EA}s (Portugal)")
+        let english = item(menu, "English (US)")
+        func validate(_ item: NSMenuItem?) -> Bool { item.map(controller.validateMenuItem) ?? false }
+        check(validate(chicago) && chicago?.state == .on, "the default style has the mark")
+        check(validate(apa) && apa?.state == .off, "another style has no mark")
+        check(validate(english) && english?.state == .on, "the default language has the mark")
+
+        // A choice that is on writes nothing.
+        let unchanged = editor.source
+        if let chicago { controller.chooseBundledStyle(chicago) }
+        _ = pump(timeout: 0.5) { false }
+        check(editor.source == unchanged, "the style that is on writes nothing")
+
+        if let apa { controller.chooseBundledStyle(apa) }
+        check(pump(timeout: 5) { editor.source.contains("csl: apa\n") }, "a bundled style goes in the frontmatter")
+        undo?.undo()
+        check(editor.source == unchanged, "one Undo takes the style back")
+        undo?.redo()
+        if let portuguese { controller.chooseLanguage(portuguese) }
+        check(pump(timeout: 5) { editor.source.contains("lang: pt-PT\n") }, "a language goes in the frontmatter")
+        ready = false
+        controller.refreshReferenceChoices { ready = true }
+        check(pump(timeout: 5) { ready }, "the menu gets the new marks")
+        check(validate(apa) && apa?.state == .on, "the chosen style has the mark")
+        check(validate(portuguese) && portuguese?.state == .on, "the chosen language has the mark")
+        check(validate(chicago) && chicago?.state == .off, "the mark leaves the old style")
+
+        // An own style file, in the folder.
+        let own = folder.appendingPathComponent("own.csl")
+        try FileManager.default.copyItem(at: bundledStyle("apa"), to: own)
+        controller.useStyleFile(own)
+        check(pump(timeout: 5) { editor.source.contains("csl: own.csl\n") }, "a style file goes in the frontmatter")
+        ready = false
+        controller.refreshReferenceChoices { ready = true }
+        check(pump(timeout: 5) { ready }, "the menu gets the marks of the file")
+        let file = item(menu, "Choose File\u{2026}")
+        check(validate(file) && file?.state == .on, "a style file marks Choose File")
+        check(validate(apa) && apa?.state == .off, "a style file takes the mark from the bundled styles")
+
+        // A document with no folder gets an absolute path.
+        let (untitled, untitledController) = try citationDocument(text: "Text.\n", folder: folder.appendingPathComponent("untitled"), saved: false)
+        defer { closeCitationDocument(untitled) }
+        let path = folder.appendingPathComponent("refs.bib")
+        untitledController.addBibliography(path)
+        check(
+            pump(timeout: 15) { untitledController.editor.source.contains("bibliography: /") && untitledController.editor.source.contains("/refs.bib\n") },
+            "an untitled document gets an absolute path"
+        )
+    }
+
+    private static func bundledStyle(_ id: String) -> URL {
+        (Bundle.main.resourceURL ?? URL(fileURLWithPath: "/")).appendingPathComponent("Citations/styles/\(id).csl")
+    }
+
+    private static func dependentStyle(parent: String) -> String {
+        """
+        <?xml version="1.0" encoding="utf-8"?>
+        <style xmlns="http://purl.org/net/xbiblio/csl" version="1.0" default-locale="en-US">
+          <info>
+            <title>A journal</title>
+            <id>http://www.zotero.org/styles/a-journal</id>
+            <link href="http://www.zotero.org/styles/\(parent)" rel="independent-parent"/>
+          </info>
+        </style>
+
+        """
+    }
+
+    /// The sheet shows, says `reason`, and nothing is written.
+    private static func checkRefusal(
+        _ check: (Bool, String) -> Void,
+        _ controller: EditorWindowController,
+        title: String,
+        reason: String,
+        _ action: () -> Void
+    ) {
+        guard let window = controller.window else { return }
+        let before = controller.editor.source
+        action()
+        check(pump(timeout: 15) { window.attachedSheet != nil }, "a sheet shows: \(title)")
+        check(controller.choiceAlertForTesting?.messageText == title, "the sheet has its title: \(title)")
+        let text = controller.choiceAlertForTesting?.informativeText ?? ""
+        check(text.contains(reason), "the sheet says why: \(text)")
+        check(controller.editor.source == before, "nothing is written: \(title)")
+        let item = NSMenuItem(title: "Bibliography", action: #selector(EditorWindowController.chooseBibliography(_:)), keyEquivalent: "")
+        check(!controller.validateMenuItem(item), "the menu waits for the sheet")
+        if let sheet = window.attachedSheet { window.endSheet(sheet) }
+        check(pump(timeout: 5) { window.attachedSheet == nil }, "the sheet closes")
+        check(controller.validateMenuItem(item), "the menu works after the sheet")
+    }
+
+    private static func checkReferenceRefusals(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Text.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+
+        let orphan = folder.appendingPathComponent("orphan.csl")
+        try Data(dependentStyle(parent: "absent-parent").utf8).write(to: orphan)
+        checkRefusal(check, controller, title: "This style cannot be used.", reason: "absent-parent") {
+            controller.useStyleFile(orphan)
+        }
+
+        let broken = folder.appendingPathComponent("broken.csl")
+        try Data("not a style".utf8).write(to: broken)
+        checkRefusal(check, controller, title: "This style cannot be used.", reason: "not valid CSL") {
+            controller.useStyleFile(broken)
+        }
+
+        let child = folder.appendingPathComponent("child.csl")
+        try Data(dependentStyle(parent: "apa").utf8).write(to: child)
+        controller.useStyleFile(child)
+        check(pump(timeout: 5) { controller.editor.source.contains("csl: child.csl\n") }, "a dependent style with a bundled parent is written")
+
+        // A new key must not move the closing line past line 50.
+        let long = "---\n" + String(repeating: "x: 1\n", count: 48) + "---\nBody.\n"
+        controller.editor.setText(long)
+        checkRefusal(check, controller, title: "The frontmatter could not be changed.", reason: "A new key would move the closing --- past line 50.") {
+            controller.addBibliography(folder.appendingPathComponent("refs.bib"))
+        }
+
+        // A window with no editor has no target for the menu.
+        let compare = controller.compare(withText: "Other.\n", title: "Other")
+        defer { compare.close() }
+        if let window = compare.window {
+            for action in [
+                #selector(EditorWindowController.chooseBibliography(_:)),
+                #selector(EditorWindowController.chooseBundledStyle(_:)),
+                #selector(EditorWindowController.chooseStyleFile(_:)),
+                #selector(EditorWindowController.chooseLanguage(_:)),
+                #selector(EditorWindowController.toggleReferences(_:)),
+            ] {
+                check(!handles(window, action), "a window with no editor has no \(action)")
+            }
+        }
+    }
+
+    private static func checkReferencesColumn(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = """
+        ---
+        bibliography: refs.bib
+        ---
+        A claim [@silva2020] and a lost key [@nobody].
+
+        """
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        let view = controller.referencesViewForTesting
+        check(pump(timeout: 15) { controller.citations.report(for: text) != nil }, "the column has a report")
+        check(!controller.isLibraryShownForTesting, "a window starts with no library")
+        controller.layoutNowForTesting()
+        let edges = controller.editorEdgesForTesting
+        check(edges.pane == 0 && edges.page == 0, "the hidden column does not push the editor: \(edges)")
+
+        let show = referencesMenu().flatMap { item($0, "Show References") }
+        func isOn() -> Bool {
+            guard let show else { return false }
+            return controller.validateMenuItem(show) && show.state == .on
+        }
+
+        // Write goes to Split first.
+        controller.layoutNowForTesting()
+        check(!isOn(), "Show References has no mark in Write")
+        let frame = controller.window?.frame
+        controller.toggleReferences(nil)
+        controller.layoutNowForTesting()
+        check(controller.window?.frame == frame, "the library keeps the size of the window: \(String(describing: controller.window?.frame))")
+        func balanced() -> Bool {
+            controller.layoutNowForTesting()
+            let widths = controller.columnWidthsForTesting
+            return abs(widths.editor - widths.right) < 3
+        }
+        check(pump(timeout: 1) { balanced() && view.filterField.frame.width > 200 }, "the library keeps the divider, and the field fills its column: \(controller.columnWidthsForTesting), \(view.filterField.frame.width)")
+        check(controller.viewMode == .split, "the command goes to Split from Write")
+        check(controller.isLibraryShownForTesting, "the column shows the library")
+        check(!controller.isPreviewVisible, "the library takes the place of the preview")
+        check(controller.isEditorVisible, "the editor stays in Split")
+        check(isOn(), "Show References has the mark")
+        check(controller.window?.firstResponder === view.filterField.currentEditor(), "the filter field takes the focus")
+
+        // Rows: a cited key with no entry goes first.
+        check(view.rowsForTesting.map(\.key) == ["nobody", "silva2020"], "a missing key goes first: \(view.rowsForTesting.map(\.key))")
+        check(view.rowsForTesting.first?.isMissing == true, "the first row is the missing key")
+        check(view.rowsForTesting.last?.isCited == true, "the entry is marked as cited")
+        check(view.rowsForTesting.last?.byline == "Silva, 2020", "the row has the authors and the year")
+
+        // The filter ignores accents.
+        view.filterForTesting("LUNG")
+        check(view.rowsForTesting.map(\.key) == ["silva2020"], "the filter finds a word of the title")
+        view.filterForTesting("nothing here")
+        check(view.messageForTesting == "No entry matches.", "no match gives a message")
+        view.filterForTesting("")
+
+        // VoiceOver reads these labels through the accessibility API.
+        check(view.filterField.accessibilityLabel() == "Filter the library", "the field has its label")
+        let table = view.tableForTesting
+        check(table.accessibilityLabel() == "Library", "the table has its label")
+        check(table.accessibilityRole() == .table, "the table has its role")
+        let cell = view.cellForTesting(row: 1)
+        check(cell?.isAccessibilityElement() == true, "a row is one element")
+        check(
+            cell?.accessibilityLabel() == "silva2020, cited, Silva, 2020, Lung function at home",
+            "a row reads as a sentence: \(cell?.accessibilityLabel() ?? "nil")"
+        )
+        check(view.cellForTesting(row: 0)?.accessibilityLabel() == "nobody, cited, no entry", "a missing key reads as a fault")
+
+        // The theme.
+        let palette = ThemeManager.shared.resolved()
+        if let palette {
+            check(view.tableBackgroundForTesting == palette.colors.background, "the table has the reading ground")
+        }
+
+        // The column switches back. The window keeps the state per mode.
+        controller.toggleReferences(nil)
+        check(!controller.isLibraryShownForTesting, "the toggle takes the library away")
+        check(controller.isPreviewVisible, "the preview comes back")
+        check(controller.window?.firstResponder === controller.editor.textView, "the editor takes the focus back")
+        check(pump(timeout: 5) { controller.previewText.contains("(Silva 2020)") }, "the preview shows the text after the library")
+
+        controller.setViewMode(.preview)
+        check(controller.isPreviewVisible, "Preview shows the preview with no request")
+        controller.toggleReferences(nil)
+        check(controller.viewMode == .preview, "the command stays in Preview")
+        check(controller.isLibraryShownForTesting && !controller.isPreviewVisible, "in Preview the library takes the place of the preview")
+        controller.setViewMode(.write)
+        check(!controller.isLibraryShownForTesting, "Write has no library")
+        check(!isOn(), "Show References has no mark in Write")
+        controller.setViewMode(.split)
+        check(controller.isLibraryShownForTesting, "the request stays with the window")
+
+        // Another window keeps its own state, and no request shows no change.
+        let (other, otherController) = try citationDocument(text: "Plain.\n", folder: folder.appendingPathComponent("other"))
+        defer { closeCitationDocument(other) }
+        otherController.setViewMode(.split)
+        check(!otherController.isLibraryShownForTesting && otherController.isPreviewVisible, "a window with no keys and no request shows no change")
+        otherController.toggleReferences(nil)
+        let empty = otherController.referencesViewForTesting.messageForTesting ?? ""
+        check(empty.hasPrefix("No references yet."), "a request with no library says what to do: \(empty)")
+        check(otherController.isLibraryShownForTesting && controller.isLibraryShownForTesting, "each window has its own state")
+        otherController.toggleReferences(nil)
+        check(controller.isLibraryShownForTesting, "the other window keeps its state")
+
+        // A file that is missing: a message, and the key under it.
+        let lost = "---\nbibliography: lost.bib\n---\nA claim [@nobody].\n"
+        let (missing, missingController) = try citationDocument(text: lost, folder: folder.appendingPathComponent("lost"))
+        defer { closeCitationDocument(missing) }
+        missingController.toggleReferences(nil)
+        let lostView = missingController.referencesViewForTesting
+        check(pump(timeout: 15) { lostView.rowsForTesting.map(\.key) == ["nobody"] }, "a missing key shows with no library")
+        lostView.layoutSubtreeIfNeeded()
+        check(lostView.messageForTesting?.hasPrefix("No references yet.") == true, "the message stands with the missing key")
+        check(lostView.messageClearsRowsForTesting, "the message does not cover the rows")
+
+        // Projector mode: bigger text, the same rows, the same minimum width.
+        let height = view.rowHeightForTesting
+        controller.toggleProjectorMode(nil)
+        check(view.rowHeightForTesting > height, "projector mode gives taller rows")
+        check(view.rowsForTesting.map(\.key) == ["nobody", "silva2020"], "projector mode keeps the rows")
+        check(controller.window?.minSize.width == 640, "the minimum width stays")
+        controller.window?.setContentSize(NSSize(width: 640, height: 400))
+        controller.layoutNowForTesting()
+        view.layoutSubtreeIfNeeded()
+        check(view.tableForTesting.bounds.width > 100, "the table has room at the minimum width")
+        check(pump(timeout: 1) { balanced() }, "the divider stays at the minimum width: \(controller.columnWidthsForTesting)")
+        controller.toggleProjectorMode(nil)
+        check(view.rowHeightForTesting == height, "the rows come back after projector mode")
+        controller.toggleReferences(nil)
+    }
+
+    private static func keyDown(_ keyCode: UInt16) -> NSEvent? {
+        NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: 0,
+            context: nil,
+            characters: "\r",
+            charactersIgnoringModifiers: "\r",
+            isARepeat: false,
+            keyCode: keyCode
+        )
+    }
+
+    private static func checkReferenceInsertion(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = "---\nbibliography: refs.bib\n---\nFirst line.\n"
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        let editor = controller.editor
+        let textView = editor.textView
+        let undo = textView.undoManager
+        let view = controller.referencesViewForTesting
+        check(pump(timeout: 15) { !(controller.citations.report(for: text)?.library.isEmpty ?? true) }, "the library is ready")
+        controller.toggleReferences(nil)
+        check(view.rowsForTesting.map(\.key) == ["silva2020"], "the table has the entry")
+
+        // Return in the table.
+        let end = (text as NSString).length - 1
+        textView.setSelectedRange(NSRange(location: end, length: 0))
+        view.selectForTesting(key: "silva2020")
+        let table = view.tableForTesting
+        controller.window?.makeFirstResponder(table)
+        let before = editor.revision
+        if let event = keyDown(36) { table.keyDown(with: event) }
+        let inserted = "---\nbibliography: refs.bib\n---\nFirst line.[@silva2020]\n"
+        check(pump(timeout: 5) { editor.source == inserted }, "Return inserts the citation: \(editor.source)")
+        check(editor.revision == before + 1, "the insertion is one edit")
+        check(textView.selectedRange() == NSRange(location: end + 12, length: 0), "the caret goes after the citation")
+        check(controller.window?.firstResponder === textView, "the focus goes back to the editor")
+        undo?.undo()
+        check(editor.source == text, "one Undo takes the citation back")
+        undo?.redo()
+        check(editor.source == inserted, "Redo puts it back")
+
+        // A double click goes the same way. The caret in a citation joins it.
+        let inside = (inserted as NSString).range(of: "@silva").location + 2
+        textView.setSelectedRange(NSRange(location: inside, length: 0))
+        view.filterForTesting("silva")
+        table.sendAction(table.doubleAction, to: table.target)
+        _ = pump(timeout: 0.3) { false }
+        check(editor.source == inserted, "a double click off the rows does nothing")
+        controller.window?.makeFirstResponder(view.filterField)
+        if let field = view.filterField.currentEditor() as? NSTextView {
+            field.doCommand(by: #selector(NSResponder.insertNewline(_:)))
+        }
+        check(pump(timeout: 5) { editor.source.contains("[@silva2020; @silva2020]") }, "Return in the field takes the first entry, and joins the citation: \(editor.source)")
+        check(controller.window?.firstResponder === textView, "the focus goes back from the field")
+        view.filterForTesting("")
+
+        // Escape in the field clears the filter, then leaves.
+        view.filterForTesting("silva")
+        controller.window?.makeFirstResponder(view.filterField)
+        (view.filterField.currentEditor() as? NSTextView)?.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        check(view.filterField.stringValue.isEmpty, "Escape clears the filter")
+        (view.filterField.currentEditor() as? NSTextView)?.doCommand(by: #selector(NSResponder.cancelOperation(_:)))
+        check(controller.window?.firstResponder === textView, "a second Escape gives the focus to the editor")
+
+        // Text in the frontmatter stops it from being one, so the rule moves it.
+        undo?.undo()
+        undo?.undo()
+        check(editor.source == text, "two Undos restore the text")
+        textView.setSelectedRange(NSRange(location: 0, length: 0))
+        view.selectForTesting(key: "silva2020")
+        if let event = keyDown(36) { table.keyDown(with: event) }
+        check(pump(timeout: 5) { editor.source.hasPrefix("---\nbibliography: refs.bib\n---\n[@silva2020]\n\nFirst line.") }, "a caret in the frontmatter inserts after it: \(editor.source)")
+
+        // Escape leaves the table, and from Preview the editor comes back.
+        controller.window?.makeFirstResponder(table)
+        if let event = keyDown(53) { table.keyDown(with: event) }
+        check(controller.window?.firstResponder === textView, "Escape gives the focus to the editor")
+        controller.setViewMode(.preview)
+        view.selectForTesting(key: "silva2020")
+        let revision = editor.revision
+        if let event = keyDown(36) { table.keyDown(with: event) }
+        check(pump(timeout: 5) { editor.revision == revision + 1 }, "Return in Preview inserts the citation")
+        check(controller.viewMode == .write, "an insertion from Preview goes to the editor")
+        check(controller.window?.firstResponder === textView, "the editor takes the focus after Preview")
+    }
+
     /// Runs the real list. `complete` does not return while the list is open,
     /// so a block on the main queue gives the list its key.
     private static func checkCompletionList(_ check: (Bool, String) -> Void, folder: URL) throws {
@@ -1677,6 +2143,13 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
     func setMeta(_ source: String, key: String, value: String?) throws -> String {
         try engine.setMeta(source, key: key, value: value)
     }
+    func addBibliography(_ source: String, path: String) throws -> String {
+        try engine.addBibliography(source, path: path)
+    }
+    func referenceChoices(_ source: String) throws -> CitationChoices { try engine.referenceChoices(source) }
+    func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion {
+        try engine.insertCitation(source, position: position, key: key)
+    }
     func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange {
         try engine.fileChange(source, name: name, path: path)
     }
@@ -1704,6 +2177,13 @@ private final class FailingCitationEngine: CitationEngineProtocol, @unchecked Se
     }
     func setMeta(_ source: String, key: String, value: String?) throws -> String {
         try engine.setMeta(source, key: key, value: value)
+    }
+    func addBibliography(_ source: String, path: String) throws -> String {
+        try engine.addBibliography(source, path: path)
+    }
+    func referenceChoices(_ source: String) throws -> CitationChoices { try engine.referenceChoices(source) }
+    func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion {
+        try engine.insertCitation(source, position: position, key: key)
     }
     func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange {
         try engine.fileChange(source, name: name, path: path)

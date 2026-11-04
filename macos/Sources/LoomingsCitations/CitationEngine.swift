@@ -6,11 +6,13 @@ public enum CitationEngineError: Error, Equatable, CustomStringConvertible {
     case bundleMissing(String)
     /// The citation code failed, or its output cannot be read.
     case script(String)
+    /// `setCitationMeta` refused the change. The message is for the writer.
+    case refused(String)
 
     public var description: String {
         switch self {
         case .bundleMissing(let path): return "The citation code is missing: \(path)"
-        case .script(let message): return message
+        case .script(let message), .refused(let message): return message
         }
     }
 }
@@ -24,6 +26,9 @@ public protocol CitationEngineProtocol: AnyObject, Sendable {
     func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan
     func setMeta(_ source: String, key: String, value: String?) throws -> String
     func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange
+    func addBibliography(_ source: String, path: String) throws -> String
+    func referenceChoices(_ source: String) throws -> CitationChoices
+    func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion
     func bundledStyle(_ id: String) -> String?
     func bundledLocale(_ tag: String) -> String?
 }
@@ -111,6 +116,21 @@ public final class CitationEngine: CitationEngineProtocol, @unchecked Sendable {
         try queue.sync { try call("fileChange", [source, name, path]) }
     }
 
+    /// Adds a chosen file to `bibliography`, and gives the changed text.
+    public func addBibliography(_ source: String, path: String) throws -> String {
+        try queue.sync { try call("addBibliography", [source, path]) }
+    }
+
+    /// The checked items of the References menu.
+    public func referenceChoices(_ source: String) throws -> CitationChoices {
+        try queue.sync { try call("referenceChoices", [source]) }
+    }
+
+    /// The text to insert for `key`. `position` is the end of the selection.
+    public func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion {
+        try queue.sync { try call("insertCitation", [source, position, key]) }
+    }
+
     public func checkStyle(_ xml: String) throws -> CitationStyleCheck {
         try queue.sync { try call("checkStyle", [xml]) }
     }
@@ -148,12 +168,20 @@ public final class CitationEngine: CitationEngineProtocol, @unchecked Sendable {
         }
     }
 
+    /// The start of each message from `setCitationMeta`.
+    private static let refusal = "setCitationMeta: "
+
     private func invoke(_ name: String, _ arguments: [Any]) throws -> JSValue {
         let (context, api) = try loaded()
         context.exception = nil
         let result = api.invokeMethod(name, withArguments: arguments)
         if let exception = context.exception {
             context.exception = nil
+            let message = exception.forProperty("message")?.toString() ?? ""
+            if message.hasPrefix(Self.refusal) {
+                let reason = message.dropFirst(Self.refusal.count)
+                throw CitationEngineError.refused(reason.prefix(1).uppercased() + reason.dropFirst())
+            }
             throw CitationEngineError.script("The citations could not be formatted: \(exception)")
         }
         guard let result else { throw CitationEngineError.script("The citation code gave no text.") }

@@ -8,7 +8,7 @@
 
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { planNativeSources } from './library.js';
-import { fileChange as changeFor } from './panel.js';
+import { fileChange as changeFor, insertCitation as insertionFor, languageChoices, styleChoices, withBibliography } from './panel.js';
 import { createSession } from './session.js';
 import { checkStyle as check } from './style.js';
 
@@ -53,6 +53,47 @@ export function setMeta(source, key, value) {
  */
 export function fileChange(source, name, path) {
   return JSON.stringify(changeFor(readCitationMeta(source), name, path));
+}
+
+/**
+ * Adds a chosen file to `bibliography`. A file that is in the list changes
+ * nothing.
+ *
+ * @param {string} source
+ * @param {string} path
+ * @returns {string}  the changed text as a JSON string
+ */
+export function addBibliography(source, path) {
+  const { bibliography } = readCitationMeta(source);
+  if (bibliography.includes(path)) return JSON.stringify(source);
+  return JSON.stringify(setCitationMeta(source, 'bibliography', withBibliography(bibliography, path)));
+}
+
+/**
+ * The checked items of the References menu.
+ *
+ * @param {string} source
+ * @returns {string}  JSON with `style`, a bundled style or null for another
+ *   file, and `language`
+ */
+export function referenceChoices(source) {
+  const meta = readCitationMeta(source);
+  return JSON.stringify({
+    style: styleChoices(meta, []).find((choice) => choice.checked)?.value ?? null,
+    language: languageChoices(meta).find((choice) => choice.checked)?.value ?? null,
+  });
+}
+
+/**
+ * The text to insert for a key, by the rule of the web's References view.
+ *
+ * @param {string} source
+ * @param {number} position  the end of the selection, in UTF-16 units
+ * @param {string} key
+ * @returns {string}  the fields `insert` and `from` as JSON
+ */
+export function insertCitation(source, position, key) {
+  return JSON.stringify(insertionFor(source, position, key));
 }
 
 /**

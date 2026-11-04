@@ -38,6 +38,23 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Native macOS app (`macos/`)
 
+- A References menu between Format and Theme. Choose Bibliography… adds a
+  `.bib` file, and a second file gives a flow list. Citation Style has the
+  five bundled styles and Choose File…. Language has the four bundled
+  locales. Each choice is one undoable edit of the frontmatter, and it makes
+  the frontmatter when there is none. A path is relative to the document's
+  folder, `../refs.bib` included. An untitled or shelf document gets an
+  absolute path. A dependent style with no parent gives a sheet that names the
+  parent, and nothing is written.
+- Show References puts the library in the right column of Split, or in the
+  place of the preview in Preview. From Write it goes to Split first. A filter
+  field ignores accents. Each row says if the document cites the entry, and a
+  cited key with no entry goes first. Return or a double click inserts
+  `[@key]` with the web's rule, as one Undo step, and the focus goes back to
+  the editor.
+- About credits citeproc-js, citation-js and the CSL styles and locales.
+  `LICENSE-citation-js` is next to the citation bundle.
+
 - A URL pasted over selected words makes a link, with the web's rule and a
   shared fixture.
 - An image dropped on the editor inserts a link at the drop point, with the

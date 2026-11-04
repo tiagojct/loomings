@@ -957,5 +957,115 @@
         "reason": "invalid"
       }
     }
-  ]
+  ],
+  "filters": {
+    "library": [
+      {
+        "key": "jacome2020",
+        "authors": "Jácome, Almeida",
+        "year": "2020",
+        "title": "Saúde e ciência"
+      },
+      {
+        "key": "smith2019",
+        "authors": "Smith",
+        "year": "2019",
+        "title": "A book on lung function"
+      },
+      {
+        "key": "muller2001",
+        "authors": "Müller",
+        "year": "2001",
+        "title": "Über die Lunge"
+      },
+      {
+        "key": "nguyen2015",
+        "authors": "Nguyễn",
+        "year": "2015",
+        "title": ""
+      }
+    ],
+    "cases": [
+      {
+        "query": "",
+        "keys": [
+          "jacome2020",
+          "smith2019",
+          "muller2001",
+          "nguyen2015"
+        ]
+      },
+      {
+        "query": "   ",
+        "keys": [
+          "jacome2020",
+          "smith2019",
+          "muller2001",
+          "nguyen2015"
+        ]
+      },
+      {
+        "query": "jacome",
+        "keys": [
+          "jacome2020"
+        ]
+      },
+      {
+        "query": "JÁCOME",
+        "keys": [
+          "jacome2020"
+        ]
+      },
+      {
+        "query": "saude ciencia",
+        "keys": [
+          "jacome2020"
+        ]
+      },
+      {
+        "query": "CIÊNCIA 2020",
+        "keys": [
+          "jacome2020"
+        ]
+      },
+      {
+        "query": "2019",
+        "keys": [
+          "smith2019"
+        ]
+      },
+      {
+        "query": "lung  function",
+        "keys": [
+          "smith2019"
+        ]
+      },
+      {
+        "query": "muller",
+        "keys": [
+          "muller2001"
+        ]
+      },
+      {
+        "query": "uber",
+        "keys": [
+          "muller2001"
+        ]
+      },
+      {
+        "query": "nguyen",
+        "keys": [
+          "nguyen2015"
+        ]
+      },
+      {
+        "query": "absent",
+        "keys": []
+      },
+      {
+        "query": "smith absent",
+        "keys": []
+      }
+    ]
+  }
 }
