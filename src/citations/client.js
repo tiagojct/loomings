@@ -31,19 +31,24 @@ async function withLocales(sources) {
   return { ...sources, lang: main.lang, localeXml: main.xml, fallbackLocaleXml: fallback };
 }
 
+const NO_WORKER = 'Citations are not available: the worker did not start.';
+const STOPPED = 'The citations stopped: the report took too long.';
+
 /**
- * The report when no worker runs. It has no citations, so the text stays literal.
+ * The report with no worker to give one. It has no citations, so the text
+ * stays literal.
  *
  * @param {string} source
+ * @param {string} message
  * @returns {CitationReport}
  */
-function unavailableReport(source) {
+function literalReport(source, message) {
   return {
     citations: [],
     bibliography: [],
     bibliographyMarkdown: '',
     library: [],
-    notes: [{ from: 0, to: 0, line: 0, message: 'Citations are not available: the worker did not start.' }],
+    notes: [{ from: 0, to: 0, line: 0, message }],
     markdownSource: source,
   };
 }
@@ -53,7 +58,7 @@ function unavailableReport(source) {
  *
  * @param {{spawn?: () => Worker}} [options]  tests replace the worker
  * @returns {{update(source: string): void, setSources(sources: CitationSources): Promise<void>,
- *   shareSource(source: string): Promise<string|null>,
+ *   shareSource(source: string): Promise<string|null>, restart(): void,
  *   onReport(listener: (report: CitationReport) => void): void, latest(): CitationReport|null}}
  */
 export function createCitationClient({ spawn = startWorker } = {}) {
@@ -65,6 +70,8 @@ export function createCitationClient({ spawn = startWorker } = {}) {
   let text = null;
   /** @type {CitationReport|null} */
   let report = null;
+  /** @type {CitationSources|null} the sources that a new worker needs */
+  let sent = null;
   /** @type {((report: CitationReport) => void)[]} */
   const listeners = [];
   let shareId = 0;
@@ -107,7 +114,10 @@ export function createCitationClient({ spawn = startWorker } = {}) {
   }
 
   function post(/** @type {any} */ message) {
-    if (worker === undefined) worker = start();
+    if (worker === undefined) {
+      worker = start();
+      if (worker && sent && message.type !== 'sources') worker.postMessage({ id, type: 'sources', sources: sent });
+    }
     if (worker) worker.postMessage(message);
   }
 
@@ -115,7 +125,7 @@ export function createCitationClient({ spawn = startWorker } = {}) {
     text = source;
     id++;
     post({ id, type: 'analyse', text: source });
-    if (worker === null) deliver(id, unavailableReport(source));
+    if (worker === null) deliver(id, literalReport(source, NO_WORKER));
   }
 
   return Object.freeze({
@@ -131,6 +141,7 @@ export function createCitationClient({ spawn = startWorker } = {}) {
         // A locale chunk did not load. The session reports that it is not ready.
       }
       if (request !== sourcesRequest) return;
+      sent = full;
       post({ id: ++id, type: 'sources', sources: full });
       if (text !== null) update(text);
     },
@@ -144,6 +155,17 @@ export function createCitationClient({ spawn = startWorker } = {}) {
         post({ share, type: 'share', text: source });
         if (!worker) endShares();
       });
+    },
+
+    // Ends a worker that does not answer. The request that waits gets a report
+    // with a note, and the next message starts a new worker.
+    restart() {
+      if (!worker) return;
+      worker.terminate();
+      worker = undefined;
+      endShares();
+      id++;
+      if (text !== null) deliver(id, literalReport(text, STOPPED));
     },
 
     onReport(listener) {

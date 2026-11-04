@@ -111,6 +111,48 @@ describe('createCitationClient', () => {
     w.answer(sent, report('late'));
     expect(client.latest().notes.length).toBe(1);
   });
+  it('ends a hung worker: a note for its text, and the next text goes to a new worker', async () => {
+    const workers = [];
+    const client = createCitationClient({ spawn: () => { const w = fakeWorker(); workers.push(w); return w; } });
+    const seen = [];
+    client.onReport((r) => seen.push(r));
+    await client.setSources(fullSources);
+    client.update('hung [@k]');
+    const pending = client.shareSource('hung');
+    const late = workers[0].sent[workers[0].sent.length - 2].id;
+    client.restart();
+    expect(workers[0].terminate).toHaveBeenCalled();
+    await expect(pending).resolves.toBe(null);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].citations).toEqual([]);
+    expect(seen[0].markdownSource).toBe('hung [@k]');
+    expect(seen[0].notes).toEqual([{ from: 0, to: 0, line: 0, message: 'The citations stopped: the report took too long.' }]);
+
+    workers[0].answer(late, report('late'));
+    expect(seen).toHaveLength(1);
+
+    client.update('next');
+    expect(workers).toHaveLength(2);
+    expect(workers[1].sent.map((m) => m.type)).toEqual(['sources', 'analyse']);
+    expect(workers[1].sent[0].sources.styleXml).toBe('s');
+    workers[1].answer(workers[1].sent[1].id, report('next'));
+    expect(seen[1]).toEqual(report('next'));
+  });
+  it('does not repeat the sources in a new worker that gets new sources', async () => {
+    const workers = [];
+    const client = createCitationClient({ spawn: () => { const w = fakeWorker(); workers.push(w); return w; } });
+    await client.setSources(fullSources);
+    client.restart();
+    await client.setSources({ ...fullSources, styleXml: 'two' });
+    expect(workers[1].sent.filter((m) => m.type === 'sources').map((m) => m.sources.styleXml)).toEqual(['two']);
+  });
+  it('does nothing on a restart with no worker', () => {
+    const spawn = vi.fn(fakeWorker);
+    const client = createCitationClient({ spawn });
+    client.restart();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(client.latest()).toBe(null);
+  });
   it('is frozen, so assigning onReport throws', () => {
     const client = createCitationClient({ spawn: fakeWorker });
     expect(() => { client.onReport = () => {}; }).toThrow(TypeError);

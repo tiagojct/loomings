@@ -24,6 +24,7 @@ function fakeClient() {
   c.setSources = vi.fn(async (s) => { c.sources.push(s); });
   c.update = vi.fn((text) => { c.asked.push(text); });
   c.shareSource = vi.fn(async (text) => `${text}shared`);
+  c.restart = vi.fn();
   c.answer = (r) => { for (const l of c.listeners) l(r); };
   return c;
 }
@@ -384,6 +385,57 @@ describe('reportFor', () => {
   });
 });
 
+describe('reportFor between two reports', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  /** @param {string} text */
+  const heldReport = (text) => {
+    const from = text.indexOf('[@a]');
+    return { ...report(), citations: [{ from, to: from + 4, html: '(A)', markdown: '(A)', missing: [] }] };
+  };
+
+  it('moves the report one time for one text', async () => {
+    const { doc, client } = setup();
+    await typed(doc, WITH_BIB);
+    client.answer(heldReport(WITH_BIB));
+    await settle();
+    const edited = WITH_BIB.replace('Text', 'Some text');
+    const moved = doc.reportFor(edited);
+    expect(moved.citations[0].from).toBe(edited.indexOf('[@a]'));
+    expect(doc.reportFor(edited)).toBe(moved);
+    expect(doc.reportFor(`${edited}more`)).not.toBe(moved);
+  });
+
+  it('moves again after a new report', async () => {
+    const { doc, client } = setup();
+    await typed(doc, WITH_BIB);
+    client.answer(heldReport(WITH_BIB));
+    await settle();
+    const edited = WITH_BIB.replace('Text', 'Some text');
+    const moved = doc.reportFor(edited);
+    await typed(doc, `${WITH_BIB}two`);
+    client.answer({ ...heldReport(WITH_BIB), citations: [{ ...heldReport(WITH_BIB).citations[0], html: '(B)' }] });
+    await settle();
+    expect(doc.reportFor(edited)).not.toBe(moved);
+    expect(doc.reportFor(edited).citations[0].html).toBe('(B)');
+  });
+
+  it('gives each equal slice its own output, and an added copy the last one', async () => {
+    const text = `${WITH_BIB}[@a] [@a]\n`;
+    const { doc, client } = setup();
+    await typed(doc, text);
+    const at = [...text.matchAll(/\[@a\]/g)].map((m) => m.index);
+    client.answer({
+      ...report(),
+      citations: at.map((from, i) => ({ from, to: from + 4, html: `(${i})`, markdown: '', missing: [] })),
+    });
+    await settle();
+    const moved = doc.reportFor(`${text}[@a]\n`);
+    expect(moved.citations.map((c) => c.html)).toEqual(['(0)', '(1)', '(2)', '(2)']);
+  });
+});
+
 describe('the time limit of flush', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
@@ -421,6 +473,36 @@ describe('the time limit of flush', () => {
     await flushed;
     await settle();
     expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('restarts the worker at the limit, so that the next text gets a report', async () => {
+    const { doc, client } = setup();
+    client.restart.mockImplementation(() => client.answer(report('stopped')));
+    let done;
+    doc.flush(WITH_BIB).then((r) => { done = r; });
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(client.restart).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(client.restart).toHaveBeenCalledTimes(1);
+    expect(done).toBe(null);
+    expect(doc.current().report.name).toBe('stopped');
+
+    await typed(doc, `${WITH_BIB}more`);
+    expect(client.asked).toEqual([WITH_BIB, `${WITH_BIB}more`]);
+    const next = report('next');
+    client.answer(next);
+    await settle();
+    expect(doc.current()).toEqual({ text: `${WITH_BIB}more`, report: next });
+  });
+
+  it('does not restart the worker after an answer in time', async () => {
+    const { doc, client } = setup();
+    const flushed = doc.flush(WITH_BIB);
+    await settle();
+    client.answer(report());
+    await flushed;
+    await vi.advanceTimersByTimeAsync(20000);
+    expect(client.restart).not.toHaveBeenCalled();
   });
 
   it('takes a late answer as the held report', async () => {

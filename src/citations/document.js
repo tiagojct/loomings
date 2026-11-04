@@ -18,7 +18,7 @@ import { scanCitations } from './scan.js';
 /**
  * @typedef {import('./session.js').CitationReport} CitationReport
  * @typedef {{update(source: string): void, setSources(sources: import('./session.js').CitationSources): Promise<void>,
- *   shareSource(source: string): Promise<string|null>,
+ *   shareSource(source: string): Promise<string|null>, restart(): void,
  *   onReport(listener: (report: CitationReport) => void): void}} CitationClient
  * @typedef {{text: string, report: CitationReport}} HeldReport
  * @typedef {{text: string, failure: string|null, styleNote: string|null}} SharedText
@@ -97,7 +97,9 @@ function moveReport(held, text) {
   const bySlice = new Map();
   for (const output of held.report.citations) {
     const slice = held.text.slice(output.from, output.to);
-    bySlice.set(slice, [...(bySlice.get(slice) ?? []), output]);
+    const same = bySlice.get(slice);
+    if (same) same.push(output);
+    else bySlice.set(slice, [output]);
   }
   /** @type {Map<string, number>} */
   const used = new Map();
@@ -166,6 +168,8 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
   let doc = 0;
   /** @type {HeldReport|null} */
   let held = null;
+  /** @type {{text: string, from: HeldReport, report: CitationReport}|null} one scan for each text */
+  let moved = null;
   /** @type {Promise<CitationClient|null>|null} */
   let loading = null;
   /** @type {import('./library.js').StoredFile[]} */
@@ -312,7 +316,8 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     if (held.text === text) return held.report;
     const meta = documentMeta(text);
     if (!usesCitations(meta) || metaKey(meta) !== metaKey(documentMeta(held.text))) return null;
-    return moveReport(held, text);
+    if (moved?.from !== held || moved.text !== text) moved = { text, from: held, report: moveReport(held, text) };
+    return moved.report;
   }
 
   /**
@@ -327,10 +332,12 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     return new Promise((resolve) => {
       /** @type {Flush} */
       const entry = { text, doc, resolve, share };
-      // A worker that hangs must not stop a print. A late answer still counts as a report.
+      // A worker that hangs must not stop a print, and the queue waits for its
+      // answer: the restart gives one, so that later texts get their reports.
       entry.limit = setTimeout(() => {
         flushes.splice(flushes.indexOf(entry), 1);
         resolve(!share && entry.doc === doc ? reportFor(text) : null);
+        loading?.then((loaded) => loaded?.restart());
       }, FLUSH_LIMIT);
       flushes.push(entry);
       run();
@@ -380,6 +387,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
       if (timer) clearTimeout(timer);
       timer = null;
       held = null;
+      moved = null;
       latest = null;
       typed = null;
     },
