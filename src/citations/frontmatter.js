@@ -32,7 +32,21 @@ function findKey(lines, last, key) {
     const m = KEY.exec(lines[n].text);
     if (!m || m[1] !== key) continue;
     let end = n;
-    while (end + 1 < last && (ITEM.test(lines[end + 1].text) || /^[ \t]+\S/.test(lines[end + 1].text))) end++;
+    let flow = false;
+    const open = stripComment(m[2]).trim();
+    if (open[0] === '[' && open[open.length - 1] !== ']') {
+      // A flow list can go on over lines of any indent, up to its closing bracket.
+      let joined = open;
+      for (let k = n + 1; k < last; k++) {
+        joined += ' ' + stripComment(lines[k].text).trim();
+        if (joined[joined.length - 1] === ']') {
+          end = k;
+          flow = true;
+          break;
+        }
+      }
+    }
+    while (!flow && end + 1 < last && (ITEM.test(lines[end + 1].text) || /^[ \t]+\S/.test(lines[end + 1].text))) end++;
     found.push({ start: n, end, rest: m[2] });
     n = end;
   }
@@ -86,6 +100,8 @@ function isFlowList(text) {
     } else if (c === '"' || c === "'") {
       if (i === 0 || /[\s[,]/.test(body[i - 1])) quote = c;
     } else if (c === '[' || c === ']') {
+      return false;
+    } else if (c === '#' && (i === 0 || /\s/.test(body[i - 1]))) {
       return false;
     }
   }
@@ -224,7 +240,7 @@ function formatScalar(value) {
  * @returns {string}
  */
 export function setCitationMeta(source, key, value) {
-  if (value !== null && /[\r\n]/.test(value)) {
+  if (value !== null && /[\r\n\u2028\u2029]/.test(value)) {
     throw new Error(`setCitationMeta: the value of "${key}" has a line break.`);
   }
   if (key === 'references' && value !== null) {
@@ -249,6 +265,9 @@ export function setCitationMeta(source, key, value) {
   const found = findKey(lines, fm.last, key);
   if (!found.length) {
     if (text === null) return source;
+    if (fm.last + 1 >= 50) {
+      throw new Error(`setCitationMeta: a new key would move the closing --- past line 50.`);
+    }
     const close = lines[fm.last];
     const nl = source.slice(lines[fm.last - 1].text.length + lines[fm.last - 1].from, lines[fm.last - 1].end);
     return source.slice(0, close.from) + text + nl + source.slice(close.from);

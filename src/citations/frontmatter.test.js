@@ -183,4 +183,36 @@ describe('setCitationMeta', () => {
     const out2 = setCitationMeta('', 'bibliography', '[a.bib, [b].bib]');
     expect(readCitationMeta(out2).bibliography).toEqual(['[a.bib, [b].bib]']);
   });
+
+  it('reads a flow list with unindented continuation lines', () => {
+    const src = '---\nbibliography: [a.bib,\nb.bib]\ncsl: x.csl\n---\n';
+    const meta = readCitationMeta(src);
+    expect(meta.bibliography).toEqual(['a.bib', 'b.bib']);
+    expect(meta.csl).toBe('x.csl');
+    expect(setCitationMeta(src, 'bibliography', null)).toBe('---\ncsl: x.csl\n---\n');
+  });
+
+  it('does not read past the frontmatter for an unclosed flow list', () => {
+    const src = '---\nbibliography: [a.bib,\n---\nb.bib]\n';
+    expect(readCitationMeta(src).bibliography).toEqual(['[a.bib,']);
+  });
+
+  it('rejects U+2028 and U+2029', () => {
+    expect(() => setCitationMeta('', 'csl', 'a\u2028b')).toThrow(/line break/);
+    expect(() => setCitationMeta('', 'csl', 'a\u2029b')).toThrow(/line break/);
+  });
+
+  it('quotes a bracket value with a comment marker', () => {
+    const out = setCitationMeta('', 'bibliography', '[a #b.bib]');
+    expect(out).toBe('---\nbibliography: "[a #b.bib]"\n---\n');
+    expect(readCitationMeta(out).bibliography).toEqual(['[a #b.bib]']);
+  });
+
+  it('throws when a new key would push the closing line past line 50', () => {
+    const src = '---\n' + 'x: 1\n'.repeat(48) + '---\n';
+    expect(src.split('\n')[49]).toBe('---');
+    expect(readCitationMeta(src)).toEqual(empty);
+    expect(() => setCitationMeta(src, 'csl', 'a.csl')).toThrow(/line 50/);
+    expect(setCitationMeta(src, 'csl', null)).toBe(src);
+  });
 });
