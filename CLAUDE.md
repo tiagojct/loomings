@@ -161,7 +161,7 @@ release numbers.
 
 ```sh
 ./macos/scripts/build-app.sh            # build macos/dist/Loomings.app
-macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test
+caffeinate -i macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test   # a Mac that sleeps stalls the run, and its waits time out
 swift test --package-path macos         # Swift Testing; CLT has no XCTest
 swift run -c release --package-path macos LoomingsBench
 

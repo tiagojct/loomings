@@ -259,10 +259,13 @@ above, APA, en-US.
   `bibliography:`, two entries: 192 MB and 169 MB, so one engine costs about 23 MB. This is
   one small document, not a limit, and the cost of more windows is not measured.
 - Typing with a slow engine (0.7 s for each report, in `--self-test`, one
-  release run of each): Insert p95 is 1.1 ms to 1.6 ms with and without the engine. The
+  release run of each): Insert p95 is 1.1 ms to 1.8 ms with and without the engine. The
   longest run loop turn stays under the 350 ms limit of the check. A build that
   waits on the engine from the main thread gave a 735 ms turn and failed the check,
   and its Insert p95 stayed at 1.4 ms, so Insert p95 alone does not show this fault.
+- Run the self-test as `caffeinate -i .../Loomings --self-test`. A Mac in Maintenance
+  Sleep stalls the run: a 3.6 s report took 29 s, and three checks of about 15 runs timed
+  out that way, each inside a sleep in `pmset -g log`.
 - The cost is once per engine setup. A change of style, locale or entries builds a new
   engine, so it costs about the first engine time again.
 - Memory in the bench: the process footprint changes between 13 MB and 110 MB through
