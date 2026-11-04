@@ -160,7 +160,9 @@ release numbers.
   `bibliography:` or `references:` key. `CitationSourceReader` reads the files
   that the plan of the citation code names. `ReferenceList` is the one rule that
   is in both languages: the filter of the References view runs on each key, and
-  the `filters` fixture keeps it the same as `filterLibrary`.
+  the `filters` fixture keeps it the same as `filterLibrary`, with non-Latin
+  text. Its fold must stay `foldText`: `lowercased(with:)`, not `lowercased()`,
+  for the Greek final sigma, and the spaces of `\s`, not `isWhitespace`.
 - `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
   app-owned handler, snapshot, visible-region styling, footprint) over
   10 KB–10 MB corpora.
@@ -310,16 +312,19 @@ Stage 2 decisions worth preserving:
   in `menuWillOpen`, so the first opening for a text gets its marks a moment
   later, and it starts an engine for a document with no citations. Do not use
   `menuNeedsUpdate` for this: it also runs for each key equivalent.
-- The right column (`rightColumn`) holds the preview and `ReferencesView`.
-  `wantsReferences` is per window and it stays through mode changes. While the
-  library shows, the preview does not render and has no sync or pairing. The
-  command does not move the divider. The column is hidden before the first
+- The right column (`rightColumn`) holds the preview, `ReferencesView` and a
+  `ModeSwitch` with Preview and References. The library is for Split only, as on
+  the web: Preview always shows the preview, and Show References goes to Split.
+  `showsColumnTabs` follows `createReferencesView` in `panel.js`: the control
+  shows in Split when the document has citation keys or the window asked. The
+  tab stays through mode changes, for each window. While the library shows, the
+  preview does not render and has no sync or pairing. The command does not move
+  the divider. The column is hidden before the first
   layout: with it, the split view gave it all the width, and the editor scrolled
   sideways. In `ReferencesView`, each width constraint stays below the split
   view's holding priority (250): a stronger one moves the divider, and one above
   500 shrinks the window. `--snapshot` with
-  `-LoomingsSnapshotReferences YES` writes `references.png` and
-  `references-page.png`.
+  `-LoomingsSnapshotReferences YES` writes `references.png`.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).

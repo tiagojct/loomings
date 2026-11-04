@@ -8,7 +8,9 @@
 
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { planNativeSources } from './library.js';
-import { fileChange as changeFor, insertCitation as insertionFor, languageChoices, styleChoices, withBibliography } from './panel.js';
+import {
+  choiceIsOn, fileChange as changeFor, insertCitation as insertionFor, languageChoices, styleChoices, withBibliography,
+} from './panel.js';
 import { createSession } from './session.js';
 import { checkStyle as check } from './style.js';
 
@@ -69,19 +71,36 @@ export function addBibliography(source, path) {
   return JSON.stringify(setCitationMeta(source, 'bibliography', withBibliography(bibliography, path)));
 }
 
+/** @param {import('./frontmatter.js').CitationMeta} meta */
+const nativeStyleChoices = (meta) => styleChoices(meta, [], { exact: true });
+
 /**
  * The checked items of the References menu.
  *
  * @param {string} source
- * @returns {string}  JSON with `style`, a bundled style or null for another
+ * @returns {string}  JSON with `style`, a bundled style or null for a style
  *   file, and `language`
  */
 export function referenceChoices(source) {
   const meta = readCitationMeta(source);
   return JSON.stringify({
-    style: styleChoices(meta, []).find((choice) => choice.checked)?.value ?? null,
+    style: nativeStyleChoices(meta).find((choice) => choice.checked)?.value ?? null,
     language: languageChoices(meta).find((choice) => choice.checked)?.value ?? null,
   });
+}
+
+/**
+ * One choice of the Citation Style or the Language menu.
+ *
+ * @param {string} source
+ * @param {'csl'|'lang'} key
+ * @param {string} value
+ * @returns {string}  the changed text as a JSON string
+ */
+export function setChoice(source, key, value) {
+  const meta = readCitationMeta(source);
+  const choices = key === 'csl' ? nativeStyleChoices(meta) : languageChoices(meta);
+  return JSON.stringify(choiceIsOn(choices, value) ? source : setCitationMeta(source, key, value));
 }
 
 /**

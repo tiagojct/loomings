@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
 import {
   filterLibrary, insertCitation, renderLibrary, bibliographyChoices, toggleBibliography, fileChange, styleChoices,
-  languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView, withBibliography,
+  languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView, withBibliography, choiceIsOn,
 } from './panel.js';
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { BUNDLED_STYLES } from './style.js';
@@ -270,6 +270,37 @@ describe('the menu choices', () => {
     expect(checked('pt-PT')).toEqual(['pt-PT']);
     expect(checked('pt')).toEqual(['pt-PT']);
     expect(languageChoices(META).map((l) => l.value)).toEqual(['en-US', 'en-GB', 'pt-PT', 'es-ES']);
+  });
+});
+
+describe('styleChoices with exact values', () => {
+  const checked = (csl) => styleChoices({ ...META, csl }, [], { exact: true }).find((c) => c.checked)?.value ?? null;
+
+  it('checks the default style with no value', () => {
+    expect(checked(null)).toBe('chicago-author-date');
+  });
+
+  it('checks a bundled style by its id', () => {
+    expect(checked('apa')).toBe('apa');
+  });
+
+  it('checks nothing for a path or a file name', () => {
+    expect(checked('own/apa.csl')).toBe(null);
+    expect(checked('apa.csl')).toBe(null);
+  });
+
+  it('keeps the base name rule of the web by default', () => {
+    expect(styleChoices({ ...META, csl: 'own/apa.csl' }, []).find((c) => c.checked)?.value).toBe('apa');
+  });
+});
+
+describe('choiceIsOn', () => {
+  const choices = [{ value: 'a', label: 'A', checked: true }, { value: 'b', label: 'B', checked: false }];
+
+  it('is true only for the checked value', () => {
+    expect(choiceIsOn(choices, 'a')).toBe(true);
+    expect(choiceIsOn(choices, 'b')).toBe(false);
+    expect(choiceIsOn(choices, 'c')).toBe(false);
   });
 });
 

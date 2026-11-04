@@ -27,8 +27,9 @@ struct ChromeColors {
     }
 }
 
-/// Write / Split / Preview as one control: equal segments, one height, and
-/// the selected segment raised on the palette's elevated ground.
+/// A choice of a few views as one control, such as Write / Split / Preview:
+/// equal segments, one height, and the selected segment raised on the
+/// palette's elevated ground.
 @MainActor
 final class ModeSwitch: NSView {
     static let height: CGFloat = 28
@@ -44,20 +45,20 @@ final class ModeSwitch: NSView {
 
     private var segments: [ModeSegment] = []
     private var colors = ChromeColors(nil)
+    /// Not `frame.size`: a hidden column gives this view no width, and the
+    /// size must come back with the column.
+    private let size: NSSize
 
-    init(labels: [String]) {
+    init(labels: [String], name: String = "View mode") {
         let font = NSFont.systemFont(ofSize: 12, weight: .medium)
         let widest = labels.map { ($0 as NSString).size(withAttributes: [.font: font]).width }.max() ?? 40
         let segmentWidth = (widest + 20).rounded(.up)
         let inset: CGFloat = 2
-        super.init(frame: NSRect(
-            x: 0, y: 0,
-            width: segmentWidth * CGFloat(labels.count) + inset * 2,
-            height: Self.height
-        ))
+        size = NSSize(width: segmentWidth * CGFloat(labels.count) + inset * 2, height: Self.height)
+        super.init(frame: NSRect(origin: .zero, size: size))
         setAccessibilityElement(true)
         setAccessibilityRole(.radioGroup)
-        setAccessibilityLabel("View mode")
+        setAccessibilityLabel(name)
 
         for (index, label) in labels.enumerated() {
             let segment = ModeSegment(label: label, font: font)
@@ -80,7 +81,7 @@ final class ModeSwitch: NSView {
         fatalError("ModeSwitch is created in code")
     }
 
-    override var intrinsicContentSize: NSSize { frame.size }
+    override var intrinsicContentSize: NSSize { size }
 
     func applyPalette(_ palette: ResolvedPalette?) {
         colors = ChromeColors(palette)

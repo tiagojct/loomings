@@ -63,12 +63,13 @@ public enum CitationFileName {
     /// A path from `folder`, with `../` when the file is outside it. With no
     /// folder, or when the two share only the root, the absolute path. This
     /// is the rule of `ImageLink.destination`, with no percent encoding: the
-    /// frontmatter is not a URL. A bare name has no `./`.
+    /// frontmatter is not a URL. A bare name has no `./`. A link stays a
+    /// link: the frontmatter holds the path that the writer chose.
     public static func value(for file: URL, folder: URL?) -> String {
-        let target = file.standardizedFileURL.resolvingSymlinksInPath()
+        let target = file.standardizedFileURL
         guard let folder else { return target.path }
         let path = target.pathComponents
-        let base = folder.standardizedFileURL.resolvingSymlinksInPath().pathComponents
+        let base = folder.standardizedFileURL.pathComponents
         var shared = 0
         while shared < min(path.count, base.count), path[shared] == base[shared] {
             shared += 1

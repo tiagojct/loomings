@@ -28,6 +28,7 @@ public protocol CitationEngineProtocol: AnyObject, Sendable {
     func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange
     func addBibliography(_ source: String, path: String) throws -> String
     func referenceChoices(_ source: String) throws -> CitationChoices
+    func setChoice(_ source: String, key: String, value: String) throws -> String
     func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion
     func bundledStyle(_ id: String) -> String?
     func bundledLocale(_ tag: String) -> String?
@@ -124,6 +125,13 @@ public final class CitationEngine: CitationEngineProtocol, @unchecked Sendable {
     /// The checked items of the References menu.
     public func referenceChoices(_ source: String) throws -> CitationChoices {
         try queue.sync { try call("referenceChoices", [source]) }
+    }
+
+    /// Sets one item of the style or language menu. An item that is on
+    /// changes nothing.
+    /// - Parameter key: `csl` or `lang`.
+    public func setChoice(_ source: String, key: String, value: String) throws -> String {
+        try queue.sync { try call("setChoice", [source, key, value]) }
     }
 
     /// The text to insert for `key`. `position` is the end of the selection.

@@ -2,7 +2,7 @@ import AppKit
 import LoomingsCitations
 import LoomingsTheme
 
-/// The library of a document, in the place of the preview: a filter field and
+/// The library of a document, in the right column of Split: a filter field and
 /// a table. All text is plain, in text fields. The rows come from
 /// `ReferenceList`, and the window applies the insertion.
 @MainActor
@@ -39,6 +39,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         filterField.action = #selector(filterChanged(_:))
         filterField.sendsSearchStringImmediately = true
         filterField.sendsWholeSearchString = false
+        filterField.centersPlaceholder = false
         filterField.setAccessibilityLabel(Self.filterLabel)
 
         status.isSelectable = false
@@ -81,7 +82,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
-        // Preview mode gives this view the whole window: the rows keep a measure.
+        // A wide window gives this view much room: the rows keep a measure.
         let measure = content.widthAnchor.constraint(equalToConstant: Self.maximumWidth)
         measure.priority = NSLayoutConstraint.Priority(100)
         let margin = content.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -24)
@@ -96,7 +97,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
             content.centerXAnchor.constraint(equalTo: centerXAnchor),
             margin,
             measure,
-            filterField.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            filterField.topAnchor.constraint(equalTo: topAnchor, constant: 4),
             filterField.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             filterField.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             status.topAnchor.constraint(equalTo: filterField.bottomAnchor, constant: 8),
@@ -114,9 +115,19 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         fatalError("ReferencesView is created in code")
     }
 
+    /// The field keeps the place of its icon from a layout in a hidden column,
+    /// which has no width.
+    override func viewDidUnhide() {
+        super.viewDidUnhide()
+        (filterField.cell as? NSSearchFieldCell)?.resetSearchButtonCell()
+        filterField.needsDisplay = true
+    }
+
+    /// `bounds`, not `dirtyRect`: since macOS 14 a view does not clip, and the
+    /// dirty rectangle can reach over the control above this view.
     override func draw(_ dirtyRect: NSRect) {
         ground.setFill()
-        dirtyRect.fill()
+        bounds.fill()
     }
 
     // MARK: Content
@@ -190,6 +201,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         rows = list.rows(filter: filterField.stringValue)
         tableView.reloadData()
         // With a filter, Return takes the first entry, and the row shows it.
+        // With no filter and no selection, Return has nothing to insert.
         select(key: selected ?? (filterField.stringValue.isEmpty ? nil : firstEntry?.key))
         updateMessage()
     }
@@ -202,8 +214,11 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
     }
 
     private func insertSelection() {
-        guard let row = rows.indices.contains(tableView.selectedRow) ? rows[tableView.selectedRow] : firstEntry else { return }
-        insert(row)
+        if rows.indices.contains(tableView.selectedRow) {
+            insert(rows[tableView.selectedRow])
+        } else if !filterField.stringValue.isEmpty, let firstEntry {
+            insert(firstEntry)
+        }
     }
 
     /// A key with no entry is a fault to mend, not a choice.
@@ -318,7 +333,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         filterChanged(nil)
     }
 
-    func selectForTesting(key: String) {
+    func selectForTesting(key: String?) {
         select(key: key)
     }
 
@@ -351,6 +366,8 @@ private struct ReferenceCellStyle: Equatable {
     let missingInk: NSColor
     let selection: NSColor
     let rule: NSColor
+    private let keyLine: CGFloat
+    private let textLine: CGFloat
 
     static let padding: CGFloat = 8
 
@@ -365,16 +382,16 @@ private struct ReferenceCellStyle: Equatable {
         missingInk = palette?.colors.linkColor ?? .linkColor
         selection = palette?.colors.selectionColor ?? .selectedContentBackgroundColor
         rule = palette?.colors.borderColor ?? .separatorColor
+        let layout = NSLayoutManager()
+        keyLine = layout.defaultLineHeight(for: keyFont).rounded(.up)
+        textLine = layout.defaultLineHeight(for: textFont).rounded(.up)
     }
 
-    /// The key line, then a line for each part that the row has.
+    /// The key line, then a line for each part that the row has. The table
+    /// asks for each row, so the line heights come from `init`.
     func height(of row: ReferenceRow) -> CGFloat {
-        let lines = [row.byline, row.title].filter { !$0.isEmpty }.count
-        return Self.lineHeight(keyFont) + CGFloat(lines) * (Self.lineHeight(textFont) + 1) + Self.padding * 2 + 1
-    }
-
-    private static func lineHeight(_ font: NSFont) -> CGFloat {
-        NSLayoutManager().defaultLineHeight(for: font).rounded(.up)
+        let lines = (row.byline.isEmpty ? 0 : 1) + (row.title.isEmpty ? 0 : 1)
+        return keyLine + CGFloat(lines) * (textLine + 1) + Self.padding * 2 + 1
     }
 }
 

@@ -86,7 +86,7 @@ removed afterwards.
 | References menu: bibliography, style, language | Yes | Self-test: one edit and one Undo for each choice; the file panels are not automated |
 | Library view, filter, `[@key]` insertion | Yes | The `filters` and `insertCitation` rules match the web; self-test with Return and the field; double click reaches the same path, the real click is not automated |
 | VoiceOver labels of the References view | Yes | Self-test reads the labels and roles through the accessibility API; not checked by ear |
-| References tabs | Different | A menu toggle, not tabs. The state is per window, and the column also takes the place of the preview in Preview |
+| References tabs | Yes | A two-part control at the top of the right column, Split only, with the web's rule for when it shows; self-test with a click on each part. The state is per window, not per session |
 
 ## Verification
 

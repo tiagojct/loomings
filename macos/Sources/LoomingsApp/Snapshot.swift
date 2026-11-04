@@ -11,8 +11,7 @@ import PDFKit
 /// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split;
 /// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption;
 /// `-LoomingsSnapshotCompareWith <file>` also writes compare.png;
-/// `-LoomingsSnapshotReferences YES` also writes references.png, Split with the library,
-/// and references-page.png, Preview with the library.
+/// `-LoomingsSnapshotReferences YES` also writes references.png, Split with the library.
 /// The input file is the base for relative images and bibliographies. The
 /// document stays untitled, so nothing writes to that file.
 /// Writes write.png, split.png and preview.png, then exits.
@@ -64,16 +63,10 @@ enum Snapshot {
             }
             write(window, to: output.appendingPathComponent("\(name).png"))
         }
-        // The library, in the two places that show it.
         if UserDefaults.standard.bool(forKey: "LoomingsSnapshotReferences") {
-            controller.setViewMode(.split)
             controller.toggleReferences(nil)
             settle(1.2)
             write(window, to: output.appendingPathComponent("references.png"))
-            controller.setViewMode(.preview)
-            settle(1.2)
-            write(window, to: output.appendingPathComponent("references-page.png"))
-            controller.toggleReferences(nil)
         }
 
         // Compare With, against another file.

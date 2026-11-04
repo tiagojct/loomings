@@ -1578,6 +1578,17 @@ enum SelfTest {
         check(validate(file) && file?.state == .on, "a style file marks Choose File")
         check(validate(apa) && apa?.state == .off, "a style file takes the mark from the bundled styles")
 
+        // A path with the name of a bundled style is a file.
+        let named = folder.appendingPathComponent("own/apa.csl")
+        try FileManager.default.createDirectory(at: named.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: bundledStyle("apa"), to: named)
+        controller.useStyleFile(named)
+        check(pump(timeout: 5) { editor.source.contains("csl: own/apa.csl\n") }, "a style file in a folder goes in the frontmatter")
+        ready = false
+        controller.refreshReferenceChoices { ready = true }
+        check(pump(timeout: 5) { ready }, "the menu gets the marks of that file")
+        check(validate(apa) && apa?.state == .off, "a path that ends in apa.csl does not mark APA")
+
         // A document with no folder gets an absolute path.
         let (untitled, untitledController) = try citationDocument(text: "Text.\n", folder: folder.appendingPathComponent("untitled"), saved: false)
         defer { closeCitationDocument(untitled) }
@@ -1674,6 +1685,25 @@ enum SelfTest {
         }
     }
 
+    private static func clickColumnTab(_ controller: EditorWindowController, _ index: Int) {
+        (controller.columnTabsForTesting?.subviews[index] as? NSButton)?.performClick(nil)
+    }
+
+    /// The selected part of the control has the raised ground, and the window
+    /// shows it: a sibling that paints over the control fails this.
+    private static func controlIsPainted(_ controller: EditorWindowController) -> Bool {
+        guard let tabs = controller.columnTabsForTesting,
+              let frame = controller.window?.contentView?.superview else { return false }
+        controller.layoutNowForTesting()
+        let inner = tabs.convert(NSPoint(x: tabs.bounds.width * (tabs.selectedIndex == 0 ? 0.08 : 0.92), y: tabs.bounds.midY), to: frame)
+        let outer = tabs.convert(NSPoint(x: -20, y: tabs.bounds.midY), to: frame)
+        guard let lit = pixel(frame, at: inner), let ground = pixel(frame, at: outer) else { return false }
+        let difference = abs(lit.redComponent - ground.redComponent)
+            + abs(lit.greenComponent - ground.greenComponent)
+            + abs(lit.blueComponent - ground.blueComponent)
+        return difference > 0.01
+    }
+
     private static func checkReferencesColumn(_ check: (Bool, String) -> Void, folder: URL) throws {
         let text = """
         ---
@@ -1684,12 +1714,14 @@ enum SelfTest {
         """
         let (document, controller) = try citationDocument(text: text, folder: folder)
         defer { closeCitationDocument(document) }
+        let editor = controller.editor
         let view = controller.referencesViewForTesting
         check(pump(timeout: 15) { controller.citations.report(for: text) != nil }, "the column has a report")
         check(!controller.isLibraryShownForTesting, "a window starts with no library")
         controller.layoutNowForTesting()
         let edges = controller.editorEdgesForTesting
         check(edges.pane == 0 && edges.page == 0, "the hidden column does not push the editor: \(edges)")
+        check(controller.columnTabsForTesting == nil, "Write has no control")
 
         let show = referencesMenu().flatMap { item($0, "Show References") }
         func isOn() -> Bool {
@@ -1697,25 +1729,58 @@ enum SelfTest {
             return controller.validateMenuItem(show) && show.state == .on
         }
 
-        // Write goes to Split first.
-        controller.layoutNowForTesting()
+        // Keys with no request: the control shows, and the preview stays.
+        controller.setViewMode(.split)
+        check(controller.columnTabsForTesting?.selectedIndex == 0, "keys give the control in Split, on Preview")
+        let tabsShown = pump(timeout: 1) {
+            controller.layoutNowForTesting()
+            return (controller.columnTabsForTesting?.frame.width ?? 0) > 100
+        }
+        check(tabsShown, "the control has its width: \(controller.columnTabsForTesting?.frame.width ?? 0)")
+        check(controlIsPainted(controller), "the control is on the screen with the preview")
+        check(controller.isPreviewVisible && !controller.isLibraryShownForTesting, "the control starts on the preview")
+        check(!isOn(), "Show References has no mark on the preview")
+
+        // The control goes when the keys go, and it comes back with them.
+        clickColumnTab(controller, 1)
+        check(controller.isLibraryShownForTesting && !controller.isPreviewVisible, "a click on References shows the library")
+        check(isOn(), "Show References follows the control")
+        editor.replace(range: NSRange(location: 0, length: (editor.source as NSString).length), with: "No keys.\n")
+        check(pump(timeout: 15) { controller.columnTabsForTesting == nil }, "the control goes with the keys")
+        check(controller.isPreviewVisible && !controller.isLibraryShownForTesting, "the preview comes back with no keys")
+        editor.replace(range: NSRange(location: 0, length: (editor.source as NSString).length), with: text)
+        check(pump(timeout: 15) { controller.columnTabsForTesting != nil }, "the control comes back with the keys")
+        check(controller.isLibraryShownForTesting, "the tab stays")
+        check(pump(timeout: 15) { controller.citations.report(for: editor.source) != nil }, "the report comes back")
+        clickColumnTab(controller, 0)
+        check(controller.isPreviewVisible && !controller.isLibraryShownForTesting, "a click on Preview is the way back")
+        check(pump(timeout: 5) { controller.previewText.contains("(Silva 2020)") }, "the preview shows the text after the library")
+        controller.setViewMode(.write)
+
+        // Write goes to Split with the library.
         check(!isOn(), "Show References has no mark in Write")
-        let frame = controller.window?.frame
         controller.toggleReferences(nil)
-        controller.layoutNowForTesting()
-        check(controller.window?.frame == frame, "the library keeps the size of the window: \(String(describing: controller.window?.frame))")
+        check(controller.viewMode == .split, "the command goes to Split from Write")
+        check(controller.isLibraryShownForTesting, "the column shows the library")
+        check(!controller.isPreviewVisible, "the library takes the place of the preview")
+        check(controller.isEditorVisible, "the editor stays in Split")
+        check(isOn(), "Show References has the mark")
+        check(controller.columnTabsForTesting?.selectedIndex == 1, "the control shows the state")
+        check(controlIsPainted(controller), "the control is on the screen with the library")
+        check(controller.window?.firstResponder === view.filterField.currentEditor(), "the filter field takes the focus")
         func balanced() -> Bool {
             controller.layoutNowForTesting()
             let widths = controller.columnWidthsForTesting
             return abs(widths.editor - widths.right) < 3
         }
         check(pump(timeout: 1) { balanced() && view.filterField.frame.width > 200 }, "the library keeps the divider, and the field fills its column: \(controller.columnWidthsForTesting), \(view.filterField.frame.width)")
-        check(controller.viewMode == .split, "the command goes to Split from Write")
-        check(controller.isLibraryShownForTesting, "the column shows the library")
-        check(!controller.isPreviewVisible, "the library takes the place of the preview")
-        check(controller.isEditorVisible, "the editor stays in Split")
-        check(isOn(), "Show References has the mark")
-        check(controller.window?.firstResponder === view.filterField.currentEditor(), "the filter field takes the focus")
+
+        // A wide window: the rows stop at their measure, and the divider
+        // stays. A measure that is too strong moves the divider.
+        let narrow = controller.window?.frame.size
+        controller.window?.setContentSize(NSSize(width: 1800, height: 800))
+        check(pump(timeout: 1) { balanced() && view.filterField.frame.width == 720 }, "the rows keep their measure in a wide window: \(view.filterField.frame.width)")
+        if let narrow { controller.window?.setFrame(NSRect(origin: controller.window?.frame.origin ?? .zero, size: narrow), display: false) }
 
         // Rows: a cited key with no entry goes first.
         check(view.rowsForTesting.map(\.key) == ["nobody", "silva2020"], "a missing key goes first: \(view.rowsForTesting.map(\.key))")
@@ -1742,6 +1807,12 @@ enum SelfTest {
             "a row reads as a sentence: \(cell?.accessibilityLabel() ?? "nil")"
         )
         check(view.cellForTesting(row: 0)?.accessibilityLabel() == "nobody, cited, no entry", "a missing key reads as a fault")
+        check(controller.columnTabsForTesting?.accessibilityLabel() == "Right column", "the control has its label")
+        check(controller.columnTabsForTesting?.accessibilityRole() == .radioGroup, "the control has its role")
+        check(
+            controller.columnTabsForTesting?.subviews.map { $0.accessibilityLabel() ?? "" } == ["Preview", "References"],
+            "the parts of the control have their labels"
+        )
 
         // The theme.
         let palette = ThemeManager.shared.resolved()
@@ -1749,21 +1820,34 @@ enum SelfTest {
             check(view.tableBackgroundForTesting == palette.colors.background, "the table has the reading ground")
         }
 
-        // The column switches back. The window keeps the state per mode.
+        // The command switches back, and the control stays as the way forward.
         controller.toggleReferences(nil)
         check(!controller.isLibraryShownForTesting, "the toggle takes the library away")
         check(controller.isPreviewVisible, "the preview comes back")
-        check(controller.window?.firstResponder === controller.editor.textView, "the editor takes the focus back")
-        check(pump(timeout: 5) { controller.previewText.contains("(Silva 2020)") }, "the preview shows the text after the library")
+        check(controller.columnTabsForTesting?.selectedIndex == 0, "the control follows the toggle")
+        check(controller.window?.firstResponder === editor.textView, "the editor takes the focus back")
 
-        controller.setViewMode(.preview)
-        check(controller.isPreviewVisible, "Preview shows the preview with no request")
+        // Escape in the preview goes to the editor.
+        let preview = controller.previewTextViewForTesting
+        controller.window?.makeFirstResponder(preview)
+        if let event = keyDown(53) { preview.keyDown(with: event) }
+        check(controller.window?.firstResponder === editor.textView, "Escape in the preview gives the focus to the editor")
+
+        // Preview always shows the preview, with the tab on References too.
         controller.toggleReferences(nil)
-        check(controller.viewMode == .preview, "the command stays in Preview")
-        check(controller.isLibraryShownForTesting && !controller.isPreviewVisible, "in Preview the library takes the place of the preview")
+        controller.setViewMode(.preview)
+        check(controller.isPreviewVisible && !controller.isLibraryShownForTesting, "Preview shows the preview with the tab on References")
+        check(controller.columnTabsForTesting == nil, "Preview has no control")
+        check(!isOn(), "Show References has no mark in Preview")
+        controller.setViewMode(.split)
+        check(controller.isLibraryShownForTesting, "the tab stays with the window")
+        controller.toggleReferences(nil)
+        controller.setViewMode(.preview)
+        controller.toggleReferences(nil)
+        check(controller.viewMode == .split, "the command goes to Split from Preview")
+        check(controller.isLibraryShownForTesting, "the command from Preview shows the library")
         controller.setViewMode(.write)
         check(!controller.isLibraryShownForTesting, "Write has no library")
-        check(!isOn(), "Show References has no mark in Write")
         controller.setViewMode(.split)
         check(controller.isLibraryShownForTesting, "the request stays with the window")
 
@@ -1771,12 +1855,16 @@ enum SelfTest {
         let (other, otherController) = try citationDocument(text: "Plain.\n", folder: folder.appendingPathComponent("other"))
         defer { closeCitationDocument(other) }
         otherController.setViewMode(.split)
-        check(!otherController.isLibraryShownForTesting && otherController.isPreviewVisible, "a window with no keys and no request shows no change")
+        check(
+            !otherController.isLibraryShownForTesting && otherController.isPreviewVisible && otherController.columnTabsForTesting == nil,
+            "a window with no keys and no request shows no change"
+        )
         otherController.toggleReferences(nil)
         let empty = otherController.referencesViewForTesting.messageForTesting ?? ""
         check(empty.hasPrefix("No references yet."), "a request with no library says what to do: \(empty)")
         check(otherController.isLibraryShownForTesting && controller.isLibraryShownForTesting, "each window has its own state")
         otherController.toggleReferences(nil)
+        check(otherController.columnTabsForTesting != nil, "after a request the control stays, with no keys")
         check(controller.isLibraryShownForTesting, "the other window keeps its state")
 
         // A file that is missing: a message, and the key under it.
@@ -1814,8 +1902,8 @@ enum SelfTest {
             timestamp: ProcessInfo.processInfo.systemUptime,
             windowNumber: 0,
             context: nil,
-            characters: "\r",
-            charactersIgnoringModifiers: "\r",
+            characters: keyCode == 53 ? "\u{1B}" : "\r",
+            charactersIgnoringModifiers: keyCode == 53 ? "\u{1B}" : "\r",
             isARepeat: false,
             keyCode: keyCode
         )
@@ -1883,17 +1971,28 @@ enum SelfTest {
         if let event = keyDown(36) { table.keyDown(with: event) }
         check(pump(timeout: 5) { editor.source.hasPrefix("---\nbibliography: refs.bib\n---\n[@silva2020]\n\nFirst line.") }, "a caret in the frontmatter inserts after it: \(editor.source)")
 
-        // Escape leaves the table, and from Preview the editor comes back.
+        // Escape leaves the table.
         controller.window?.makeFirstResponder(table)
         if let event = keyDown(53) { table.keyDown(with: event) }
         check(controller.window?.firstResponder === textView, "Escape gives the focus to the editor")
-        controller.setViewMode(.preview)
-        view.selectForTesting(key: "silva2020")
-        let revision = editor.revision
+
+        // Return with no filter and no selection has nothing to insert.
+        let before2 = editor.source
+        view.filterForTesting("")
+        view.selectForTesting(key: nil)
+        controller.window?.makeFirstResponder(view.filterField)
+        (view.filterField.currentEditor() as? NSTextView)?.doCommand(by: #selector(NSResponder.insertNewline(_:)))
         if let event = keyDown(36) { table.keyDown(with: event) }
-        check(pump(timeout: 5) { editor.revision == revision + 1 }, "Return in Preview inserts the citation")
-        check(controller.viewMode == .write, "an insertion from Preview goes to the editor")
-        check(controller.window?.firstResponder === textView, "the editor takes the focus after Preview")
+        _ = pump(timeout: 0.3) { false }
+        check(editor.source == before2, "Return with no filter and no selection inserts nothing")
+
+        // A failed answer for the menu gives a status.
+        controller.citations.useEngineForTesting(try FailingCitationEngine())
+        controller.refreshReferenceChoices {}
+        check(
+            pump(timeout: 5) { controller.overlayTextForTesting == "The References menu cannot show the current choices." },
+            "a failed answer for the menu gives a status"
+        )
     }
 
     /// Runs the real list. `complete` does not return while the list is open,
@@ -2147,6 +2246,9 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
         try engine.addBibliography(source, path: path)
     }
     func referenceChoices(_ source: String) throws -> CitationChoices { try engine.referenceChoices(source) }
+    func setChoice(_ source: String, key: String, value: String) throws -> String {
+        try engine.setChoice(source, key: key, value: value)
+    }
     func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion {
         try engine.insertCitation(source, position: position, key: key)
     }
@@ -2181,7 +2283,12 @@ private final class FailingCitationEngine: CitationEngineProtocol, @unchecked Se
     func addBibliography(_ source: String, path: String) throws -> String {
         try engine.addBibliography(source, path: path)
     }
-    func referenceChoices(_ source: String) throws -> CitationChoices { try engine.referenceChoices(source) }
+    func referenceChoices(_ source: String) throws -> CitationChoices {
+        throw CitationEngineError.script("The citation code failed.")
+    }
+    func setChoice(_ source: String, key: String, value: String) throws -> String {
+        try engine.setChoice(source, key: key, value: value)
+    }
     func insertCitation(_ source: String, position: Int, key: String) throws -> CitationInsertion {
         try engine.insertCitation(source, position: position, key: key)
     }

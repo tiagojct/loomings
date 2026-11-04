@@ -30,9 +30,13 @@ final class EditorWindowController: NSWindowController,
     private let scrollView = DocumentScrollView()
     private let previewScrollView = NSScrollView()
     private let previewTextView = PreviewTextView()
-    /// The right pane of Split, and the page of Preview: the preview or the library.
-    private let rightColumn = NSView()
+    /// The right pane of Split, and the page of Preview. In Split it can hold
+    /// the library in the place of the preview, under `columnTabs`.
+    private let rightColumn = RightColumnView()
+    private let columnTabs = ModeSwitch(labels: ["Preview", "References"], name: "Right column")
     private let referencesView = ReferencesView()
+    /// The room above the preview and the library.
+    private var columnTop: NSLayoutConstraint!
     private let splitView = ThemedSplitView()
     private let statusBar = StatusBarView()
     private var statusHeightConstraint: NSLayoutConstraint!
@@ -208,13 +212,26 @@ final class EditorWindowController: NSWindowController,
         splitView.translatesAutoresizingMaskIntoConstraints = false
         rightColumn.translatesAutoresizingMaskIntoConstraints = false
         referencesView.translatesAutoresizingMaskIntoConstraints = false
+        columnTabs.translatesAutoresizingMaskIntoConstraints = false
+        rightColumn.addSubview(columnTabs)
+        let columnContent = NSLayoutGuide()
+        rightColumn.addLayoutGuide(columnContent)
+        columnTop = columnContent.topAnchor.constraint(equalTo: rightColumn.topAnchor)
+        NSLayoutConstraint.activate([
+            columnTabs.topAnchor.constraint(equalTo: rightColumn.topAnchor, constant: Self.columnTabsInset),
+            columnTabs.centerXAnchor.constraint(equalTo: rightColumn.centerXAnchor),
+            columnTop,
+            columnContent.bottomAnchor.constraint(equalTo: rightColumn.bottomAnchor),
+            columnContent.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor),
+            columnContent.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
+        ])
         for view in [previewScrollView, referencesView] as [NSView] {
             rightColumn.addSubview(view)
             NSLayoutConstraint.activate([
-                view.topAnchor.constraint(equalTo: rightColumn.topAnchor),
-                view.bottomAnchor.constraint(equalTo: rightColumn.bottomAnchor),
-                view.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor),
-                view.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
+                view.topAnchor.constraint(equalTo: columnContent.topAnchor),
+                view.bottomAnchor.constraint(equalTo: columnContent.bottomAnchor),
+                view.leadingAnchor.constraint(equalTo: columnContent.leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: columnContent.trailingAnchor),
             ])
         }
 
@@ -287,7 +304,13 @@ final class EditorWindowController: NSWindowController,
             self?.insertCitation(key: key)
         }
         referencesView.onLeave = { [weak self] in
-            self?.leaveReferences()
+            self?.leaveColumn()
+        }
+        rightColumn.onEscape = { [weak self] in
+            self?.leaveColumn()
+        }
+        columnTabs.onSelect = { [weak self] index in
+            self?.selectColumn(ColumnTab(rawValue: index) ?? .preview)
         }
         refreshCompanion()
         statusBar.onExerciseClick = { [weak self] in
@@ -312,7 +335,7 @@ final class EditorWindowController: NSWindowController,
 
     func updateCitations() {
         citations.update(source: editor.source, documentURL: loomingsDocument?.citationDocumentURL)
-        updateLibrary()
+        syncRightColumn()
         guard citations.isActive else {
             editor.clearCitations()
             updateNoteCount()
@@ -442,21 +465,17 @@ final class EditorWindowController: NSWindowController,
 
     @objc func chooseBundledStyle(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }
-        setChoice(key: "csl", value: id) { $0.style }
+        setChoice(key: "csl", value: id)
     }
 
     @objc func chooseLanguage(_ sender: NSMenuItem) {
         guard let tag = sender.representedObject as? String else { return }
-        setChoice(key: "lang", value: tag) { $0.language }
+        setChoice(key: "lang", value: tag)
     }
 
-    /// A choice that is on stays on: with no `csl:` the default style is on,
-    /// and a click must write nothing.
-    private func setChoice(key: String, value: String, current: @escaping @Sendable (CitationChoices) -> String?) {
+    private func setChoice(key: String, value: String) {
         changeFrontmatter { engine, source in
-            current(try engine.referenceChoices(source)) == value
-                ? source
-                : try engine.setMeta(source, key: key, value: value)
+            try engine.setChoice(source, key: key, value: value)
         }
     }
 
@@ -500,51 +519,99 @@ final class EditorWindowController: NSWindowController,
         citations.change(source: source) { engine, text in
             try engine.referenceChoices(text)
         } completion: { [weak self] result in
-            guard let self, case .success(let choices) = result else { return }
-            self.referenceChoices = (source, choices)
-            done()
+            guard let self else { return }
+            switch result {
+            case .success(let choices):
+                self.referenceChoices = (source, choices)
+                done()
+            case .failure:
+                self.markupOverlay.show("The References menu cannot show the current choices.")
+            }
         }
     }
 
     // MARK: - References column
 
-    /// The writer asked for the library. The state is per window.
-    private var wantsReferences = false
+    /// What the control at the top of the right column selects.
+    private enum ColumnTab: Int {
+        case preview
+        case references
+    }
 
-    /// The right column shows the library in place of the preview.
-    private var isLibraryShown: Bool { wantsReferences && viewMode != .write }
+    private static let columnTabsInset: CGFloat = 8
 
-    /// Write goes to Split first, and the command then only shows the library.
+    /// Stays through mode changes, for each window, as on the web.
+    private var columnTab = ColumnTab.preview
+    /// The writer asked for the library, so the control stays with this window.
+    private var askedForReferences = false
+
+    /// Only Split has the control: Preview always shows the preview.
+    private var showsColumnTabs: Bool {
+        viewMode == .split && (askedForReferences || citations.isActive)
+    }
+
+    private var isLibraryShown: Bool { showsColumnTabs && columnTab == .references }
+
+    /// Show References goes to Split with the library. In Split it switches.
     @objc func toggleReferences(_ sender: Any?) {
-        wantsReferences = viewMode == .write ? true : !wantsReferences
-        if viewMode == .write {
-            setViewMode(.split)
+        askedForReferences = true
+        if viewMode == .split {
+            selectColumn(isLibraryShown ? .preview : .references)
         } else {
-            applyRightColumn()
+            columnTab = .references
+            setViewMode(.split)
         }
         if isLibraryShown {
             window?.makeFirstResponder(referencesView.filterField)
         } else {
-            refreshPreview()
-            layoutPreview()
-            leaveReferences()
+            leaveColumn()
         }
     }
 
-    private func leaveReferences() {
-        window?.makeFirstResponder(viewMode == .preview ? previewTextView : editor.textView)
+    private func selectColumn(_ tab: ColumnTab) {
+        columnTab = tab
+        applyRightColumn()
+        if !isLibraryShown {
+            refreshPreview()
+            layoutPreview()
+        }
     }
 
-    /// Puts the preview or the library in the right column. The divider stays
-    /// where the writer put it.
+    /// Escape in the column. Preview has no editor to go to.
+    private func leaveColumn() {
+        guard viewMode == .split else { return }
+        window?.makeFirstResponder(editor.textView)
+    }
+
+    /// Puts the control and the preview or the library in the right column.
+    /// The divider stays where the writer put it.
     private func applyRightColumn() {
         let showRight = viewMode != .write
+        let showTabs = showsColumnTabs
         let showLibrary = isLibraryShown
         clearPairing()
         rightColumn.isHidden = !showRight
+        columnTabs.isHidden = !showTabs
+        columnTabs.selectedIndex = columnTab.rawValue
+        columnTop.constant = showTabs ? ModeSwitch.height + Self.columnTabsInset * 2 : 0
         previewScrollView.isHidden = !showRight || showLibrary
         referencesView.isHidden = !showLibrary
         updateLibrary()
+    }
+
+    /// The citation keys of the text decide if the control shows, so an edit
+    /// can change the column.
+    private func syncRightColumn() {
+        guard columnTabs.isHidden == showsColumnTabs || referencesView.isHidden == isLibraryShown else {
+            updateLibrary()
+            return
+        }
+        let wasLibrary = !referencesView.isHidden
+        applyRightColumn()
+        if wasLibrary, !isLibraryShown {
+            refreshPreview()
+            layoutPreview()
+        }
     }
 
     private func updateLibrary() {
@@ -557,9 +624,8 @@ final class EditorWindowController: NSWindowController,
 
     /// Inserts a citation of `key` at the end of the selection, by the rule of
     /// the citation code: one edit, one Undo. The focus goes back to the
-    /// editor. From Preview, the editor comes back first, as on the web.
+    /// editor.
     func insertCitation(key: String) {
-        if viewMode == .preview { setViewMode(.write) }
         let source = editor.source
         let position = NSMaxRange(editor.textView.selectedRange())
         citations.change(source: source) { engine, text in
@@ -597,6 +663,8 @@ final class EditorWindowController: NSWindowController,
     }
 
     var isLibraryShownForTesting: Bool { isLibraryShown && !referencesView.isHidden }
+    var columnTabsForTesting: ModeSwitch? { columnTabs.isHidden ? nil : columnTabs }
+    var previewTextViewForTesting: NSTextView { previewTextView }
     /// The left edge of the editor pane, and of the page in it.
     var editorEdgesForTesting: (pane: CGFloat, page: CGFloat) { (scrollView.frame.minX, scrollView.contentView.bounds.minX) }
     /// The widths of the editor and the right column.
@@ -1749,6 +1817,7 @@ final class EditorWindowController: NSWindowController,
 
     private func applyToolbarPalette(_ resolved: ResolvedPalette?) {
         modeSwitch?.applyPalette(resolved)
+        columnTabs.applyPalette(resolved)
         for button in toolButtons {
             button.applyPalette(resolved)
         }
@@ -1911,6 +1980,15 @@ private final class PreviewPipeline: @unchecked Sendable {
             themed = true
         }
         return renderer.render(source: source, documentURL: documentURL)
+    }
+}
+
+/// The right column. Escape in the preview or on the control comes here.
+final class RightColumnView: NSView {
+    var onEscape: (() -> Void)?
+
+    override func cancelOperation(_ sender: Any?) {
+        onEscape?()
     }
 }
 

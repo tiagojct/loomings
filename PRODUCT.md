@@ -62,7 +62,7 @@ without giving up the property that makes it work.
   marker glossary, exercise checks, section word limits, paired lines,
   projector mode, handouts with a QR code.
   The native app has the same citations, from files read next to the document,
-  with a References menu and a References column. It does not draw diagrams
+  with a References menu and a References tab in Split. It does not draw diagrams
   yet: CoreSVG ignores `var()`, so the Pele colours do not apply.
 - Deployed as a container behind Cloudflare and Caddy at
   `loomings.tiagojacinto.eu`; the app lives at `/app/`, the landing page owns

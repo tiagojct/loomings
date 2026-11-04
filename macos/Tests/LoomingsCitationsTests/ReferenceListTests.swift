@@ -152,6 +152,31 @@ struct ReferenceEditTests {
         #expect(try engine.referenceChoices("---\ncsl: journal.csl\n---\n") == CitationChoices(style: nil, language: "en-US"))
     }
 
+    @Test("A path with the name of a bundled style is a file: the value must match exactly")
+    func exactStyle() throws {
+        let engine = try CitationEngine(resources: resources)
+        #expect(try engine.referenceChoices("---\ncsl: own/apa.csl\n---\n").style == nil)
+        #expect(try engine.referenceChoices("---\ncsl: apa.csl\n---\n").style == nil)
+    }
+
+    @Test("A choice that is on writes nothing")
+    func choiceOn() throws {
+        let engine = try CitationEngine(resources: resources)
+        #expect(try engine.setChoice("Body.\n", key: "csl", value: "chicago-author-date") == "Body.\n")
+        #expect(try engine.setChoice("Body.\n", key: "lang", value: "en-US") == "Body.\n")
+        let text = "---\ncsl: apa\nlang: pt\n---\n"
+        #expect(try engine.setChoice(text, key: "csl", value: "apa") == text)
+        #expect(try engine.setChoice(text, key: "lang", value: "pt-PT") == text)
+    }
+
+    @Test("Another choice goes in the frontmatter, also over a file of the same name")
+    func choiceOff() throws {
+        let engine = try CitationEngine(resources: resources)
+        #expect(try engine.setChoice("Body.\n", key: "csl", value: "apa") == "---\ncsl: apa\n---\nBody.\n")
+        #expect(try engine.setChoice("---\ncsl: own/apa.csl\n---\n", key: "csl", value: "apa") == "---\ncsl: apa\n---\n")
+        #expect(try engine.setChoice("---\ncsl: apa\n---\n", key: "lang", value: "es-ES") == "---\ncsl: apa\nlang: es-ES\n---\n")
+    }
+
     @Test("Inserts by the rule of the web")
     func insertion() throws {
         let engine = try CitationEngine(resources: resources)

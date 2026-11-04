@@ -190,6 +190,8 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     /// The count of queries, to prove that one list makes one query.
     public private(set) var citationMatchRuns: UInt64 = 0
     private var preparedRows: (range: NSRange, rows: [CitationCompletion])?
+    /// True while rows wait for a list that is about to open.
+    public var hasPreparedRows: Bool { preparedRows != nil }
     private var typedOneCharacter = false
     /// The sign whose list the writer closed.
     private var dismissedSign: Int?
@@ -199,6 +201,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     /// change to the current text.
     public func setCitations(_ marks: [CitationMark], keys: [CitationCompletion], reportedSource: String) {
         citationKeys = keys
+        preparedRows = nil
         let length = (textView.string as NSString).length
         let change = TextChange.between(reportedSource, textView.string)
         let moved = marks.compactMap { mark -> CitationMark? in
@@ -213,6 +216,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     public func clearCitations() {
         citationKeys = []
         isCompletionArmed = false
+        preparedRows = nil
         guard !citationMarks.isEmpty else { return }
         citationMarks = []
         updateCitationSquiggles()
@@ -341,7 +345,11 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
         let revision = self.revision
         RunLoop.main.perform { [weak self] in
             MainActor.assumeIsolated {
-                guard let self, self.revision == revision, self.citationQueryRange() == range else { return }
+                guard let self else { return }
+                guard self.revision == revision, self.citationQueryRange() == range else {
+                    self.preparedRows = nil
+                    return
+                }
                 self.textView.complete(nil)
             }
         }
@@ -549,6 +557,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
         applyFrontmatterAttribute(output.spans)
         applyAnalysis(output)
         applyVisibleStyling()
+        openArmedCompletion()
     }
 
     public func observeScrolling(in scrollView: NSScrollView) {

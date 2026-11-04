@@ -226,10 +226,12 @@ export function fileChange(meta, name, path) {
  *
  * @param {CitationMeta} meta
  * @param {FileName[]} files
+ * @param {{exact?: boolean}} [options]  exact: compare the whole value. The
+ *   native app reads by path, so `own/apa.csl` is a file, not the bundled APA.
  * @returns {{value: string, label: string, checked: boolean}[]}
  */
-export function styleChoices(meta, files) {
-  const wanted = meta.csl ? fileBaseName(meta.csl) : DEFAULT_STYLE;
+export function styleChoices(meta, files, { exact = false } = {}) {
+  const wanted = meta.csl ? (exact ? meta.csl : fileBaseName(meta.csl)) : DEFAULT_STYLE;
   const stored = files.filter((f) => f.kind === 'csl');
   const hidden = new Set(stored.map((f) => fileBaseName(f.name)));
   return [
@@ -245,6 +247,18 @@ export function styleChoices(meta, files) {
 export function languageChoices(meta) {
   const wanted = localeFor(meta.lang);
   return BUNDLED_LOCALES.map((value) => ({ value, label: LOCALE_LABELS[value] ?? value, checked: value === wanted }));
+}
+
+/**
+ * A radio item that is on stays on: with no `csl:` the default style is on,
+ * and a click must write nothing.
+ *
+ * @param {{value: string, checked: boolean}[]} choices
+ * @param {string} value
+ * @returns {boolean}
+ */
+export function choiceIsOn(choices, value) {
+  return choices.some((choice) => choice.value === value && choice.checked);
 }
 
 /**

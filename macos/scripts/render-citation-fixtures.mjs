@@ -225,8 +225,15 @@ const library = [
   { key: 'smith2019', authors: 'Smith', year: '2019', title: 'A book on lung function' },
   { key: 'muller2001', authors: 'Müller', year: '2001', title: 'Über die Lunge' },
   { key: 'nguyen2015', authors: 'Nguyễn', year: '2015', title: '' },
+  { key: 'greek2010', authors: 'ΣΩΚΡΑΤΗΣ', year: '2010', title: 'ΑΣΘΜΑ ΚΑΙ ΣΟΦΟΣ' },
+  { key: 'russian2011', authors: 'Ёлкин', year: '2011', title: 'Лёгкие' },
+  { key: 'japan2012', authors: '山田', year: '2012', title: 'ガイド' },
+  { key: 'turkish2013', authors: 'İnan', year: '2013', title: 'Akciğer' },
+  { key: 'arabic2014', authors: 'مُحَمَّد', year: '2014', title: 'الرِّئة' },
 ];
-const filterQueries = ['', '   ', 'jacome', 'JÁCOME', 'saude ciencia', 'CIÊNCIA 2020', '2019', 'lung  function', 'muller', 'uber', 'nguyen', 'absent', 'smith absent'];
+const filterQueries = ['', '   ', 'jacome', 'JÁCOME', 'saude ciencia', 'CIÊNCIA 2020', '2019', 'lung  function', 'muller', 'uber', 'nguyen', 'absent', 'smith absent',
+  'σωκρατης', 'ΣΩΚΡΑΤΗΣ', 'σωκρατησ', 'σοφος', 'σοφοσ', 'ασθμα', 'елкин', 'ЛЕГКИЕ', '山田', 'カイト', 'ガイド', 'inan', 'İNAN', 'akciger', 'AKCIĞER', 'محمد', 'الرئة',
+  'smith\u00a02019', 'smith\u30002019', 'smith\ufeff2019', 'smith\u200b2019'];
 
 const out = {
   plans: plans.map((p) => ({ ...p, plan: planNativeSources(p.request, p.known) })),

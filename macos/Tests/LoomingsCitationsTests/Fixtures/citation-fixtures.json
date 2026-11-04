@@ -983,6 +983,36 @@
         "authors": "Nguyễn",
         "year": "2015",
         "title": ""
+      },
+      {
+        "key": "greek2010",
+        "authors": "ΣΩΚΡΑΤΗΣ",
+        "year": "2010",
+        "title": "ΑΣΘΜΑ ΚΑΙ ΣΟΦΟΣ"
+      },
+      {
+        "key": "russian2011",
+        "authors": "Ёлкин",
+        "year": "2011",
+        "title": "Лёгкие"
+      },
+      {
+        "key": "japan2012",
+        "authors": "山田",
+        "year": "2012",
+        "title": "ガイド"
+      },
+      {
+        "key": "turkish2013",
+        "authors": "İnan",
+        "year": "2013",
+        "title": "Akciğer"
+      },
+      {
+        "key": "arabic2014",
+        "authors": "مُحَمَّد",
+        "year": "2014",
+        "title": "الرِّئة"
       }
     ],
     "cases": [
@@ -992,7 +1022,12 @@
           "jacome2020",
           "smith2019",
           "muller2001",
-          "nguyen2015"
+          "nguyen2015",
+          "greek2010",
+          "russian2011",
+          "japan2012",
+          "turkish2013",
+          "arabic2014"
         ]
       },
       {
@@ -1001,7 +1036,12 @@
           "jacome2020",
           "smith2019",
           "muller2001",
-          "nguyen2015"
+          "nguyen2015",
+          "greek2010",
+          "russian2011",
+          "japan2012",
+          "turkish2013",
+          "arabic2014"
         ]
       },
       {
@@ -1064,6 +1104,126 @@
       },
       {
         "query": "smith absent",
+        "keys": []
+      },
+      {
+        "query": "σωκρατης",
+        "keys": [
+          "greek2010"
+        ]
+      },
+      {
+        "query": "ΣΩΚΡΑΤΗΣ",
+        "keys": [
+          "greek2010"
+        ]
+      },
+      {
+        "query": "σωκρατησ",
+        "keys": []
+      },
+      {
+        "query": "σοφος",
+        "keys": [
+          "greek2010"
+        ]
+      },
+      {
+        "query": "σοφοσ",
+        "keys": []
+      },
+      {
+        "query": "ασθμα",
+        "keys": [
+          "greek2010"
+        ]
+      },
+      {
+        "query": "елкин",
+        "keys": [
+          "russian2011"
+        ]
+      },
+      {
+        "query": "ЛЕГКИЕ",
+        "keys": [
+          "russian2011"
+        ]
+      },
+      {
+        "query": "山田",
+        "keys": [
+          "japan2012"
+        ]
+      },
+      {
+        "query": "カイト",
+        "keys": [
+          "japan2012"
+        ]
+      },
+      {
+        "query": "ガイド",
+        "keys": [
+          "japan2012"
+        ]
+      },
+      {
+        "query": "inan",
+        "keys": [
+          "turkish2013"
+        ]
+      },
+      {
+        "query": "İNAN",
+        "keys": [
+          "turkish2013"
+        ]
+      },
+      {
+        "query": "akciger",
+        "keys": [
+          "turkish2013"
+        ]
+      },
+      {
+        "query": "AKCIĞER",
+        "keys": [
+          "turkish2013"
+        ]
+      },
+      {
+        "query": "محمد",
+        "keys": [
+          "arabic2014"
+        ]
+      },
+      {
+        "query": "الرئة",
+        "keys": [
+          "arabic2014"
+        ]
+      },
+      {
+        "query": "smith 2019",
+        "keys": [
+          "smith2019"
+        ]
+      },
+      {
+        "query": "smith　2019",
+        "keys": [
+          "smith2019"
+        ]
+      },
+      {
+        "query": "smith﻿2019",
+        "keys": [
+          "smith2019"
+        ]
+      },
+      {
+        "query": "smith​2019",
         "keys": []
       }
     ]

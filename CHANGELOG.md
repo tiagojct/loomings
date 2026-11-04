@@ -46,9 +46,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   folder, `../refs.bib` included. An untitled or shelf document gets an
   absolute path. A dependent style with no parent gives a sheet that names the
   parent, and nothing is written.
-- Show References puts the library in the right column of Split, or in the
-  place of the preview in Preview. From Write it goes to Split first. A filter
-  field ignores accents. Each row says if the document cites the entry, and a
+- Show References goes to Split with the library in the right column. In
+  Split, a control at the top of the column selects Preview or References. It
+  shows when the document has citation keys or the writer asked for the
+  library. Preview always shows the preview. Escape in the column gives the
+  focus to the editor. A filter field ignores accents. Each row says if the document cites the entry, and a
   cited key with no entry goes first. Return or a double click inserts
   `[@key]` with the web's rule, as one Undo step, and the focus goes back to
   the editor.

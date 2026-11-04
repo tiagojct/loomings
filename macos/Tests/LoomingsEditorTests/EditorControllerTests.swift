@@ -539,6 +539,47 @@ struct CitationCompletionTests {
         #expect(editor.isCompletionArmed)
     }
 
+    /// A window that gives the editor the focus, with a parse in place and
+    /// a list on its way.
+    private func preparedEditor() -> (EditorController, NSWindow) {
+        let editor = editor(Self.bibliography + "A claim ")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = editor.textView
+        window.makeFirstResponder(editor.textView)
+        type("@", in: editor)
+        editor.reparseSynchronously()
+        return (editor, window)
+    }
+
+    @Test("New keys drop the rows of a list that has not opened")
+    func preparedRowsGoWithNewKeys() {
+        let (editor, window) = preparedEditor()
+        defer { window.close() }
+        #expect(editor.hasPreparedRows)
+        editor.setCitations([], keys: editor.citationKeys, reportedSource: editor.source)
+        #expect(!editor.hasPreparedRows)
+    }
+
+    @Test("Clear drops the rows of a list that has not opened")
+    func preparedRowsGoWithClear() {
+        let (editor, window) = preparedEditor()
+        defer { window.close() }
+        #expect(editor.hasPreparedRows)
+        editor.clearCitations()
+        #expect(!editor.hasPreparedRows)
+    }
+
+    @Test("An edit before the list opens drops its rows")
+    func preparedRowsGoWithAnEdit() {
+        let (editor, window) = preparedEditor()
+        defer { window.close() }
+        #expect(editor.hasPreparedRows)
+        editor.replace(range: NSRange(location: 0, length: 0), with: "x")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        #expect(!editor.hasPreparedRows)
+    }
+
     @Test("A sign from code does not arm the list")
     func programmaticSign() {
         let replaced = editor("A claim ")

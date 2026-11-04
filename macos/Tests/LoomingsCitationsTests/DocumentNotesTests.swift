@@ -88,6 +88,23 @@ struct CitationFileNameTests {
         #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Users/b/my refs/refs (1).bib"), folder: folder) == "../../b/my refs/refs (1).bib")
     }
 
+    @Test("A path stays as it was chosen: a link is not followed")
+    func noLinks() throws {
+        let base = FileManager.default.temporaryDirectory.appendingPathComponent("loomings-links-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: base) }
+        let real = base.appendingPathComponent("real")
+        let paper = base.appendingPathComponent("paper")
+        for folder in [real, paper] {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        }
+        try Data().write(to: real.appendingPathComponent("refs.bib"))
+        let link = base.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+        let file = link.appendingPathComponent("refs.bib")
+        #expect(CitationFileName.value(for: file, folder: paper) == "../link/refs.bib")
+        #expect(CitationFileName.value(for: file, folder: nil) == file.path)
+    }
+
     @Test("A file that shares only the root, or no folder, gives an absolute path")
     func absolute() {
         #expect(CitationFileName.value(for: URL(fileURLWithPath: "/Volumes/d/refs.bib"), folder: folder) == "/Volumes/d/refs.bib")
