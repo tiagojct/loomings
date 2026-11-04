@@ -33,13 +33,14 @@ import {
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
-  listCitationFiles, refreshCitationFiles,
+  listCitationFiles, refreshCitationFiles, pickCitationFile,
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
 import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
 import { createCitationDocument, citedHtml, citationsLeftLiteral } from './citations/document.js';
+import { citationExtensions, citationReportEffect, citationNotes, citationThemeRules } from './citations/editor.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -172,6 +173,7 @@ function makeTheme(p, isDark) {
     '.cm-search [name=close]': { color: p.fgDim },
     '.cm-searchMatch': { backgroundColor: p.accent + '40' },
     '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: p.accentLight + '70' },
+    ...citationThemeRules(p),
   }, { dark: isDark });
 }
 
@@ -534,6 +536,7 @@ function buildState(doc = '') {
       frontmatterPlugin,
       pairedLinesPlugin,
       notesPlugin,
+      ...citationExtensions((text) => citations.reportFor(text)),
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
@@ -634,6 +637,8 @@ function getText() { return view.state.doc.toString(); }
 function setText(text) {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
+    // The citation marks follow the new report, which is none after a reset.
+    effects: citationReportEffect.of(null),
   });
 }
 
@@ -1155,7 +1160,11 @@ const citations = createCitationDocument({
   client: async () => (await import('./citations/client.js')).createCitationClient(),
   assets: () => import('./citations/assets.js'),
   listFiles: listCitationFiles,
-  onChange: () => updatePreview({ onlyIfChanged: true }),
+  onChange: () => {
+    updatePreview({ onlyIfChanged: true });
+    view.dispatch({ effects: citationReportEffect.of(null) });
+    refreshNotes();
+  },
 });
 
 function markDirty() {
@@ -1813,6 +1822,8 @@ const notesMenu   = el('notes-menu');
 let teachingRevision = 0;
 /** @type {{revision: number, issues: import('./teaching/lint.js').LintIssue[]}} */
 let teaching = { revision: -1, issues: [] };
+/** @type {(import('./teaching/lint.js').LintIssue & {fileLevel?: boolean, action?: {title: string, kind: string}})[]} */
+let noteList = [];
 /** @type {ReturnType<typeof setTimeout>|null} */ let teachingTimer = null;
 
 function scheduleTeaching() {
@@ -1855,34 +1866,66 @@ function runTeaching() {
  * @param {import('./teaching/report.js').TeachingReport} report
  */
 function applyTeaching(revision, report) {
-  const issues = report.issues;
-  teaching = { revision, issues };
+  teaching = { revision, issues: report.issues };
   limitedSections = report.sections;
   updateExercise({ results: report.results, notes: report.notes });
   updateSectionStatus();
-  view.dispatch({ effects: notesEffect.of(issues) });
-  notesWrap.classList.toggle('hidden', issues.length === 0);
-  notesButton.textContent = issues.length === 1 ? '1 note' : `${issues.length} notes`;
-  notesButton.setAttribute('aria-label', issues.length === 1 ? '1 Markdown note' : `${issues.length} Markdown notes`);
+  refreshNotes();
+}
+
+/**
+ * The notes of the checker and of the citation report in one list. The
+ * checker notes come first. Either part can arrive late: this runs when
+ * either one changes, and keeps the part that did not change. The wavy marks
+ * are for a note whose text is the text in the editor, so they use the
+ * checker issues of the current revision and a report of the current text.
+ */
+function refreshNotes() {
+  const text = getText();
+  const report = citations.reportFor(text);
+  const held = citations.current();
+  const citeNotes = citationNotes(report, text.length);
+  noteList = [...teaching.issues, ...citeNotes];
+  const marks = [
+    ...(teaching.revision === teachingRevision ? teaching.issues : []),
+    ...(held?.text === text ? citeNotes : []),
+  ];
+  view.dispatch({ effects: notesEffect.of(marks) });
+  notesWrap.classList.toggle('hidden', noteList.length === 0);
+  notesButton.textContent = noteList.length === 1 ? '1 note' : `${noteList.length} notes`;
+  notesButton.setAttribute('aria-label', noteList.length === 1 ? '1 Markdown note' : `${noteList.length} Markdown notes`);
   if (!notesMenu.classList.contains('hidden')) renderNotesMenu();
 }
 
 function renderNotesMenu() {
   const doc = view.state.doc;
-  notesMenu.innerHTML = teaching.issues.map((issue, i) => {
+  notesMenu.innerHTML = noteList.map((issue, i) => {
     const line = doc.lineAt(Math.min(issue.from, doc.length)).number;
-    const fix = issue.fix
-      ? `<button type="button" class="tb-menu-item" role="menuitem" data-fix="${i}" aria-describedby="note-${i}">${escapeHtml(issue.fix.title)}</button>`
+    const title = issue.fix?.title ?? issue.action?.title;
+    const fix = title
+      ? `<button type="button" class="tb-menu-item" role="menuitem" data-fix="${i}" aria-describedby="note-${i}">${escapeHtml(title)}</button>`
       : '';
+    const go = issue.fileLevel
+      ? ''
+      : `<button type="button" class="tb-menu-item" role="menuitem" data-go="${i}" aria-describedby="note-${i}">Go to line ${line}</button>`;
     return `<div class="note-row" role="none">
         <p class="note-message" id="note-${i}">${escapeHtml(issue.message)}</p>
-        <div class="note-actions" role="none">${fix}<button type="button" class="tb-menu-item" role="menuitem" data-go="${i}" aria-describedby="note-${i}">Go to line ${line}</button></div>
+        <div class="note-actions" role="none">${fix}${go}</div>
       </div>`;
   }).join('');
 }
 
-/** @param {import('./teaching/lint.js').LintIssue} issue */
+/** Asks for the missing citation file and reads the citations again. */
+async function addCitationFile() {
+  const file = await pickCitationFile();
+  if (!file) return;
+  if (!file.stored) flashStatus(`${file.name} is open in this tab only`);
+  await citations.refresh();
+}
+
+/** @param {import('./teaching/lint.js').LintIssue & {action?: {title: string, kind: string}}} issue */
 function applyFix(issue) {
+  if (issue.action) { addCitationFile(); return; }
   const fix = issue.fix;
   if (!fix || teaching.revision !== teachingRevision || fix.to > view.state.doc.length) return;
   view.dispatch({
@@ -1911,7 +1954,7 @@ attachMenu(notesButton, notesMenu, {
     runTeaching();
   },
   onPick: (item) => {
-    const issue = teaching.issues[Number(item.dataset.fix ?? item.dataset.go)];
+    const issue = noteList[Number(item.dataset.fix ?? item.dataset.go)];
     if (!issue) return;
     if (item.dataset.fix !== undefined) applyFix(issue);
     else goToPosition(issue.from);
