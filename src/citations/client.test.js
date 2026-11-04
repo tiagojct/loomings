@@ -1,0 +1,110 @@
+import { describe, it, expect, vi } from 'vitest';
+import { createCitationClient } from './client.js';
+
+const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+const report = (markdownSource) => ({ markdownSource });
+
+function fakeWorker() {
+  const w = { sent: [], onmessage: null, onerror: null, terminate: vi.fn() };
+  w.postMessage = (m) => w.sent.push(m);
+  w.answer = (id, r) => w.onmessage({ data: { id, report: r } });
+  return w;
+}
+const fullSources = { bibs: [], styleXml: 's', localeXml: 'l', lang: 'en-US' };
+
+describe('createCitationClient', () => {
+  it('starts the worker on the first use only', () => {
+    const spawn = vi.fn(fakeWorker);
+    const client = createCitationClient({ spawn });
+    expect(spawn).not.toHaveBeenCalled();
+    client.update('a');
+    client.update('b');
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+  it('drops older answers and keeps the latest', () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    const seen = [];
+    client.onReport((r) => seen.push(r));
+    client.update('a');
+    client.update('b');
+    expect(w.sent.map((m) => m.type)).toEqual(['analyse', 'analyse']);
+    w.answer(w.sent[1].id, report('b'));
+    w.answer(w.sent[0].id, report('a'));
+    expect(seen).toEqual([report('b')]);
+    expect(client.latest()).toEqual(report('b'));
+  });
+  it('gives null before the first report', () => {
+    expect(createCitationClient({ spawn: fakeWorker }).latest()).toBe(null);
+  });
+  it('sends the sources, then the last text again', async () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    client.update('a');
+    await client.setSources(fullSources);
+    expect(w.sent.map((m) => m.type)).toEqual(['analyse', 'sources', 'analyse']);
+    expect(w.sent[2].text).toBe('a');
+    expect(w.sent[1].id).toBeLessThan(w.sent[2].id);
+  });
+  it('adds the en-US fallback for another language', async () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    await client.setSources({ ...fullSources, lang: 'pt-PT' });
+    expect(w.sent[0].sources.fallbackLocaleXml).toContain('<locale');
+    expect(w.sent[0].sources.lang).toBe('pt-PT');
+    expect(w.sent[0].sources.localeXml).toBe('l');
+  });
+  it('loads a locale that the sources do not carry', async () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    await client.setSources({ bibs: [], styleXml: 's', lang: 'en-US' });
+    expect(w.sent[0].sources.localeXml).toContain('xml:lang="en-US"');
+    expect(w.sent[0].sources.fallbackLocaleXml).toBeUndefined();
+  });
+  it('sends only the newest sources when two calls overlap', async () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    const first = client.setSources({ bibs: [], styleXml: 'one', lang: 'pt-PT' });
+    const second = client.setSources({ bibs: [], styleXml: 'two', lang: 'es-ES' });
+    await Promise.all([first, second]);
+    expect(w.sent.filter((m) => m.type === 'sources').map((m) => m.sources.styleXml)).toEqual(['two']);
+  });
+  it('runs on this thread when the worker cannot start', async () => {
+    const analyse = vi.fn((text) => report(text));
+    const setSources = vi.fn();
+    const client = createCitationClient({
+      spawn: () => { throw new Error('no worker'); },
+      loadSession: async () => ({ analyse, setSources }),
+    });
+    const seen = [];
+    client.onReport((r) => seen.push(r));
+    await client.setSources(fullSources);
+    client.update('a');
+    client.update('b');
+    await tick();
+    expect(setSources).toHaveBeenCalledTimes(1);
+    expect(seen).toEqual([report('b')]);
+  });
+  it('moves to this thread when the worker fails, and sends the state again', async () => {
+    const w = fakeWorker();
+    const analyse = vi.fn((text) => report(text));
+    const setSources = vi.fn();
+    const client = createCitationClient({ spawn: () => w, loadSession: async () => ({ analyse, setSources }) });
+    await client.setSources(fullSources);
+    client.update('a');
+    w.onerror();
+    await tick();
+    expect(w.terminate).toHaveBeenCalled();
+    expect(setSources).toHaveBeenCalledTimes(1);
+    expect(client.latest()).toEqual(report('a'));
+  });
+  it('survives a session that cannot load', async () => {
+    const client = createCitationClient({
+      spawn: () => { throw new Error('no worker'); },
+      loadSession: () => Promise.reject(new Error('no chunk')),
+    });
+    client.update('a');
+    await tick();
+    expect(client.latest()).toBe(null);
+  });
+});
