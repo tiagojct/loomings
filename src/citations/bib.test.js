@@ -65,6 +65,47 @@ describe('parseBibliography', () => {
     expect(notes[0].message).toContain('a1');
   });
 
+  it('does not keep the source text in the items', () => {
+    let text = '';
+    for (let n = 0; n < 5; n++) text += entry('k' + n, 'Unique title ' + n);
+    const { items } = parseBibliography(text);
+    const json = JSON.stringify(items[0]);
+    expect(json).not.toContain('Unique title 1');
+    expect(items[0]._graph).toBeUndefined();
+    expect(items[0]['citation-key']).toBeUndefined();
+    expect(items[0].id).toBe('k0');
+  });
+
+  it('drops a bad @string and keeps the entries', () => {
+    const text = '@string{x = }\n' + entry('a1') + entry('a2');
+    const { items, notes } = parseBibliography(text);
+    expect(items.map((i) => i.id)).toEqual(['a1', 'a2']);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].line).toBe(0);
+  });
+
+  it('does not cut a closed block at a line that starts with @', () => {
+    const text = '@article{a1,\n title = {Has\n@word{inside}\n text},\n year = {2020}}\n' + entry('a2');
+    const { items, notes } = parseBibliography(text);
+    expect(items.map((i) => i.id)).toEqual(['a1', 'a2']);
+    expect(notes).toEqual([]);
+  });
+
+  it('keeps the first duplicate on the fallback path', () => {
+    const text = entry('a1', 'First') + '@article{bad,\n title = {x} year = {1}}\n' + entry('a1', 'Second');
+    const { items, notes } = parseBibliography(text);
+    expect(items).toHaveLength(1);
+    expect(items[0].title).toBe('First');
+    expect(notes.map((n) => [n.key, n.line]).sort()).toEqual([['a1', 7], ['bad', 5]]);
+  });
+
+  it('counts lines in CRLF text', () => {
+    const text = (entry('a1') + '@article{bad,\n title = {x} year = {1}}\n' + entry('a3')).replace(/\n/g, '\r\n');
+    const { notes } = parseBibliography(text);
+    expect(notes).toHaveLength(1);
+    expect(notes[0].line).toBe(5);
+  });
+
   it('never throws', () => {
     for (const text of ['@', '@article', '@article{', '{{{{', '@@@{}', '@string{x', null, undefined]) {
       expect(() => parseBibliography(/** @type {any} */ (text))).not.toThrow();

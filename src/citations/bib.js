@@ -17,7 +17,7 @@ import '@citation-js/plugin-bibtex';
  */
 
 const START = /@([A-Za-z]+)[ \t]*([{(])/g;
-const LINE_START = /^[ \t]*@[A-Za-z]+[ \t]*[{(]/;
+const NEXT_ENTRY = /\n(?=@[A-Za-z]+[ \t]*[{(])/g;
 const KEY = /^[\s]*([^\s,{}()=]+)[ \t\r\n]*,/;
 const NO_ITEM = new Set(['string', 'comment', 'preamble']);
 
@@ -57,11 +57,13 @@ function scanBlocks(text) {
       else if (c === close) {
         depth--;
         if (depth === 0) { closed = true; i++; break; }
-      } else if (c === '\n') {
-        // An unclosed block stops where the next entry begins.
-        const rest = text.slice(i + 1, i + 80);
-        if (LINE_START.test(rest) && /^@/.test(rest)) break;
       }
+    }
+    if (!closed) {
+      // An unclosed block ends before the next line that starts an entry.
+      NEXT_ENTRY.lastIndex = bodyStart;
+      const next = NEXT_ENTRY.exec(text);
+      i = next ? next.index + 1 : text.length;
     }
     const kind = m[1].toLowerCase();
     const body = text.slice(bodyStart, i);
@@ -111,10 +113,12 @@ export function parseBibliography(text) {
   /**
    * Adds an item. The first item with a key wins.
    *
-   * @param {CslItem} item
+   * @param {CslItem} rawItem
    * @param {number} [line] the line of the block, if known
    */
-  const add = (item, line) => {
+  const add = (rawItem, line) => {
+    // citation-js adds the whole source text as _graph. Drop it and the key copy.
+    const { _graph, 'citation-key': _key, ...item } = rawItem;
     const count = seen.get(item.id);
     if (count === undefined) {
       seen.set(item.id, 1);
@@ -146,7 +150,17 @@ export function parseBibliography(text) {
   }
 
   const all = getBlocks();
-  const strings = all.filter((b) => b.kind === 'string' && b.closed).map((b) => b.text).join('\n');
+  const goodStrings = [];
+  for (const block of all) {
+    if (block.kind !== 'string' || !block.closed) continue;
+    try {
+      parseText(`${block.text}\n@misc{x, title = {x}}`);
+      goodStrings.push(block.text);
+    } catch {
+      notes.push({ line: block.line, message: 'A string definition could not be read. It is not used.' });
+    }
+  }
+  const strings = goodStrings.join('\n');
   for (const block of all) {
     if (NO_ITEM.has(block.kind)) continue;
     const name = block.key ? `Entry ${block.key}` : `The entry on line ${block.line + 1}`;
