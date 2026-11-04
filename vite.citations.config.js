@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { citeprocNotice } from './scripts/citeproc-notice.js';
 
 // The citation code as one script for JavaScriptCore. A JSContext has only
 // the language, so the banner adds the few globals that the libraries read.
@@ -29,6 +30,7 @@ export default defineConfig({
       formats: ['iife'],
       fileName: () => 'citations.js',
     },
-    rolldownOptions: { output: { banner } },
+    // The minifier rewrites the banner. A notice must stay as it is, so it goes after that step.
+    rolldownOptions: { output: { banner, postBanner: citeprocNotice('LICENSE-citeproc') } },
   },
 });

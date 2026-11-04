@@ -238,7 +238,7 @@ decodes it from the rendered page instead).
 ## Citations in JavaScriptCore (2026-11-04)
 
 The citation code of `src/citations` runs as one bundle in JavaScriptCore
-(`macos/Resources/Citations/citations.js`, 614 kB, 188 kB gzip). Command:
+(`macos/Resources/Citations/citations.js`, 623 kB, 188 kB gzip). Command:
 `swift run -c release --package-path macos LoomingsBench --citations`. Each row
 of the bench is one new engine. These are the medians of six engines on the machine
 above, APA, en-US.
@@ -283,4 +283,5 @@ above, APA, en-US.
 - No time limit stops a script that does not end. It stops only the citation queue, not
   the editor.
 - Licences: `LICENSE-citeproc`, `LICENSE-citation-js` and `LICENSE-CSL.md` are next to
-  the bundle. About has the attribution.
+  the bundle. The first line of the bundle names citeproc and its licence file, because
+  the bundle holds citeproc and MIT code in one file. About has the attribution.

@@ -15,3 +15,6 @@ social/instagram/images/
 macos/.build/
 macos/.swiftpm/
 macos/dist/
+
+# Vitest cache
+.vitest/

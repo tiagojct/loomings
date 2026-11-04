@@ -27,6 +27,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   gives no note when the link holds every cited entry. A bundled style travels
   by name. An uploaded style stays with the writer: the status says so, and the
   reader gets the default style with a note.
+- A language in `lang:` applies to each style, also to a style with its own
+  default locale, such as AMA.
+- A share link does not keep a `references:` line with entries that the text
+  does not cite.
+- A long run of spaces in a citation or an entry no longer stops the citations.
+  A print or a share link restarts a citation worker that gives no answer in
+  10 s, so later reports work.
 - A style that is not found no longer leaves the citations as keys. The default
   style formats them, and the note says so.
 - About credits citeproc-js, citation-js and the CSL styles and locales.

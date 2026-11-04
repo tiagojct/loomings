@@ -25,7 +25,7 @@ reference-section-title: Referências   # optional
 ---
 ```
 
-Without `csl:`, the style is `chicago-author-date`, Pandoc's default. Without `bibliography:`, Loomings treats `[@key]` as ordinary text.
+Without `csl:`, the style is `chicago-author-date`, Pandoc's default. Without `bibliography:` and `references:`, Loomings treats `[@key]` as ordinary text. Either key turns citations on.
 
 ### Syntax
 
@@ -74,9 +74,12 @@ Styles: `chicago-author-date`, `apa`, `vancouver` (from `nlm-citation-sequence`)
 
 ## Licences
 
-`citeproc` is CPAL-1.0 or AGPL-1.0, and Loomings is MIT. Ship it as a separate component under CPAL, with its licence file and the attribution in About. Have this read by someone qualified before a public release.
+`citeproc` is under the CPAL or the AGPL, and Loomings is MIT. It does not ship as a separate component: the build puts it in one file with MIT code, the worker chunk `worker-*.js` on the web and `citations.js` on the Mac. Each of these files starts with a notice that names citeproc, its copyright and its licence file. The licence file ships beside the bundle (`/app/licenses/citeproc-LICENSE.txt`, `LICENSE-citeproc`), and About has the attribution. The CSL licence notice ships in the same way (`/app/licenses/CSL-LICENSE.txt`, `LICENSE-CSL.md`). Have this read by someone qualified before a public release, with one question first: does a file with both licences meet the CPAL, or must citeproc stay in a file of its own?
 
 ## Limits
 
 - A bundled `csl: apa` means nothing to Pandoc outside Loomings, unless a file with that name exists.
 - A new lesson on citations is a later step.
+- On the Mac, a known citation stays plain in the editor. Only an unknown key has a mark, because rendering attributes cannot repaint laid-out text. The web gives each citation the marker colour.
+- `references:` is one line of JSON. A list over more lines is not read, and a note says so.
+- No time limit stops a script in JavaScriptCore. A script that does not end stops the citation queue of its window, not the editor. On the web, a print, an export or a share link restarts a worker that gives no answer in 10 s. A worker that hangs while the writer only types stays hung until one of these.
