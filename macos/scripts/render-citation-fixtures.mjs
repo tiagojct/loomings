@@ -118,6 +118,24 @@ Volta ao início [@silva2021].
     sources: { bibs: [refs], style: 'vancouver', locale: 'pt-PT' },
   },
   {
+    name: 'ama-pt-PT',
+    source: `---
+bibliography: refs.bib
+csl: american-medical-association
+lang: pt-PT
+---
+Uma frase [@silva2021, p. 7].
+
+Outra frase [@jacome2020; @smith2019].
+`,
+    sources: { bibs: [refs], style: 'american-medical-association', locale: 'pt-PT' },
+  },
+  {
+    name: 'open-fence',
+    source: '---\nbibliography: refs.bib\n---\nOne [@smith2019].\n\n```\ncode [@smith2019]\n',
+    sources: { bibs: [refs], style: 'apa', locale: 'en-US' },
+  },
+  {
     name: 'broken-entry',
     source: '---\nbibliography: broken.bib\n---\nFirst [@good2020], then [@after2021] and [@broken2020].\n',
     sources: { bibs: [{ name: 'broken.bib', text: BROKEN_BIB }], style: 'apa', locale: 'en-US' },
@@ -236,6 +254,13 @@ const shareCases = [
     style: 'chicago-author-date',
     missing: ['refs.bib', 'own-journal.csl'],
     styleNote: 'The style own-journal.csl was not found. The default style is chicago-author-date.',
+  },
+  {
+    name: 'style-file-in-a-folder',
+    source: '---\nbibliography: refs.bib\ncsl: styles/apa.csl\n---\nOne [@smith2019].\n',
+    style: 'apa',
+    missing: ['refs.bib'],
+    styleNote: null,
   },
 ];
 

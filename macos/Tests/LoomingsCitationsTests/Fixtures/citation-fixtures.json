@@ -348,6 +348,25 @@
         "The file own-journal.csl is missing.",
         "The style own-journal.csl was not found. The default style is chicago-author-date."
       ]
+    },
+    {
+      "name": "style-file-in-a-folder",
+      "source": "---\nbibliography: refs.bib\ncsl: styles/apa.csl\n---\nOne [@smith2019].\n",
+      "style": "apa",
+      "missing": [
+        "refs.bib"
+      ],
+      "styleNote": null,
+      "shared": "---\nbibliography: refs.bib\ncsl: styles/apa.csl\nreferences: [{\"publisher-place\":\"Porto\",\"author\":[{\"given\":\"John\",\"family\":\"Smith\"}],\"type\":\"book\",\"id\":\"smith2019\",\"issued\":{\"date-parts\":[[2019]]},\"publisher\":\"Press\",\"title\":\"A book on lung function\"}]\n---\nOne [@smith2019].\n",
+      "payload": "z.RY6xbsQgEER7vgJNDU4uXaiSNk0ipUQuwF7bKBwgFp9kWf73iCZp52nejNZa-OBjyGt1ZTuMrLTw4IMXE0cjuR2R-MkVN0wcRaWFKqWJ2Eh7ouw-Bt6o6hLdRDD4yrVlKLi9bbnC2BNreFCCwUfeEhQWdw_xgMH3PbQN16jQjtK7PucfKIQZBtzhy_PttQfMO80wJ2bXSBdXG8NY2_E4Xur_Rj9QiRkKLbTYpe-ya2VOMu5plcuephZywjUKrbX4TCTt29_aOIhf",
+      "linkNote": "The link carries the citations; the style file apa.csl stays here, so the reader can see a different style.",
+      "html": [
+        "(Smith, 2019)"
+      ],
+      "bibliography": [
+        "<div class=\"csl-entry\">Smith, J. (2019). <i>A book on lung function</i>. Press.</div>"
+      ],
+      "notes": []
     }
   ],
   "reports": [
@@ -539,6 +558,137 @@
         ],
         "notes": [],
         "markdownSource": "---\nbibliography: refs.bib\ncsl: vancouver\nlang: pt-PT\nreference-section-title: Referências\n---\nUma frase (1). Outra frase (2,3).\n\nVolta ao início (1).\n\n## Referências\n\n1\\. Silva A. Capítulo sobre espirometria. Em: Costa R, editor. Livro de fisiologia. Porto Editora; 2021. p. 5–9.\n\n2\\. Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. Journal of Tests. 2020;12(3):101–10. doi:[10.1000/xyz](https://doi.org/10.1000/xyz)\n\n3\\. Smith J. A book on lung function. Porto: Press; 2019."
+      }
+    },
+    {
+      "name": "ama-pt-PT",
+      "source": "---\nbibliography: refs.bib\ncsl: american-medical-association\nlang: pt-PT\n---\nUma frase [@silva2021, p. 7].\n\nOutra frase [@jacome2020; @smith2019].\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "american-medical-association",
+        "locale": "pt-PT"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 87,
+            "to": 105,
+            "html": "<sup>1(p7)</sup>",
+            "markdown": "1(p7)",
+            "missing": []
+          },
+          {
+            "from": 120,
+            "to": 145,
+            "html": "<sup>2,3</sup>",
+            "markdown": "²,³",
+            "missing": []
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">\n    <div class=\"csl-left-margin\">1.</div><div class=\"csl-right-inline\">Silva A. Capítulo sobre espirometria. Em: Costa R, ed. <i>Livro de fisiologia</i>. Porto Editora; 2021:5–9.</div>\n  </div>",
+          "<div class=\"csl-entry\">\n    <div class=\"csl-left-margin\">2.</div><div class=\"csl-right-inline\">Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. <i>Journal of Tests</i>. 2020;12(3):101–110. doi:<a href=\"https://doi.org/10.1000/xyz\">10.1000/xyz</a></div>\n  </div>",
+          "<div class=\"csl-entry\">\n    <div class=\"csl-left-margin\">3.</div><div class=\"csl-right-inline\">Smith J. <i>A book on lung function</i>. Press; 2019.</div>\n  </div>"
+        ],
+        "bibliographyMarkdown": "1\\. Silva A. Capítulo sobre espirometria. Em: Costa R, ed. *Livro de fisiologia*. Porto Editora; 2021:5–9.\n\n2\\. Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. *Journal of Tests*. 2020;12(3):101–110. doi:[10.1000/xyz](https://doi.org/10.1000/xyz)\n\n3\\. Smith J. *A book on lung function*. Press; 2019.",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": true
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": true
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [],
+        "markdownSource": "---\nbibliography: refs.bib\ncsl: american-medical-association\nlang: pt-PT\n---\nUma frase 1(p7).\n\nOutra frase ²,³.\n\n1\\. Silva A. Capítulo sobre espirometria. Em: Costa R, ed. *Livro de fisiologia*. Porto Editora; 2021:5–9.\n\n2\\. Jácome C, Almeida R, Fonseca JA. Mobile health tools for COPD. *Journal of Tests*. 2020;12(3):101–110. doi:[10.1000/xyz](https://doi.org/10.1000/xyz)\n\n3\\. Smith J. *A book on lung function*. Press; 2019."
+      }
+    },
+    {
+      "name": "open-fence",
+      "source": "---\nbibliography: refs.bib\n---\nOne [@smith2019].\n\n```\ncode [@smith2019]\n",
+      "sources": {
+        "bibs": [
+          {
+            "name": "refs.bib",
+            "text": "@string{jt = \"Journal of Tests\"}\n@article{jacome2020,\n  author = {J{\\'a}come, Cristina and Almeida, Rute and Fonseca, Jo{\\~a}o A.},\n  title = {Mobile health tools for {COPD}},\n  journal = jt,\n  volume = {12},\n  number = {3},\n  pages = {101--110},\n  year = {2020},\n  doi = {10.1000/xyz}\n}\n@book{smith2019,\n  author = {Smith, John},\n  title = {A book on lung function},\n  publisher = {Press},\n  address = {Porto},\n  year = {2019}\n}\n@incollection{silva2021,\n  author = {Silva, Ana},\n  editor = {Costa, Rui},\n  title = {Capítulo sobre espirometria},\n  booktitle = {Livro de fisiologia},\n  publisher = {Porto Editora},\n  year = {2021},\n  pages = {5--9}\n}\n@misc{unused2001,\n  title = {Never cited},\n  year = {2001}\n}\n"
+          }
+        ],
+        "style": "apa",
+        "locale": "en-US"
+      },
+      "report": {
+        "citations": [
+          {
+            "from": 35,
+            "to": 47,
+            "html": "(Smith, 2019)",
+            "markdown": "(Smith, 2019)",
+            "missing": []
+          }
+        ],
+        "bibliography": [
+          "<div class=\"csl-entry\">Smith, J. (2019). <i>A book on lung function</i>. Press.</div>"
+        ],
+        "bibliographyMarkdown": "Smith, J. (2019). *A book on lung function*. Press.",
+        "library": [
+          {
+            "key": "jacome2020",
+            "authors": "Jácome, Almeida, Fonseca",
+            "year": "2020",
+            "title": "Mobile health tools for COPD",
+            "cited": false
+          },
+          {
+            "key": "silva2021",
+            "authors": "Silva",
+            "year": "2021",
+            "title": "Capítulo sobre espirometria",
+            "cited": false
+          },
+          {
+            "key": "smith2019",
+            "authors": "Smith",
+            "year": "2019",
+            "title": "A book on lung function",
+            "cited": true
+          },
+          {
+            "key": "unused2001",
+            "authors": "",
+            "year": "2001",
+            "title": "Never cited",
+            "cited": false
+          }
+        ],
+        "notes": [],
+        "markdownSource": "---\nbibliography: refs.bib\n---\nOne (Smith, 2019).\n\n```\ncode [@smith2019]\n```\n\nSmith, J. (2019). *A book on lung function*. Press."
       }
     },
     {
