@@ -1281,11 +1281,11 @@ async function exportHtml() {
   pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
   .pele { --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
           --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
-          --pele-accent: ${p.accent}; ${peleSeriesCss(p)} }
+          --pele-accent: ${p.accent}; ${peleSeriesCss(p, p.bg)} }
   @media print { body { background: #fff; color: #000; }
     /* --pele-bg is the paper colour (#fff) of the body rule above. */
     .pele { --pele-bg: #fff; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
-            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; ${peleSeriesCss(lp)} } }
+            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; ${peleSeriesCss(lp, '#fff')} } }
 </style>
 </head>
 <body>

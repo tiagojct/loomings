@@ -39,7 +39,7 @@ describe('handout page', () => {
     expect(css).toContain(`--pele-surface-alt: ${p.bgDeep};`);
     expect(css).toContain(`--pele-border: ${p.border};`);
     expect(css).toContain(`--pele-accent: ${p.accent};`);
-    expect(css).toContain(`--pele-series-2: ${p.heading};`);
-    expect(css).toContain(`--pele-critical: ${p.emphasis};`);
+    expect(css).toContain(`--pele-series-2: color-mix(in srgb, ${p.fg} 72%, #fff);`);
+    expect(css).toContain(`--pele-critical: ${p.accent};`);
   });
 });

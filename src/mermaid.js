@@ -116,12 +116,19 @@ export async function renderDiagramsInHtml(html, render) {
   return template.innerHTML;
 }
 
+const SERIES = /** @type {const} */ ([['accent', 100], ['fg', 72], ['accent', 58], ['fg', 50], ['accent', 40], ['fg', 32], ['accent', 24], ['fg', 16]]);
+
 /**
- * The Pele series and critical colours as CSS declarations, from palette roles.
- * @param {Record<string, string>} p roles(): accent, heading, emphasis, code, marker, accentLight, accentDim, fgDim
+ * The Pele series and critical colours as CSS declarations. Series are tints
+ * of the accent and the text over the ground, because the ink roles repeat.
+ * @param {Record<string, string>} p roles(): accent and fg
+ * @param {string} ground the colour behind the diagram, the same as --pele-bg
  * @returns {string}
  */
-export function peleSeriesCss(p) {
-  const series = [p.accent, p.heading, p.emphasis, p.code, p.marker, p.accentLight, p.accentDim, p.fgDim];
-  return series.map((c, i) => `--pele-series-${i + 1}: ${c};`).join(' ') + ` --pele-critical: ${p.emphasis};`;
+export function peleSeriesCss(p, ground) {
+  const series = SERIES.map(([role, pct], i) => {
+    const colour = pct === 100 ? p[role] : `color-mix(in srgb, ${p[role]} ${pct}%, ${ground})`;
+    return `--pele-series-${i + 1}: ${colour};`;
+  });
+  return series.join(' ') + ` --pele-critical: ${p.accent};`;
 }

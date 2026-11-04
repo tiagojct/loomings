@@ -165,11 +165,12 @@ describe('mermaid renderer', () => {
     expect(renderAsync).toHaveBeenCalledTimes(1);
   });
 
-  it('peleSeriesCss maps eight series and critical', () => {
-    const p = { accent: 'a', heading: 'h', emphasis: 'e', code: 'c', marker: 'm', accentLight: 'l', accentDim: 'd', fgDim: 'f' };
-    const css = m.peleSeriesCss(p);
-    expect(css).toContain('--pele-series-1: a;');
-    expect(css).toContain('--pele-series-8: f;');
-    expect(css).toContain('--pele-critical: e;');
+  it('peleSeriesCss makes tints of the accent and the text over the ground', () => {
+    const css = m.peleSeriesCss({ accent: '#a', fg: '#f' }, '#g');
+    expect(css).toContain('--pele-series-1: #a;');
+    expect(css).toContain('--pele-series-2: color-mix(in srgb, #f 72%, #g);');
+    expect(css).toContain('--pele-series-3: color-mix(in srgb, #a 58%, #g);');
+    expect(css).toContain('--pele-series-8: color-mix(in srgb, #f 16%, #g);');
+    expect(css).toContain('--pele-critical: #a;');
   });
 });

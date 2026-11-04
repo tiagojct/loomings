@@ -379,14 +379,14 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   --pele-border: var(--border);
   --pele-accent: var(--accent);
   --pele-series-1: var(--accent);
-  --pele-series-2: var(--heading);
-  --pele-series-3: var(--emphasis);
-  --pele-series-4: var(--code);
-  --pele-series-5: var(--marker);
-  --pele-series-6: var(--accent-light);
-  --pele-series-7: var(--accent-dim);
-  --pele-series-8: var(--fg-dim);
-  --pele-critical: var(--emphasis);
+  --pele-series-2: color-mix(in srgb, var(--fg) 72%, var(--bg));
+  --pele-series-3: color-mix(in srgb, var(--accent) 58%, var(--bg));
+  --pele-series-4: color-mix(in srgb, var(--fg) 50%, var(--bg));
+  --pele-series-5: color-mix(in srgb, var(--accent) 40%, var(--bg));
+  --pele-series-6: color-mix(in srgb, var(--fg) 32%, var(--bg));
+  --pele-series-7: color-mix(in srgb, var(--accent) 24%, var(--bg));
+  --pele-series-8: color-mix(in srgb, var(--fg) 16%, var(--bg));
+  --pele-critical: var(--accent);
 }
 #preview pre.mermaid {
   background: none;
