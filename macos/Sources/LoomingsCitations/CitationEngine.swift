@@ -22,6 +22,8 @@ public protocol CitationEngineProtocol: AnyObject, Sendable {
     func analyse(_ source: String) -> CitationReport
     func readMeta(_ source: String) throws -> CitationMeta
     func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan
+    func setMeta(_ source: String, key: String, value: String?) throws -> String
+    func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange
     func bundledStyle(_ id: String) -> String?
     func bundledLocale(_ tag: String) -> String?
 }
@@ -101,6 +103,12 @@ public final class CitationEngine: CitationEngineProtocol, @unchecked Sendable {
     /// - Parameter key: `bibliography`, `csl` or `references`.
     public func setMeta(_ source: String, key: String, value: String?) throws -> String {
         try queue.sync { try call("setMeta", [source, key, value ?? NSNull()]) }
+    }
+
+    /// The change that puts the file at `path` in the place of the missing
+    /// file `name`. Give the result to `setMeta`.
+    public func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange {
+        try queue.sync { try call("fileChange", [source, name, path]) }
     }
 
     public func checkStyle(_ xml: String) throws -> CitationStyleCheck {

@@ -981,6 +981,10 @@ enum SelfTest {
             try checkPrintOrder(check, folder: root.appendingPathComponent("print"))
             try checkPrintPanel(check, folder: root.appendingPathComponent("panel"))
             try checkInsertWithSlowEngine(check, folder: root.appendingPathComponent("insert"))
+            try checkCitationMarks(check, folder: root.appendingPathComponent("marks"))
+            try checkNotesMerge(check, folder: root.appendingPathComponent("merge"))
+            try checkMissingFileNote(check, folder: root.appendingPathComponent("missing"))
+            try inRunningApp { try checkCompletionList(check, folder: root.appendingPathComponent("completion")) }
         } catch {
             check(false, "citation setup (\(error))")
         }
@@ -1284,6 +1288,302 @@ enum SelfTest {
         check(slow.longestTurn < 350, "the main thread does not wait for a slow engine")
     }
 
+    private static let markText = """
+    ---
+    bibliography: refs.bib
+    ---
+    A claim [@silva2020] and [@nobody] end.
+
+    Next line.
+
+    """
+
+    private static func checkCitationMarks(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: markText, folder: folder)
+        defer { closeCitationDocument(document) }
+        let editor = controller.editor
+        let textView = editor.textView
+        let revision = editor.revision
+        check(pump(timeout: 15) { editor.citationRanges.count == 2 }, "a report gives the editor its citations")
+        let text = markText as NSString
+        let known = text.range(of: "[@silva2020]")
+        let unknown = text.range(of: "[@nobody]")
+        check(textView.decorations(for: "citations").map(\.range) == [unknown], "an unknown key has a squiggle")
+        check(textView.decorations(for: "notes").isEmpty, "the squiggle does not use the checker's layer")
+        check(editor.citationKeys.map(\.key) == ["silva2020"], "the library reaches the editor")
+
+        check(editor.revision == revision && !document.isDocumentEdited, "marks do not edit the document")
+
+        check(squigglePainted(textView, range: unknown), "the squiggle reaches the screen")
+
+        // An edit before the marks moves them at once.
+        textView.setSelectedRange(NSRange(location: text.range(of: "A claim").location, length: 0))
+        textView.insertText("New. ", replacementRange: textView.selectedRange())
+        check(
+            textView.decorations(for: "citations").map(\.range) == [NSRange(location: unknown.location + 5, length: unknown.length)],
+            "a squiggle follows an edit before it"
+        )
+
+        // One Undo takes back the edit, and the mark goes back with it.
+        textView.undoManager?.undo()
+        check(editor.source == markText, "Undo restores the text")
+        check(textView.decorations(for: "citations").map(\.range) == [unknown], "the squiggle follows Undo")
+
+        // An edit in a mark drops it. The next report brings it back.
+        textView.insertText("x", replacementRange: NSRange(location: unknown.location + 3, length: 0))
+        check(textView.decorations(for: "citations").isEmpty, "an edit in a mark drops the mark")
+        textView.undoManager?.undo()
+        check(editor.source == markText, "Undo restores the key")
+        check(
+            pump(timeout: 15) { textView.decorations(for: "citations").map(\.range) == [unknown] },
+            "the next report brings the mark back"
+        )
+
+        // No citation keys: no marks and no list.
+        editor.replace(range: text.range(of: "bibliography: refs.bib"), with: "title: x")
+        check(pump(timeout: 5) { editor.citationRanges.isEmpty && editor.citationKeys.isEmpty }, "a document with no bibliography has no marks")
+    }
+
+    /// True when the row under `range` differs with and without its squiggle.
+    private static func squigglePainted(_ textView: EditorTextView, range: NSRange) -> Bool {
+        guard let frame = textView.segmentFrames(for: range).first else { return false }
+        let row = NSRect(x: frame.minX, y: frame.maxY - 4, width: frame.width, height: 4)
+        func image() -> Data? {
+            guard let bitmap = textView.bitmapImageRepForCachingDisplay(in: row) else { return nil }
+            textView.cacheDisplay(in: row, to: bitmap)
+            return bitmap.tiffRepresentation
+        }
+        let marked = image()
+        let decorations = textView.decorations(for: "citations")
+        textView.setDecorations([], for: "citations")
+        let plain = image()
+        textView.setDecorations(decorations, for: "citations")
+        return marked != nil && marked != plain
+    }
+
+    private static func checkNotesMerge(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = markText + "####No space here\n"
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0.5))
+        let editor = controller.editor
+        editor.setText(text)
+        editor.textView.window?.makeFirstResponder(editor.textView)
+        editor.textView.insertText("", replacementRange: NSRange(location: 0, length: 0))
+        check(pump(timeout: 5) { !controller.notesForTesting.isEmpty }, "the checker's notes come first")
+        let lint = controller.notesForTesting.count
+        check(controller.statusNotesTitleForTesting == (lint == 1 ? "1 note" : "\(lint) notes"), "the count waits for no report")
+
+        check(pump(timeout: 15) { controller.citations.report(for: text) != nil }, "the report comes late")
+        let total = lint + 1
+        check(controller.statusNotesTitleForTesting == "\(total) notes", "the late report adds to the count")
+        check(controller.notesForTesting.count == lint, "the late report keeps the checker's notes")
+        let messages = controller.noteMessagesForTesting
+        check(messages.count == total, "the list has both kinds of note")
+        check(messages.first?.contains("nobody") == true, "the notes go by place: \(messages)")
+
+        controller.showNotesForTesting()
+        check(controller.isNotesPopoverShownForTesting, "the merged list opens")
+        check(controller.noteButtonsForTesting.filter { $0.hasPrefix("Go to line") }.count == total, "each note with a place can go to its line")
+        controller.closeNotesForTesting()
+    }
+
+    private static func checkMissingFileNote(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = """
+        ---
+        bibliography: lost.bib
+        ---
+        A claim [@silva2020].
+
+        """
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        let editor = controller.editor
+        check(pump(timeout: 15) { controller.citations.report(for: text) != nil }, "a document with a missing file has a report")
+        check(controller.noteMessagesForTesting.contains("The file lost.bib is missing."), "the missing file is a note")
+        controller.showNotesForTesting()
+        let buttons = controller.noteButtonsForTesting
+        check(buttons.contains("Choose lost.bib\u{2026}"), "a missing file has an action")
+        let fileRows = buttons.filter { $0.hasPrefix("Choose") }.count
+        check(fileRows == 1, "one action for one missing file")
+        check(buttons.count == fileRows + 1, "a note about a file has no Go to line: \(buttons)")
+        controller.closeNotesForTesting()
+
+        // The panel gives a file: one edit, one Undo.
+        let chosen = folder.appendingPathComponent("refs.bib")
+        let before = editor.revision
+        controller.useCitationFile(chosen, for: "lost.bib")
+        check(pump(timeout: 5) { editor.source.contains("bibliography: refs.bib") }, "the chosen file goes in the frontmatter")
+        check(editor.source.hasSuffix("A claim [@silva2020].\n"), "the body stays")
+        check(editor.revision == before + 1, "the choice is one edit")
+        check(
+            pump(timeout: 15) { controller.citations.report(for: editor.source)?.citations.first?.markdown == "(Silva 2020)" },
+            "the citation formats with the chosen file"
+        )
+        check(editor.textView.undoManager?.canUndo == true, "the choice can be undone")
+        editor.textView.undoManager?.undo()
+        check(editor.source == text, "one Undo takes the choice back")
+        editor.textView.undoManager?.redo()
+        check(editor.source.contains("bibliography: refs.bib"), "Redo puts it back")
+    }
+
+    /// Runs the real list. `complete` does not return while the list is open,
+    /// so a block on the main queue gives the list its key.
+    private static func checkCompletionList(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = """
+        ---
+        bibliography: refs.bib
+        ---
+        - A claim
+
+        `code `
+
+        """
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        let editor = controller.editor
+        let textView = editor.textView
+        guard let window = controller.window else { return }
+        check(spin(timeout: 15) { !editor.citationKeys.isEmpty }, "the library is ready")
+
+        window.makeFirstResponder(textView)
+
+        /// `pump`, and each event goes out too: an event left in the queue
+        /// closes the list.
+        func spin(timeout: TimeInterval, until condition: () -> Bool) -> Bool {
+            let deadline = Date().addingTimeInterval(timeout)
+            while Date() < deadline, !condition() {
+                if let event = NSApp.nextEvent(matching: .any, until: Date().addingTimeInterval(0.005), inMode: .default, dequeue: true) {
+                    NSApp.sendEvent(event)
+                }
+            }
+            return condition()
+        }
+        _ = spin(timeout: 0.3) { false }
+
+        func enter(_ text: String) {
+            for character in text {
+                textView.insertText(String(character), replacementRange: textView.selectedRange())
+            }
+        }
+        func listIsOpen() -> Bool {
+            NSApp.windows.contains { "\(type(of: $0))".contains("Completion") && $0.isVisible }
+        }
+        /// The count of the lists that took a key.
+        var answered = 0
+        func answer(_ characters: String, keyCode: UInt16, attempts: Int = 300) {
+            guard attempts > 0 else { return }
+            guard listIsOpen() else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                    answer(characters, keyCode: keyCode, attempts: attempts - 1)
+                }
+                return
+            }
+            answered += 1
+            post(characters, keyCode: keyCode, to: window)
+        }
+
+        let lineEnd = (text as NSString).range(of: "- A claim").upperBound
+        textView.setSelectedRange(NSRange(location: lineEnd, length: 0))
+        enter(" [@")
+        let beforeKey = editor.source
+        // This block is one run loop turn, so the undo group of the turn must
+        // end by hand, as it does at the end of a key press.
+        textView.undoManager?.endUndoGrouping()
+        textView.undoManager?.beginUndoGrouping()
+        let generation = editor.editGeneration
+        answer("\r", keyCode: 36)
+        check(spin(timeout: 5) { answered == 1 && !listIsOpen() }, "a typed sign opens the list, and Return closes it")
+        check(editor.source.contains("- A claim [@silva2020\n"), "Return inserts the key with its sign")
+        check(editor.editGeneration == generation + 1, "browsing makes no edit, and the key is one edit")
+
+        textView.undoManager?.undo()
+        check(editor.source == beforeKey, "one Undo removes the key and keeps the sign")
+        textView.undoManager?.redo()
+        check(editor.source.contains("[@silva2020\n"), "Redo puts the key back")
+        _ = spin(timeout: 0.4) { false }
+        check(!listIsOpen(), "Redo does not open the list")
+
+        enter("]")
+        check(editor.handleNewline(), "list continuation works after a citation")
+        check(editor.source.contains("[@silva2020]\n- "), "the next item starts")
+
+        // Escape closes the list, and a letter does not open it again.
+        enter("[@")
+        answer("\u{1B}", keyCode: 53)
+        check(spin(timeout: 5) { answered == 2 && !listIsOpen() }, "the sign opens the list, and Escape closes it")
+        check(editor.source.contains("- [@\n"), "Escape leaves the sign")
+        enter("s")
+        _ = spin(timeout: 0.5) { false }
+        check(answered == 2 && !listIsOpen(), "the list stays shut after Escape")
+
+        // A typed letter closes the list, and the list opens again for the query.
+        enter("; @")
+        answer("l", keyCode: 37)
+        check(spin(timeout: 5) { answered == 3 && editor.source.contains("; @l") }, "a letter closes the list and goes in the text")
+        answer("\t", keyCode: 48)
+        check(spin(timeout: 5) { answered == 4 && !listIsOpen() }, "the list opens again for the query, and Tab closes it")
+        check(editor.source.contains("; @silva2020"), "Tab inserts the key")
+
+        let code = (editor.source as NSString).range(of: "`code `")
+        textView.setSelectedRange(NSRange(location: code.location + 6, length: 0))
+        enter("@")
+        _ = spin(timeout: 0.6) { false }
+        check(answered == 4 && !listIsOpen(), "no list in inline code")
+
+        textView.setSelectedRange(NSRange(location: (editor.source as NSString).length, length: 0))
+        enter("\nana@")
+        _ = spin(timeout: 0.6) { false }
+        check(!listIsOpen(), "no list in an email address")
+
+        enter(" \"")
+        check(editor.source.hasSuffix("ana@ \u{201C}"), "smart typography works beside the sign")
+    }
+
+    /// The list closes at once when `NSApp.run` is not running. `body` starts
+    /// from the run loop, because a block on the main queue holds the later
+    /// blocks while the list is open.
+    private static func inRunningApp(_ body: () throws -> Void) throws {
+        try withoutActuallyEscaping(body) { body in
+            var failure: Error?
+            RunLoop.main.perform {
+                MainActor.assumeIsolated {
+                    do {
+                        try body()
+                    } catch {
+                        failure = error
+                    }
+                    NSApp.stop(nil)
+                    // `run` looks at `stop` after the next event.
+                    if let event = NSEvent.otherEvent(with: .applicationDefined, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil, subtype: 0, data1: 0, data2: 0) {
+                        NSApp.postEvent(event, atStart: false)
+                    }
+                }
+            }
+            NSApp.run()
+            if let failure { throw failure }
+        }
+    }
+
+    /// The list runs its own event loop, so a key goes to the event queue.
+    private static func post(_ characters: String, keyCode: UInt16, to window: NSWindow) {
+        for kind in [NSEvent.EventType.keyDown, .keyUp] {
+            guard let event = NSEvent.keyEvent(
+                with: kind,
+                location: .zero,
+                modifierFlags: [],
+                timestamp: ProcessInfo.processInfo.systemUptime,
+                windowNumber: window.windowNumber,
+                context: nil,
+                characters: characters,
+                charactersIgnoringModifiers: characters,
+                isARepeat: false,
+                keyCode: keyCode
+            ) else { continue }
+            NSApp.postEvent(event, atStart: false)
+        }
+    }
+
     private static func pump(timeout: TimeInterval = 5, until condition: () -> Bool) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -1346,6 +1646,12 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
     func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan {
         try engine.resolveNative(request, known: known)
     }
+    func setMeta(_ source: String, key: String, value: String?) throws -> String {
+        try engine.setMeta(source, key: key, value: value)
+    }
+    func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange {
+        try engine.fileChange(source, name: name, path: path)
+    }
 }
 
 /// An engine whose reports all fail, as a broken script does.
@@ -1367,5 +1673,11 @@ private final class FailingCitationEngine: CitationEngineProtocol, @unchecked Se
     func bundledLocale(_ tag: String) -> String? { engine.bundledLocale(tag) }
     func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan {
         try engine.resolveNative(request, known: known)
+    }
+    func setMeta(_ source: String, key: String, value: String?) throws -> String {
+        try engine.setMeta(source, key: key, value: value)
+    }
+    func fileChange(_ source: String, name: String, path: String) throws -> CitationMetaChange {
+        try engine.fileChange(source, name: name, path: path)
     }
 }

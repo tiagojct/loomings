@@ -191,9 +191,27 @@ const flowItem = (/** @type {string} */ name) => (/^[\w./-][\w ./-]*$/.test(name
 export function toggleBibliography(list, name) {
   const base = fileBaseName(name);
   const others = list.filter((entry) => fileBaseName(entry) !== base);
-  const next = others.length < list.length ? others : [...list, name];
-  if (!next.length) return null;
-  return next.length === 1 ? next[0] : `[${next.map(flowItem).join(', ')}]`;
+  return bibliographyValue(others.length < list.length ? others : [...list, name]);
+}
+
+/** The value of `bibliography` for these names. */
+function bibliographyValue(/** @type {string[]} */ names) {
+  if (!names.length) return null;
+  return names.length === 1 ? names[0] : `[${names.map(flowItem).join(', ')}]`;
+}
+
+/**
+ * The change of the frontmatter that puts a chosen file in the place of a
+ * missing one. A name that is not in `bibliography` is the style.
+ *
+ * @param {CitationMeta} meta
+ * @param {string} name  the missing name, as the document has it
+ * @param {string} path
+ * @returns {{key: 'bibliography'|'csl', value: string|null}}
+ */
+export function fileChange(meta, name, path) {
+  if (!meta.bibliography.includes(name)) return { key: 'csl', value: path };
+  return { key: 'bibliography', value: bibliographyValue(meta.bibliography.map((entry) => (entry === name ? path : entry))) };
 }
 
 /**

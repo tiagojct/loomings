@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
 import {
-  filterLibrary, insertCitation, renderLibrary, bibliographyChoices, toggleBibliography, styleChoices,
+  filterLibrary, insertCitation, renderLibrary, bibliographyChoices, toggleBibliography, fileChange, styleChoices,
   languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView,
 } from './panel.js';
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
@@ -232,6 +232,16 @@ describe('the menu choices', () => {
     const value = toggleBibliography(['my refs.bib', 'a, b.bib'], 'c#d.bib');
     const text = setCitationMeta('---\ntitle: T\n---\n', 'bibliography', value);
     expect(readCitationMeta(text).bibliography).toEqual(['my refs.bib', 'a, b.bib', 'c#d.bib']);
+  });
+
+  it('puts a chosen file in the place of a missing bibliography', () => {
+    expect(fileChange({ ...META, bibliography: ['a.bib'] }, 'a.bib', '/x/a.bib')).toEqual({ key: 'bibliography', value: '/x/a.bib' });
+    expect(fileChange({ ...META, bibliography: ['a.bib', 'b.bib'] }, 'b.bib', 'my refs.bib'))
+      .toEqual({ key: 'bibliography', value: '[a.bib, my refs.bib]' });
+  });
+
+  it('puts a chosen file in the place of a missing style', () => {
+    expect(fileChange({ ...META, bibliography: ['a.bib'], csl: 'b.csl' }, 'b.csl', '/x/b.csl')).toEqual({ key: 'csl', value: '/x/b.csl' });
   });
 
   it('checks one style: the default when the document names none', () => {

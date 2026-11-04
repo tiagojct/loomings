@@ -118,6 +118,17 @@ extension CitationMeta {
     }
 }
 
+/// One change of the frontmatter, for `setMeta`.
+public struct CitationMetaChange: Decodable, Sendable, Equatable {
+    public let key: String
+    public let value: String?
+
+    public init(key: String, value: String?) {
+        self.key = key
+        self.value = value
+    }
+}
+
 /// The keys of the frontmatter that decide which files a document uses.
 public struct CitationSourceRequest: Codable, Sendable, Hashable {
     public var bibliography: [String]

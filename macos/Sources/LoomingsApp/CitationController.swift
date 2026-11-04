@@ -29,6 +29,9 @@ final class CitationController {
         var folder: URL? { documentURL?.deletingLastPathComponent() }
     }
 
+    /// One change of a text. It runs on the citation queue.
+    typealias TextEdit = @Sendable (any CitationEngineProtocol, String) throws -> String
+
     var onReport: ((CitationReport) -> Void)?
     /// How long an export waits for its report.
     var exportLimit: TimeInterval = 10
@@ -95,6 +98,29 @@ final class CitationController {
     func close() {
         forget()
         onReport = nil
+    }
+
+    /// False when the document has no citations, so it needs no marks.
+    var isActive: Bool { requested != nil }
+
+    /// The newest report, with the text it belongs to. That text can be older
+    /// than the editor's text.
+    var latestResult: (source: String, report: CitationReport)? { latest }
+
+    /// Runs `edit` on the citation queue, and gives the changed text to
+    /// `completion` on the main actor. The text in the editor stays as it is.
+    func change(
+        source: String,
+        with edit: @escaping TextEdit,
+        completion: @escaping (Result<String, Error>) -> Void
+    ) {
+        let worker = self.worker
+        worker.queue.async {
+            let result = Result { try edit(worker.engineForWork(), source) }
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        }
     }
 
     /// The report of exactly this text.
@@ -245,6 +271,11 @@ private final class CitationWorker: @unchecked Sendable {
         guard let load, load.changedFiles() else { return false }
         self.load = nil
         return true
+    }
+
+    /// Use this only on `queue`.
+    func engineForWork() throws -> any CitationEngineProtocol {
+        try currentEngine()
     }
 
     private func currentEngine() throws -> any CitationEngineProtocol {

@@ -262,8 +262,8 @@ final class EditorWindowController: NSWindowController,
         previewTextView.onScroll = { [weak self] in
             self?.syncEditorToPreview()
         }
-        citations.onReport = { [weak self] _ in
-            self?.refreshPreview()
+        citations.onReport = { [weak self] report in
+            self?.apply(report)
         }
         refreshCompanion()
         statusBar.onExerciseClick = { [weak self] in
@@ -288,6 +288,111 @@ final class EditorWindowController: NSWindowController,
 
     func updateCitations() {
         citations.update(source: editor.source, documentURL: loomingsDocument?.citationDocumentURL)
+        guard citations.isActive else {
+            editor.clearCitations()
+            updateNoteCount()
+            return
+        }
+        // Undo can bring back the text of the last report. No new report
+        // comes for that text, so the dropped marks come from the last one.
+        if let report = citations.latestResult?.report, editor.citationRanges.count != report.citations.count {
+            applyMarks(of: report)
+            updateNoteCount()
+        }
+    }
+
+    private func apply(_ report: CitationReport) {
+        refreshPreview()
+        applyMarks(of: report)
+        updateNoteCount()
+    }
+
+    private func applyMarks(of report: CitationReport) {
+        guard let source = citations.latestResult?.source else { return }
+        editor.setCitations(
+            report.citations.map {
+                CitationMark(range: NSRange(location: $0.from, length: $0.to - $0.from), isUnknown: !$0.missing.isEmpty)
+            },
+            keys: report.library.map {
+                CitationCompletion(key: $0.key, authors: $0.authors, year: $0.year, title: $0.title)
+            },
+            reportedSource: source
+        )
+    }
+
+    /// The notes of the newest report, in the current text. A note goes when
+    /// an edit touches its place; the next report brings it back.
+    private func citationNotes() -> [DocumentNote] {
+        guard let latest = citations.latestResult else { return [] }
+        let notes = latest.report.documentNotes
+        guard notes.contains(where: { $0.range != nil }),
+              let change = TextChange.between(latest.source, editor.source) else {
+            return notes
+        }
+        return notes.compactMap { note in
+            guard let range = note.range else { return note }
+            var moved = note
+            moved.range = change.map(range)
+            return moved.range == nil ? nil : moved
+        }
+    }
+
+    /// Asks for a file in the place of `name`, a missing file.
+    private func chooseCitationFile(named name: String) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = ["bib", "csl"].compactMap { UTType(filenameExtension: $0) }
+        panel.allowsOtherFileTypes = true
+        panel.message = "Choose the file for \(name)."
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.useCitationFile(url, for: name)
+        }
+    }
+
+    /// Writes the file in the frontmatter in the place of the missing `name`.
+    func useCitationFile(_ url: URL, for name: String) {
+        let path = CitationFileName.value(
+            for: url,
+            folder: loomingsDocument?.citationDocumentURL?.deletingLastPathComponent()
+        )
+        changeFrontmatter { engine, source in
+            let change = try engine.fileChange(source, name: name, path: path)
+            return try engine.setMeta(source, key: change.key, value: change.value)
+        }
+    }
+
+    /// Sets one citation key of the frontmatter. A nil value removes the key.
+    func setCitationMeta(key: String, value: String?) {
+        changeFrontmatter { engine, source in
+            try engine.setMeta(source, key: key, value: value)
+        }
+    }
+
+    /// Applies `edit` as one undoable edit that covers only the text that
+    /// differs, so the caret and the rest of the document stay in place. When
+    /// the writer types during the work, the work starts again on the new text.
+    private func changeFrontmatter(_ edit: @escaping CitationController.TextEdit) {
+        let source = editor.source
+        citations.change(source: source, with: edit) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let changed):
+                guard self.editor.source == source else {
+                    self.changeFrontmatter(edit)
+                    return
+                }
+                guard let change = TextChange.between(source, changed) else { return }
+                self.editor.textView.breakUndoCoalescing()
+                self.editor.replace(range: change.range, with: change.replacement(in: changed))
+                self.editor.textView.breakUndoCoalescing()
+            case .failure(let error):
+                let alert = NSAlert()
+                alert.messageText = "The frontmatter could not be changed."
+                alert.informativeText = String(describing: error)
+                self.present(alert)
+            }
+        }
     }
 
     /// One export, fixed when it starts: the page and the share link come from
@@ -476,26 +581,41 @@ final class EditorWindowController: NSWindowController,
             issues.map { EditorDecoration(range: $0.range, style: .squiggle(tint)) },
             for: "notes"
         )
-        statusBar.setNotes(count: issues.count)
+        lintNoteCount = issues.count
+        updateNoteCount()
     }
 
-    private func lineNumber(of issue: LintIssue) -> Int {
-        editor.lineNumber(at: issue.range.location)
+    /// The count of the last parse. A citation report can come between an
+    /// edit and its parse, and the checker's notes must not go away then.
+    private var lintNoteCount = 0
+
+    private func updateNoteCount() {
+        statusBar.setNotes(count: lintNoteCount + citationNotes().count)
+    }
+
+    /// The notes for the current text.
+    private var currentNotes: [DocumentNote] {
+        DocumentNote.merged(lint: currentReport?.lintIssues ?? [], citation: citationNotes())
     }
 
     private var notesPopover: NSPopover?
 
-    private func showNotes(_ only: [LintIssue]? = nil) {
-        guard let issues = only ?? currentReport?.lintIssues, !issues.isEmpty else { return }
+    private func showNotes(_ only: [DocumentNote]? = nil) {
+        let notes = only ?? currentNotes
+        guard !notes.isEmpty else { return }
         let content = TeachingPopovers.notes(
-            issues,
-            line: { [weak self] in self?.lineNumber(of: $0) ?? 1 },
+            notes,
+            line: { [weak self] in self?.editor.lineNumber(at: $0.location) ?? 1 },
             onFix: { [weak self] in self?.fixFromNotes($0) },
-            onGo: { [weak self] in self?.reveal($0.range) }
+            onGo: { [weak self] in self?.reveal($0) },
+            onChooseFile: { [weak self] name in
+                self?.notesPopover?.close()
+                self?.chooseCitationFile(named: name)
+            }
         )
         notesPopover?.close()
-        if let only, let first = only.first,
-           let rect = editor.textView.segmentFrames(for: first.range).first {
+        if let only, let range = only.first?.range,
+           let rect = editor.textView.segmentFrames(for: range).first {
             notesPopover = TeachingPopovers.show(content, relativeTo: rect, of: editor.textView, palette: ThemeManager.shared.resolved())
         } else {
             notesPopover = TeachingPopovers.show(content, relativeTo: statusBar.bounds, of: statusBar, palette: ThemeManager.shared.resolved())
@@ -511,6 +631,17 @@ final class EditorWindowController: NSWindowController,
     }
 
     func showNotesForTesting() { showNotes() }
+    func closeNotesForTesting() { notesPopover?.close() }
+    var noteMessagesForTesting: [String] { currentNotes.map(\.message) }
+    /// The titles of the buttons in the open list of notes.
+    var noteButtonsForTesting: [String] {
+        func buttons(in view: NSView) -> [String] {
+            view.subviews.flatMap { subview -> [String] in
+                ((subview as? NSButton).map { [$0.title] } ?? []) + buttons(in: subview)
+            }
+        }
+        return notesPopover?.contentViewController.map { buttons(in: $0.view) } ?? []
+    }
     var isNotesPopoverShownForTesting: Bool { notesPopover?.isShown ?? false }
     func fixFromNotesPopoverForTesting(_ index: Int) {
         guard let issues = currentReport?.lintIssues, issues.indices.contains(index) else { return }
@@ -531,8 +662,11 @@ final class EditorWindowController: NSWindowController,
 
     /// Option-click: a note under the pointer first, else what the marker means.
     private func explain(at location: Int) {
-        if let issue = currentReport?.lintIssues.first(where: { NSLocationInRange(location, $0.range) || NSMaxRange($0.range) == location }) {
-            showNotes([issue])
+        let here = currentNotes.filter { note in
+            note.range.map { NSLocationInRange(location, $0) || NSMaxRange($0) == location } ?? false
+        }
+        if !here.isEmpty {
+            showNotes(here)
             return
         }
         guard let (span, explanation) = explanation(at: location) else { return }

@@ -8,6 +8,7 @@
 
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { planNativeSources } from './library.js';
+import { fileChange as changeFor } from './panel.js';
 import { createSession } from './session.js';
 import { checkStyle as check } from './style.js';
 
@@ -42,6 +43,16 @@ export function readMeta(source) {
  */
 export function setMeta(source, key, value) {
   return JSON.stringify(setCitationMeta(source, key, value));
+}
+
+/**
+ * @param {string} source
+ * @param {string} name  the missing name
+ * @param {string} path  the file that takes its place
+ * @returns {string}  the key and the value for `setMeta` as JSON
+ */
+export function fileChange(source, name, path) {
+  return JSON.stringify(changeFor(readCitationMeta(source), name, path));
 }
 
 /**

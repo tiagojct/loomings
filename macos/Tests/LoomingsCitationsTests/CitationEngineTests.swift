@@ -176,6 +176,16 @@ struct CitationEngineTests {
         #expect(meta.referencesDropped == 1)
     }
 
+    @Test("A chosen file takes the place of a missing file")
+    func fileChange() throws {
+        let engine = try CitationEngine(resources: resources)
+        let one = "---\nbibliography: refs.bib\ncsl: my.csl\n---\n"
+        #expect(try engine.fileChange(one, name: "refs.bib", path: "/x/refs.bib") == CitationMetaChange(key: "bibliography", value: "/x/refs.bib"))
+        #expect(try engine.fileChange(one, name: "my.csl", path: "/x/my.csl") == CitationMetaChange(key: "csl", value: "/x/my.csl"))
+        let two = "---\nbibliography: [a.bib, b.bib]\n---\n"
+        #expect(try engine.fileChange(two, name: "b.bib", path: "c.bib") == CitationMetaChange(key: "bibliography", value: "[a.bib, c.bib]"))
+    }
+
     @Test("A value that setCitationMeta refuses is an error and the engine goes on")
     func setMetaRefusesALineBreak() throws {
         let engine = try CitationEngine(resources: resources)

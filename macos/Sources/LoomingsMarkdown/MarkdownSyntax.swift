@@ -70,6 +70,8 @@ public struct MarkdownParseOutput: Sendable {
     public let spans: [MarkdownSyntaxSpan]
     /// Sorted by location; nested styles overlap.
     public let styleRanges: [MarkdownStyleRange]
+    /// Inline code and code blocks, sorted by location.
+    public let codeRanges: [NSRange]
     public let nodeCount: Int
     public let outline: [OutlineItem]
     /// UTF-16 offsets of every line start, including 0.
@@ -84,10 +86,12 @@ public struct MarkdownParseOutput: Sendable {
         lineStarts: [Int],
         wordCount: Int,
         characterCount: Int,
-        styleRanges: [MarkdownStyleRange] = []
+        styleRanges: [MarkdownStyleRange] = [],
+        codeRanges: [NSRange] = []
     ) {
         self.spans = spans
         self.styleRanges = styleRanges
+        self.codeRanges = codeRanges
         self.nodeCount = nodeCount
         self.outline = outline
         self.lineStarts = lineStarts

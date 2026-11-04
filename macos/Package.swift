@@ -55,7 +55,7 @@ let package = Package(
         ),
         .target(
             name: "LoomingsCitations",
-            dependencies: ["LoomingsDocuments"],
+            dependencies: ["LoomingsDocuments", "LoomingsTeaching"],
             linkerSettings: [.linkedFramework("JavaScriptCore")]
         ),
         .executableTarget(
@@ -68,7 +68,7 @@ let package = Package(
         ),
         .testTarget(
             name: "LoomingsCitationsTests",
-            dependencies: ["LoomingsCitations", "LoomingsDocuments"],
+            dependencies: ["LoomingsCitations", "LoomingsDocuments", "LoomingsTeaching"],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(
