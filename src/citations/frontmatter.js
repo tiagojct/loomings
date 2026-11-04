@@ -1,0 +1,210 @@
+// ========================================
+// Loomings — citation frontmatter keys
+// Reads and writes `bibliography`, `csl`, `lang`, `reference-section-title`
+// and `references` in the leading frontmatter. Line based, no YAML library.
+// Pure: no DOM, no Node or browser APIs (JavaScriptCore runs it too).
+// ========================================
+
+import { splitLines, frontmatterLines } from '../teaching/parse.js';
+
+/**
+ * @typedef {{bibliography: string[], csl: string|null, lang: string|null,
+ *   title: string|null, references: Record<string, unknown>[]}} CitationMeta
+ * @typedef {import('../teaching/parse.js').SourceLine} SourceLine
+ */
+
+const KEY = /^([A-Za-z][\w-]*)[ \t]*:(.*)$/;
+const ITEM = /^[ \t]*-(?:[ \t]+(.*))?$/;
+
+/**
+ * Find a key line inside the frontmatter. A key owns the list items and
+ * indented lines that follow it.
+ *
+ * @param {SourceLine[]} lines
+ * @param {number} last  index of the closing line
+ * @param {string} key
+ * @returns {{start: number, end: number, rest: string}[]}  end: last line of the block
+ */
+function findKey(lines, last, key) {
+  /** @type {{start: number, end: number, rest: string}[]} */
+  const found = [];
+  for (let n = 1; n < last; n++) {
+    const m = KEY.exec(lines[n].text);
+    if (!m || m[1] !== key) continue;
+    let end = n;
+    while (end + 1 < last && (ITEM.test(lines[end + 1].text) || /^[ \t]+\S/.test(lines[end + 1].text))) end++;
+    found.push({ start: n, end, rest: m[2] });
+    n = end;
+  }
+  return found;
+}
+
+/** Remove a comment that starts with whitespace and `#`, outside quotes. */
+function stripComment(text) {
+  let quote = '';
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) {
+      if (c === '\\' && quote === '"') i++;
+      else if (c === quote) quote = '';
+    } else if (c === '"' || c === "'") {
+      if (i === 0 || /[\s[,]/.test(text[i - 1])) quote = c;
+    } else if (c === '#' && (i === 0 || /\s/.test(text[i - 1]))) {
+      return text.slice(0, i);
+    }
+  }
+  return text;
+}
+
+/** One scalar: trimmed, with matching quotes removed. */
+function unquote(text) {
+  const t = text.trim();
+  if (t.length >= 2 && t[0] === '"' && t[t.length - 1] === '"') {
+    try {
+      const v = JSON.parse(t);
+      if (typeof v === 'string') return v;
+    } catch {
+      /* fall through to the plain strip */
+    }
+    return t.slice(1, -1);
+  }
+  if (t.length >= 2 && t[0] === "'" && t[t.length - 1] === "'") return t.slice(1, -1).replace(/''/g, "'");
+  return t;
+}
+
+/** Split a flow list body on commas outside quotes. */
+function splitFlow(body) {
+  /** @type {string[]} */
+  const parts = [];
+  let quote = '';
+  let from = 0;
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (quote) {
+      if (c === '\\' && quote === '"') i++;
+      else if (c === quote) quote = '';
+    } else if (c === '"' || c === "'") {
+      quote = c;
+    } else if (c === ',') {
+      parts.push(body.slice(from, i));
+      from = i + 1;
+    }
+  }
+  parts.push(body.slice(from));
+  return parts;
+}
+
+/**
+ * The values of a key as a list: a scalar, a flow list or a block list.
+ *
+ * @param {SourceLine[]} lines
+ * @param {{start: number, end: number, rest: string}} entry
+ * @returns {string[]}
+ */
+function listValue(lines, entry) {
+  const rest = stripComment(entry.rest).trim();
+  /** @type {string[]} */
+  let values;
+  if (rest === '') {
+    values = [];
+    for (let n = entry.start + 1; n <= entry.end; n++) {
+      const m = ITEM.exec(lines[n].text);
+      if (m && m[1] !== undefined) values.push(unquote(stripComment(m[1])));
+    }
+  } else if (rest[0] === '[' && rest[rest.length - 1] === ']') {
+    values = splitFlow(rest.slice(1, -1)).map(unquote);
+  } else {
+    values = [unquote(rest)];
+  }
+  return values.filter((v) => v !== '');
+}
+
+/** @returns {string|null} */
+function scalarValue(lines, entry) {
+  const list = listValue(lines, entry);
+  return list.length ? list[0] : null;
+}
+
+/** @param {string} text @returns {Record<string, unknown>[]} */
+function parseReferences(text) {
+  try {
+    const value = JSON.parse(text);
+    if (!Array.isArray(value)) return [];
+    return value.filter((e) => e !== null && typeof e === 'object' && !Array.isArray(e) && typeof e.id === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The citation keys of the leading frontmatter.
+ *
+ * @param {string} source
+ * @returns {CitationMeta}
+ */
+export function readCitationMeta(source) {
+  /** @type {CitationMeta} */
+  const meta = { bibliography: [], csl: null, lang: null, title: null, references: [] };
+  const lines = splitLines(source);
+  const fm = frontmatterLines(lines);
+  if (!fm) return meta;
+  const first = (key) => findKey(lines, fm.last, key)[0];
+  const bib = first('bibliography');
+  if (bib) meta.bibliography = listValue(lines, bib);
+  const csl = first('csl');
+  if (csl) meta.csl = scalarValue(lines, csl);
+  const lang = first('lang');
+  if (lang) meta.lang = scalarValue(lines, lang);
+  const title = first('reference-section-title');
+  if (title) meta.title = scalarValue(lines, title);
+  const refs = first('references');
+  if (refs) meta.references = parseReferences(refs.rest.trim());
+  return meta;
+}
+
+/** Quote a scalar when plain YAML would change its meaning. */
+function formatScalar(value) {
+  if (/^[\s"'[\]{}&*!|>%@`#,-]|\s$|\s#|: |:$|^$/.test(value)) return JSON.stringify(value);
+  return value;
+}
+
+/**
+ * Set or remove one key. `null` removes the key. A `bibliography` value that
+ * starts with `[` is written as it is (a flow list). A `references` value is
+ * written as it is (one line of JSON). Other values are quoted when needed.
+ * Without a frontmatter, one is made when the value is not null.
+ *
+ * @param {string} source
+ * @param {'bibliography'|'csl'|'references'} key
+ * @param {string|null} value
+ * @returns {string}
+ */
+export function setCitationMeta(source, key, value) {
+  const lines = splitLines(source);
+  const fm = frontmatterLines(lines);
+  const raw = key === 'references' || (key === 'bibliography' && value !== null && value.startsWith('['));
+  const text = value === null ? null : `${key}: ${raw ? value : formatScalar(value)}`;
+  if (!fm) {
+    if (text === null) return source;
+    const eol = /\r\n|\n|\r/.exec(source);
+    const nl = eol ? eol[0] : '\n';
+    return `---${nl}${text}${nl}---${nl}${source}`;
+  }
+  const found = findKey(lines, fm.last, key);
+  if (!found.length) {
+    if (text === null) return source;
+    const close = lines[fm.last];
+    const nl = source.slice(lines[fm.last - 1].text.length + lines[fm.last - 1].from, lines[fm.last - 1].end);
+    return source.slice(0, close.from) + text + nl + source.slice(close.from);
+  }
+  // Rewrite from the last entry to the first so the offsets stay valid.
+  let out = source;
+  for (let i = found.length - 1; i >= 0; i--) {
+    const e = found[i];
+    const from = lines[e.start].from;
+    const to = lines[e.end].end;
+    const nl = out.slice(lines[e.end].from + lines[e.end].text.length, to);
+    out = out.slice(0, from) + (i === 0 && text !== null ? text + nl : '') + out.slice(to);
+  }
+  return out;
+}
