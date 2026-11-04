@@ -7,6 +7,7 @@
 // ========================================
 
 import { SAFE_URL } from '../markdown.js';
+import { parseSource } from '../teaching/parse.js';
 
 /** @typedef {{from: number, to: number, html: string, markdown: string, missing: string[]}} CitationOutput */
 
@@ -79,6 +80,13 @@ export function cleanCitationHtml(html) {
   const input = String(html ?? '');
   /** @type {{name: string, close: string, escaped: boolean}[]} */
   const open = [];
+  // Counts the open tags by name, so a closing tag with no opening tag costs one step.
+  const depth = new Map();
+  const closeLast = () => {
+    const entry = /** @type {{name: string, close: string, escaped: boolean}} */ (open.pop());
+    depth.set(entry.name, depth.get(entry.name) - 1);
+    return entry;
+  };
   let out = '';
   let at = 0;
   TAG.lastIndex = 0;
@@ -89,17 +97,16 @@ export function cleanCitationHtml(html) {
     const lower = m[2].toLowerCase();
     const name = lower === 'em' ? 'i' : lower;
     if (m[1]) {
-      let i = open.length - 1;
-      while (i >= 0 && open[i].name !== name) i--;
-      if (i < 0) {
+      if (!depth.get(name)) {
         out += escapeTag(m[0]);
         continue;
       }
-      while (open.length > i + 1) out += /** @type {{close: string}} */ (open.pop()).close;
-      const entry = /** @type {{close: string, escaped: boolean}} */ (open.pop());
+      while (open[open.length - 1].name !== name) out += closeLast().close;
+      const entry = closeLast();
       out += entry.escaped ? escapeTag(m[0]) : entry.close;
       continue;
     }
+    depth.set(name, (depth.get(name) ?? 0) + 1);
     const tag = allowedTag(name, m[3], input, at);
     if (tag) {
       out += tag.open;
@@ -110,12 +117,23 @@ export function cleanCitationHtml(html) {
     }
   }
   out += cleanText(input.slice(at));
-  while (open.length) out += /** @type {{close: string}} */ (open.pop()).close;
+  while (open.length) out += closeLast().close;
   return out;
 }
 
 const NAMED = /** @type {Record<string, string>} */ ({ amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" });
-const SUPERSCRIPT = '⁰¹²³⁴⁵⁶⁷⁸⁹';
+const SUPERSCRIPT = /** @type {Record<string, string>} */ ({
+  0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹',
+  '+': '⁺', '-': '⁻', '–': '⁻', '−': '⁻', '=': '⁼', '(': '⁽', ')': '⁾',
+});
+// A comma and a space stay as they are between superscript digits: citeproc
+// joins numbers with them, and they have no superscript form.
+const SUPERSCRIPT_RUN = /^[0-9+\-–−=(), ]*$/;
+
+/** Superscript forms for the whole run, or the plain text. No run has mixed forms. */
+function superscript(text) {
+  return SUPERSCRIPT_RUN.test(text) ? text.replace(/[^, ]/g, (c) => SUPERSCRIPT[c]) : text;
+}
 
 /** Decodes each entity once. An entity with no valid character stays. */
 function decodeEntities(text) {
@@ -148,7 +166,7 @@ function wrap(text, mark) {
 function closeMarkdown(name, href, text, nested) {
   if (name === 'i') return nested ? text : wrap(text, '*');
   if (name === 'b') return nested ? text : wrap(text, '**');
-  if (name === 'sup') return text.replace(/\d/g, (d) => SUPERSCRIPT[Number(d)]);
+  if (name === 'sup') return superscript(text);
   if (name === 'div') return `${text} `;
   if (name !== 'a' || !text.trim()) return text;
   const target = decodeEntities(href);
@@ -166,6 +184,7 @@ export function toMarkdown(html) {
   const input = cleanCitationHtml(html);
   const frames = [{ name: '', href: '', text: '' }];
   const top = () => frames[frames.length - 1];
+  const depth = new Map();
   const add = (/** @type {string} */ raw) => {
     top().text += escapeMarkdown(decodeEntities(raw).replace(BLANKS, ' '));
   };
@@ -177,9 +196,12 @@ export function toMarkdown(html) {
     at = TAG.lastIndex;
     if (!m[1]) {
       frames.push({ name: m[2], href: attribute(HREF.exec(m[3])) ?? '', text: '' });
+      depth.set(m[2], (depth.get(m[2]) ?? 0) + 1);
     } else {
       const frame = /** @type {{name: string, href: string, text: string}} */ (frames.pop());
-      top().text += closeMarkdown(frame.name, frame.href, frame.text, frames.some((f) => f.name === frame.name));
+      const outside = depth.get(frame.name) - 1;
+      depth.set(frame.name, outside);
+      top().text += closeMarkdown(frame.name, frame.href, frame.text, outside > 0);
     }
   }
   add(input.slice(at));
@@ -211,9 +233,31 @@ function replaceRanges(source, citations, text) {
   return out + source.slice(at);
 }
 
+const FENCE_LINE = /^ {0,3}(`+|~+)[ \t]*$/;
+
+/**
+ * The marker that closes the final fence of a text, or null when no fence is
+ * open. An open fence runs to the end of the text, so it is the last token. A
+ * fence in a list or a quotation ends at the blank line before the references.
+ *
+ * @param {string} text
+ * @returns {string|null}
+ */
+function openFence(text) {
+  if (!text.includes('```') && !text.includes('~~~')) return null;
+  const { tokens, lines } = parseSource(text);
+  const last = tokens[tokens.length - 1];
+  if (last?.type !== 'fence' || last.level !== 0 || !last.map) return null;
+  const end = last.map[1] - 1;
+  const closing = end > last.map[0] ? FENCE_LINE.exec(lines[end].text)?.[1] : undefined;
+  const closed = closing !== undefined && closing[0] === last.markup[0] && closing.length >= last.markup.length;
+  return closed ? null : last.markup;
+}
+
 /**
  * The document for a Markdown renderer: each citation as Markdown, then the
- * title and the entries.
+ * title and the entries. A closing line for an open final fence comes after
+ * the last source line, so each source line stays at its number.
  *
  * @param {string} source
  * @param {CitationOutput[]} citations
@@ -224,8 +268,11 @@ function replaceRanges(source, citations, text) {
 export function withReferences(source, citations, title, bibliographyMarkdown) {
   const text = replaceRanges(source, citations, (i) => citations[i].markdown);
   if (!bibliographyMarkdown) return text;
-  const gap = /[\r\n]$/.test(text) ? '\n' : '\n\n';
-  return `${text}${gap}${title ? `## ${title}\n\n` : ''}${bibliographyMarkdown}`;
+  const endsLine = /[\r\n]$/.test(text);
+  const fence = openFence(text);
+  const body = fence === null ? text : `${text}${endsLine ? '' : '\n'}${fence}\n`;
+  const gap = fence !== null || endsLine ? '\n' : '\n\n';
+  return `${body}${gap}${title ? `## ${title}\n\n` : ''}${bibliographyMarkdown}`;
 }
 
 /** Two private-use characters that the source does not contain. */

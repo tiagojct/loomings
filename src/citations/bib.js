@@ -20,10 +20,50 @@ const START = /@([A-Za-z]+)[ \t]*([{(])/g;
 const NEXT_ENTRY = /\n(?=@[A-Za-z]+[ \t]*[{(])/g;
 const KEY = /^[\s]*([^\s,{}()=]+)[ \t\r\n]*,/;
 const NO_ITEM = new Set(['string', 'comment', 'preamble']);
+// A file with a bad pattern can give one note for each entry.
+const MAX_NOTES = 50;
 
 /**
- * Splits the text into top-level @ blocks with a brace counter. A block that
- * is not closed ends before the next line that starts an entry.
+ * For each opening `{` and `(`, the offset after its closing mark. Each kind
+ * has its own count, and 0 means not closed. One pass, so a text with many
+ * unclosed blocks does not cost one pass for each block.
+ *
+ * @param {string} text
+ * @returns {Int32Array}
+ */
+function matchClosers(text) {
+  const closers = new Int32Array(text.length);
+  /** @type {number[]} */
+  const braces = [];
+  /** @type {number[]} */
+  const parens = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 123) braces.push(i);
+    else if (c === 40) parens.push(i);
+    else if (c === 125 || c === 41) {
+      const opener = (c === 125 ? braces : parens).pop();
+      if (opener !== undefined) closers[opener] = i + 1;
+    }
+  }
+  return closers;
+}
+
+/**
+ * Keeps the first notes, and one note that counts the others.
+ *
+ * @param {BibNote[]} notes
+ * @returns {BibNote[]}
+ */
+function capNotes(notes) {
+  if (notes.length <= MAX_NOTES + 1) return notes;
+  const more = notes.length - MAX_NOTES;
+  return [...notes.slice(0, MAX_NOTES), { line: notes[MAX_NOTES].line, message: `${more} more notes for this file are not shown.` }];
+}
+
+/**
+ * Splits the text into top-level @ blocks. A block that is not closed ends
+ * before the next line that starts an entry.
  *
  * @param {string} text
  * @returns {Block[]}
@@ -40,25 +80,15 @@ function scanBlocks(text) {
     linePos = Math.max(linePos, offset);
     return line;
   };
+  const closers = matchClosers(text);
   let pos = 0;
   while (pos < text.length) {
     START.lastIndex = pos;
     const m = START.exec(text);
     if (!m) break;
-    const open = m[2];
-    const close = open === '{' ? '}' : ')';
     const bodyStart = m.index + m[0].length;
-    let depth = 1;
-    let i = bodyStart;
-    let closed = false;
-    for (; i < text.length; i++) {
-      const c = text[i];
-      if (c === open) depth++;
-      else if (c === close) {
-        depth--;
-        if (depth === 0) { closed = true; i++; break; }
-      }
-    }
+    let i = closers[bodyStart - 1];
+    const closed = i > 0;
     if (!closed) {
       // An unclosed block ends before the next line that starts an entry.
       NEXT_ENTRY.lastIndex = bodyStart;
@@ -110,6 +140,20 @@ export function parseBibliography(text) {
 
   /** @type {Map<string, number>} */
   const seen = new Map();
+  /** @type {Map<string|undefined, Block[]>|null} */
+  let byKey = null;
+  /** @param {string} key  The blocks with this key. One pass, for each duplicate. */
+  const blocksOf = (key) => {
+    if (!byKey) {
+      byKey = new Map();
+      for (const block of getBlocks()) {
+        const same = byKey.get(block.key);
+        if (same) same.push(block);
+        else byKey.set(block.key, [block]);
+      }
+    }
+    return byKey.get(key) ?? [];
+  };
   /**
    * Adds an item. The first item with a key wins.
    *
@@ -129,7 +173,7 @@ export function parseBibliography(text) {
     let at = line;
     if (at === undefined) {
       // The (count + 1)th block with this key is the later entry.
-      const same = getBlocks().filter((b) => b.key === item.id);
+      const same = blocksOf(item.id);
       at = same[count]?.line ?? same[same.length - 1]?.line ?? 0;
     }
     notes.push({
@@ -141,7 +185,7 @@ export function parseBibliography(text) {
 
   try {
     for (const item of parseText(source)) add(item);
-    return { items, notes };
+    return { items, notes: capNotes(notes) };
   } catch {
     // One entry has an error. Read the entries one at a time.
     items.length = 0;
@@ -175,5 +219,5 @@ export function parseBibliography(text) {
       notes.push({ line: block.line, key: block.key, message: `${name} could not be read: the syntax is not correct.` });
     }
   }
-  return { items, notes };
+  return { items, notes: capNotes(notes) };
 }

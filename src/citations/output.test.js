@@ -71,6 +71,21 @@ describe('toMarkdown', () => {
     expect(toMarkdown('<i></i>')).toBe('');
     expect(toMarkdown('<i>a <i>b</i> c</i>')).toBe('*a b c*');
   });
+  it('writes a superscript form only when each character has one', () => {
+    expect(toMarkdown('<sup>1(p3)</sup>')).toBe('1(p3)');
+    expect(toMarkdown('<sup>1-3</sup>')).toBe('¹⁻³');
+    expect(toMarkdown('<sup>1–3</sup>')).toBe('¹⁻³');
+    expect(toMarkdown('<sup>(1)</sup>')).toBe('⁽¹⁾');
+    expect(toMarkdown('<sup>1, 2</sup>')).toBe('¹, ²');
+    expect(toMarkdown('<sup>st</sup>')).toBe('st');
+    expect(toMarkdown('a<sup>1.2</sup>')).toBe('a1.2');
+    expect(toMarkdown('<sup><i>n</i>2</sup>')).toBe('*n*2');
+  });
+
+  it('keeps the text of a sub', () => {
+    expect(toMarkdown('H<sub>2</sub>O')).toBe('H2O');
+  });
+
   it('writes superscript digits and drops sub and span tags', () => {
     expect(toMarkdown('<sup>1,23</sup>')).toBe('¹,²³');
     expect(toMarkdown('H<sub>2</sub>O <span>x</span>')).toBe('H2O x');
@@ -174,5 +189,59 @@ describe('withReferences', () => {
   });
   it('adds nothing without references', () => {
     expect(withReferences('a\n', [], 'Refs', '')).toBe('a\n');
+  });
+});
+
+describe('text with many tags', () => {
+  it('reads closing tags with no opening tag in time', () => {
+    const html = '<i></b>'.repeat(150000);
+    const before = performance.now();
+    expect(cleanCitationHtml(html).startsWith('<i>&lt;/b&gt;<i>')).toBe(true);
+    expect(performance.now() - before).toBeLessThan(2000);
+  });
+
+  it('closes the tags inside a closing tag', () => {
+    expect(cleanCitationHtml('<i><b><sup>x</i>y</b>')).toBe('<i><b><sup>x</sup></b></i>y&lt;/b&gt;');
+  });
+
+  it('reads deep tags in time, and marks only the outer one', () => {
+    const before = performance.now();
+    expect(toMarkdown(`${'<i>'.repeat(300000)}x`)).toBe('*x*');
+    expect(performance.now() - before).toBeLessThan(2000);
+  });
+});
+
+describe('withReferences with a fence', () => {
+  const close = (text) => withReferences(text, [], 'References', 'Entry.');
+
+  it('adds the list after a closed fence with no extra line', () => {
+    expect(close('a\n\n```\ncode\n```\n')).toBe('a\n\n```\ncode\n```\n\n## References\n\nEntry.');
+  });
+
+  it('closes a final fence that is open', () => {
+    expect(close('a\n\n```\ncode\n')).toBe('a\n\n```\ncode\n```\n\n## References\n\nEntry.');
+    expect(close('a\n\n```\ncode')).toBe('a\n\n```\ncode\n```\n\n## References\n\nEntry.');
+    expect(close('~~~~ js\ncode\n```\n')).toBe('~~~~ js\ncode\n```\n~~~~\n\n## References\n\nEntry.');
+    expect(close('```')).toBe('```\n```\n\n## References\n\nEntry.');
+  });
+
+  it('keeps each line of the source at its number', () => {
+    const text = '---\nreferences: []\n---\nA\n\n```\none\ntwo\n';
+    const lines = text.split('\n').slice(0, -1);
+    expect(close(text).split('\n').slice(0, lines.length)).toEqual(lines);
+  });
+
+  it('sees a closing line with a longer marker or an indent as a close', () => {
+    expect(close('```\ncode\n`````\n')).toBe('```\ncode\n`````\n\n## References\n\nEntry.');
+    expect(close('```\ncode\n   ```  \n')).toBe('```\ncode\n   ```  \n\n## References\n\nEntry.');
+  });
+
+  it('does not take a line that cannot close the fence as a close', () => {
+    expect(close('````\ncode\n```\n')).toBe('````\ncode\n```\n````\n\n## References\n\nEntry.');
+    expect(close('```\ncode\n    ```\n')).toBe('```\ncode\n    ```\n```\n\n## References\n\nEntry.');
+  });
+
+  it('leaves a fence in a quotation: the blank line ends it', () => {
+    expect(close('> ```\n> code\n')).toBe('> ```\n> code\n\n## References\n\nEntry.');
   });
 });

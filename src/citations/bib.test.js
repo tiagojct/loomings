@@ -106,6 +106,41 @@ describe('parseBibliography', () => {
     expect(notes[0].line).toBe(5);
   });
 
+  it('reads many unclosed blocks in time, with one summary note', () => {
+    const text = `${entry('a1')}${'@article{bad,\n  title = {open\n'.repeat(20000)}`;
+    const before = performance.now();
+    const { items, notes } = parseBibliography(text);
+    expect(performance.now() - before).toBeLessThan(3000);
+    expect(items.map((i) => i.id)).toEqual(['a1']);
+    expect(notes).toHaveLength(51);
+    expect(notes[0].message).toContain('a brace is not closed');
+    expect(notes[50]).toEqual({ line: notes[49].line + 2, message: '19950 more notes for this file are not shown.' });
+  });
+
+  it('counts the same braces as a counter from each opening', () => {
+    const text = '@article{open,\n  title = {a\n@article{in,\n  title = {b},\n  year = {2020}}\n@misc{paren(x), title={c}}\n';
+    const { items, notes } = parseBibliography(text);
+    expect(items.map((i) => i.id)).toEqual(['in', 'paren(x)']);
+    expect(notes.map((n) => n.key)).toEqual(['open']);
+  });
+
+  it('closes a block in parentheses with its own parenthesis', () => {
+    const { items, notes } = parseBibliography('@article(p1, title = {a) b}, year = {2020})\n@bad{\n');
+    expect(notes.length + items.length).toBeGreaterThan(0);
+    expect(() => parseBibliography('@article(p1, title = {a}\n@misc(p2, title = {b})\n')).not.toThrow();
+  });
+
+  it('finds the line of many duplicates in time', () => {
+    const text = entry('a1').repeat(5000);
+    const before = performance.now();
+    const { items, notes } = parseBibliography(text);
+    expect(performance.now() - before).toBeLessThan(5000);
+    expect(items).toHaveLength(1);
+    expect(notes).toHaveLength(51);
+    expect(notes[0].line).toBe(5);
+    expect(notes[1].line).toBe(10);
+  });
+
   it('never throws', () => {
     for (const text of ['@', '@article', '@article{', '{{{{', '@@@{}', '@string{x', null, undefined]) {
       expect(() => parseBibliography(/** @type {any} */ (text))).not.toThrow();
