@@ -9,19 +9,23 @@ const cache = new Map();
 /** Thrown when the Pele module cannot load. The result is not cached. */
 export class LoadError extends Error {}
 
+/** @type {typeof import('pele/lazy') | undefined} */
+let pele;
+
 /**
  * @param {string} text
  * @returns {Promise<{svg: string}>}
  */
 async function peleRender(text) {
-  /** @type {typeof import('pele/lazy')} */
-  let pele;
   try {
-    pele = await import('pele/lazy');
+    // Keep the module after the first load, so later updates do not wait for the loader.
+    pele ??= await import('pele/lazy');
+    return await pele.renderAsync(text, { links: false, images: false });
   } catch (err) {
+    // A diagram chunk that fails to load rejects with a TypeError, not a PeleError.
+    if (pele && err instanceof pele.PeleError) throw err;
     throw new LoadError(err instanceof Error ? err.message : String(err));
   }
-  return pele.renderAsync(text, { links: false, images: false });
 }
 
 /** @param {string} key @param {{svg: string} | {error: string}} value */
@@ -110,4 +114,14 @@ export async function renderDiagramsInHtml(html, render) {
   template.innerHTML = html;
   await renderDiagrams(template.content, render);
   return template.innerHTML;
+}
+
+/**
+ * The Pele series and critical colours as CSS declarations, from palette roles.
+ * @param {Record<string, string>} p roles(): accent, heading, emphasis, code, marker, accentLight, accentDim, fgDim
+ * @returns {string}
+ */
+export function peleSeriesCss(p) {
+  const series = [p.accent, p.heading, p.emphasis, p.code, p.marker, p.accentLight, p.accentDim, p.fgDim];
+  return series.map((c, i) => `--pele-series-${i + 1}: ${c};`).join(' ') + ` --pele-critical: ${p.emphasis};`;
 }

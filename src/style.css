@@ -378,6 +378,15 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   --pele-surface-alt: var(--bg-deep);
   --pele-border: var(--border);
   --pele-accent: var(--accent);
+  --pele-series-1: var(--accent);
+  --pele-series-2: var(--heading);
+  --pele-series-3: var(--emphasis);
+  --pele-series-4: var(--code);
+  --pele-series-5: var(--marker);
+  --pele-series-6: var(--accent-light);
+  --pele-series-7: var(--accent-dim);
+  --pele-series-8: var(--fg-dim);
+  --pele-critical: var(--emphasis);
 }
 #preview pre.mermaid {
   background: none;
@@ -927,6 +936,7 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
   #preview a { color: var(--print-link, #000); text-decoration: underline; }
   #preview code, #preview pre { background: var(--print-code-bg, #f2f2f2); border-color: var(--print-border, #ccc); }
   #preview pre code { color: var(--print-fg, #000); }
+  #preview pre.mermaid-error p { color: var(--print-dim, #333); }
   #preview blockquote { border-left-color: var(--print-border, #999); color: var(--print-dim, #333); }
   #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: var(--print-dim, #555); }
   #preview .paired { background: none; box-shadow: none; }

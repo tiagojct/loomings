@@ -135,4 +135,41 @@ describe('mermaid renderer', () => {
     const html = '<p>a &amp; b<br></p><pre><code class="language-js">x</code></pre>';
     expect(await m.renderDiagramsInHtml(html)).toBe(html);
   });
+
+  it('a chunk load failure inside render is a load error and is not cached', async () => {
+    class PeleError extends Error {}
+    const renderAsync = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch dynamically imported module'))
+      .mockResolvedValue({ svg: '<svg id="ok"></svg>' });
+    vi.doMock('pele/lazy', () => ({ renderAsync, PeleError }));
+    vi.resetModules();
+    const fresh = await import('./mermaid.js');
+    const src = 'graph TD; Z--&gt;Y';
+    const first = root(fence(src));
+    await fresh.renderDiagrams(first);
+    expect(first.querySelector('pre')?.classList.contains('mermaid-error')).toBe(true);
+    const second = root(fence(src));
+    await fresh.renderDiagrams(second);
+    expect(second.querySelector('svg#ok')).not.toBeNull();
+  });
+
+  it('a PeleError is a cached diagram error', async () => {
+    class PeleError extends Error {}
+    const renderAsync = vi.fn().mockRejectedValue(new PeleError('syntax'));
+    vi.doMock('pele/lazy', () => ({ renderAsync, PeleError }));
+    vi.resetModules();
+    const fresh = await import('./mermaid.js');
+    await fresh.renderDiagrams(root(fence('graph TD; P--&gt;Q')));
+    await fresh.renderDiagrams(root(fence('graph TD; P--&gt;Q')));
+    expect(renderAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('peleSeriesCss maps eight series and critical', () => {
+    const p = { accent: 'a', heading: 'h', emphasis: 'e', code: 'c', marker: 'm', accentLight: 'l', accentDim: 'd', fgDim: 'f' };
+    const css = m.peleSeriesCss(p);
+    expect(css).toContain('--pele-series-1: a;');
+    expect(css).toContain('--pele-series-8: f;');
+    expect(css).toContain('--pele-critical: e;');
+  });
 });

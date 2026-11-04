@@ -54,8 +54,9 @@ without giving up the property that makes it work.
   palettes against WCAG floors.
 - Features: in-place Markdown rendering, split view with scroll sync, outline
   palette, focus mode, typewriter scrolling, full screen, word goal, stats,
-  find and replace, Mermaid diagrams (also in print and HTML export), six bundled lessons, cheatsheet, print/PDF, standalone
-  HTML export, share links, offline install. Teaching: the learner's checker,
+  find and replace, Mermaid diagrams (in the preview, print and HTML export),
+  six bundled lessons, cheatsheet, print/PDF, standalone HTML export, share
+  links, offline install. Teaching: the learner's checker,
   marker glossary, exercise checks, section word limits, paired lines,
   projector mode, handouts with a QR code.
   The native app does not draw diagrams yet: CoreSVG ignores `var()`, so the

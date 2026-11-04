@@ -7,6 +7,8 @@
 // browsers that support them; Safari prints without page numbers.
 // ========================================
 
+import { peleSeriesCss } from './mermaid.js';
+
 /**
  * @param {string} language a BCP 47 tag, e.g. navigator.language
  * @returns {'A4'|'letter'}
@@ -40,6 +42,6 @@ export function handoutCss({ title, palette: p, paper }) {
 /* --pele-bg is the paper colour of the print rule in style.css, not a palette role. */
 #preview .pele {
   --pele-bg: #fff; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim}; --pele-surface: ${p.bgElev};
-  --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border}; --pele-accent: ${p.accent};
+  --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border}; --pele-accent: ${p.accent}; ${peleSeriesCss(p)}
 } }`;
 }

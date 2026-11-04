@@ -37,7 +37,7 @@ import {
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
-import { hasDiagrams, renderDiagrams, renderDiagramsInHtml } from './mermaid.js';
+import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -1281,11 +1281,11 @@ async function exportHtml() {
   pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
   .pele { --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
           --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
-          --pele-accent: ${p.accent}; }
+          --pele-accent: ${p.accent}; ${peleSeriesCss(p)} }
   @media print { body { background: #fff; color: #000; }
     /* --pele-bg is the paper colour (#fff) of the body rule above. */
     .pele { --pele-bg: #fff; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
-            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; } }
+            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; ${peleSeriesCss(lp)} } }
 </style>
 </head>
 <body>
@@ -1609,7 +1609,7 @@ function updatePreview() {
   // Diagrams change the block heights. Skip the work if a newer render started.
   renderDiagrams(preview).then(() => {
     if (generation !== previewGeneration) return;
-    pairedBlockEl = null;
+    lightPreviewBlock(null);
     invalidatePreviewBlocks();
     if (effectiveViewMode() === 'split') syncPreviewToEditor();
   }, () => {});
