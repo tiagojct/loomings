@@ -12,6 +12,7 @@
     "skipLibCheck": true,
     "types": ["vite/client"],
     "noEmit": true,
+    "paths": { "citeproc": ["./src/citations/citeproc.d.ts"] },
     "lib": ["ES2022", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*", "vite.config.js", "vitest.config.js"],
