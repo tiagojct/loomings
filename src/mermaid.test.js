@@ -8,8 +8,11 @@ function root(html) {
   return el;
 }
 
-const fence = (src, extra = '') =>
-  `<pre data-line="3"${extra}><code class="language-mermaid">${src}</code></pre>`;
+import { renderPreview } from './markdown.js';
+
+/** Real preview markup for a mermaid fence. @param {string} src */
+const fence = (src) =>
+  renderPreview('```mermaid\n' + src.replace(/&gt;/g, '>').replace(/&lt;/g, '<') + '\n```');
 
 /** @type {typeof import('./mermaid.js')} */
 let m;
@@ -25,7 +28,8 @@ describe('mermaid renderer', () => {
     expect(m.hasDiagrams(el)).toBe(true);
     await m.renderDiagrams(el, async () => ({ svg: '<svg id="d"></svg>' }));
     const pre = el.querySelector('pre');
-    expect(pre?.getAttribute('data-line')).toBe('3');
+    expect(pre?.getAttribute('data-line')).toBe('0');
+    expect(pre?.hasAttribute('data-line-end')).toBe(true);
     expect(pre?.classList.contains('mermaid')).toBe(true);
     expect(pre?.querySelector('svg#d')).not.toBeNull();
     expect(pre?.querySelector('code')).toBeNull();
@@ -48,7 +52,9 @@ describe('mermaid renderer', () => {
     });
     const pre = el.querySelector('pre');
     expect(pre?.classList.contains('mermaid-error')).toBe(true);
-    expect(pre?.querySelector('code')?.textContent).toBe('bad source');
+    expect(pre?.getAttribute('data-line')).toBe('0');
+    expect(pre?.hasAttribute('data-line-end')).toBe(true);
+    expect(pre?.querySelector('code')?.textContent).toBe('bad source\n');
     expect(pre?.querySelector('p')?.textContent).toContain('<b>x</b>');
     expect(el.querySelector('b')).toBeNull();
   });
@@ -66,7 +72,7 @@ describe('mermaid renderer', () => {
     vi.resetModules();
     const fresh = await import('./mermaid.js');
     await fresh.renderDiagrams(root(fence('graph TD; A--&gt;B')));
-    expect(renderAsync).toHaveBeenCalledWith('graph TD; A-->B', {
+    expect(renderAsync).toHaveBeenCalledWith('graph TD; A-->B\n', {
       links: false,
       images: false,
     });

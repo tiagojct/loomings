@@ -53,6 +53,10 @@ export async function renderDiagrams(root, render = peleRender) {
       }
       remember(source, result);
     }
+    for (const name of ['data-line', 'data-line-end']) {
+      const value = code.getAttribute(name);
+      if (value !== null) pre.setAttribute(name, value);
+    }
     if ('svg' in result) {
       pre.classList.add('mermaid');
       pre.innerHTML = result.svg;
