@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 
 // The worker is a template, not a module: vite.config.js substitutes the
 // version, base and precache list at build time. Doing the same substitutions
@@ -133,5 +133,17 @@ describe('service worker', () => {
     await fire(worker, 'fetch', evt);
 
     expect(await evt.responded).toBe('cached:/app/');
+  });
+});
+
+// The diagram renderer loads on demand, so its chunks must be in the precache
+// list for offline use. This test reads the last build and skips without one.
+const DIST = new URL('../dist/', import.meta.url);
+describe.skipIf(!existsSync(new URL('sw.js', DIST)))('built precache list', () => {
+  it('lists every JavaScript chunk, including the lazy diagram chunk', () => {
+    const sw = readFileSync(new URL('sw.js', DIST), 'utf8');
+    const chunks = readdirSync(new URL('assets/', DIST)).filter((f) => f.endsWith('.js'));
+    expect(chunks.some((f) => f.startsWith('lazy-'))).toBe(true);
+    for (const f of chunks) expect(sw).toContain(`/assets/${f}`);
   });
 });

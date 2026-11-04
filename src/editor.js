@@ -37,6 +37,7 @@ import {
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
+import { hasDiagrams, renderDiagrams } from './mermaid.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -1585,12 +1586,23 @@ preview.addEventListener('mouseover', (e) => {
 
 preview.addEventListener('mouseleave', () => lightSourceLines(null));
 
+let previewGeneration = 0;
+
 function updatePreview() {
   if (!previewShown()) return;
+  const generation = ++previewGeneration;
   preview.innerHTML = renderPreview(getText());
   pairedBlockEl = null;
   invalidatePreviewBlocks();
   if (effectiveViewMode() === 'split') syncPreviewToEditor();
+  if (!hasDiagrams(preview)) return;
+  // Diagrams change the block heights. Skip the work if a newer render started.
+  renderDiagrams(preview).then(() => {
+    if (generation !== previewGeneration) return;
+    pairedBlockEl = null;
+    invalidatePreviewBlocks();
+    if (effectiveViewMode() === 'split') syncPreviewToEditor();
+  }, () => {});
 }
 
 // Print / PDF: the handout. The print stylesheet shows only the rendered

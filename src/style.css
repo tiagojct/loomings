@@ -369,6 +369,29 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   margin: 1em 0;
 }
 #preview pre code { background: none; padding: 0; color: var(--fg-dim); }
+#preview .pele {
+  --pele-bg: transparent;
+  --pele-fg: var(--fg);
+  --pele-muted: var(--fg-dim);
+  --pele-line: var(--fg-dim);
+  --pele-surface: var(--bg-elev);
+  --pele-surface-alt: var(--bg-deep);
+  --pele-border: var(--border);
+  --pele-accent: var(--accent);
+}
+#preview pre.mermaid {
+  background: none;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  text-align: center;
+}
+#preview pre.mermaid svg { max-width: 100%; height: auto; }
+#preview pre.mermaid-error p {
+  margin: 0.75em 0 0;
+  color: var(--fg-dim);
+  font-size: 0.9em;
+}
 #preview blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 16px;
