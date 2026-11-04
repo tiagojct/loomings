@@ -7,6 +7,7 @@
 // ========================================
 
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
+import { planNativeSources } from './library.js';
 import { createSession } from './session.js';
 import { checkStyle as check } from './style.js';
 
@@ -49,4 +50,16 @@ export function setMeta(source, key, value) {
  */
 export function checkStyle(xml) {
   return JSON.stringify(check(xml));
+}
+
+/**
+ * The next step to find the files of a document. Swift only reads what the
+ * plan names, so the rules for names stay in one place.
+ *
+ * @param {string} metaJson  the fields `bibliography`, `csl` and `lang`
+ * @param {string} knownJson  a NativeFiles (library.js)
+ * @returns {string}  a NativePlan as JSON
+ */
+export function resolveNative(metaJson, knownJson) {
+  return JSON.stringify(planNativeSources(JSON.parse(metaJson), JSON.parse(knownJson)));
 }

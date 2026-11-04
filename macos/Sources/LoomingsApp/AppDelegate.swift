@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             Task { @MainActor in
                 for document in NSDocumentController.shared.documents {
                     (document as? LoomingsDocument)?.checkForExternalChange()
+                    (document as? LoomingsDocument)?.checkCitationFiles()
                 }
                 ThemeManager.shared.refreshForSystemAppearance()
             }

@@ -397,6 +397,12 @@ describe('analyse: file notes', () => {
     expect(fileNotes(r)[0].message).toContain('broken');
     expect(r.citations[0].html).toContain('Smith');
   });
+  it('uses a better note for a missing file when the sources give one', () => {
+    const s = createSession();
+    s.setSources({ bibs: [], styleXml: style('apa'), localeXml: locale('en-US'), lang: 'en-US', missing: ['a.bib', 'b.bib'], missingNotes: { 'a.bib': 'No folder.' } });
+    const r = s.analyse('---\nbibliography: [a.bib, b.bib]\n---\nText.\n');
+    expect(r.notes.map((n) => n.message)).toEqual(['No folder.', 'The file b.bib is missing.']);
+  });
   it('reports a missing file', () => {
     const r = ready({ bibs: [], missing: ['refs.bib'] }).analyse(doc('text'));
     expect(r.notes).toEqual([{ from: 0, to: 0, file: 'refs.bib', line: 0, message: 'The file refs.bib is missing.' }]);

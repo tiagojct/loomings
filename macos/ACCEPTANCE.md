@@ -245,17 +245,29 @@ above, APA, en-US.
 | Same text again (cached render) | 0.22 ms | 3.3 ms |
 | A new citation (render, same engine) | 5.9 ms | 406 ms |
 
-- Startup with no citations: unchanged. `LoomingsApp` does not link
-  `LoomingsCitations` yet, so the app has no JavaScriptCore dependency in this build.
-  When Task 11 links it, `init` costs 0.14 ms and the bundle stays unloaded until a
-  document has `bibliography:` or `references:`.
-- Startup with a bibliography: not an app measurement yet. The first report takes about
-  1.6 s to 2 s on the citation queue, so the citations stay literal for that time. Most
-  of it is the first citeproc engine.
+- Startup with no citations: `LoomingsApp` links `LoomingsCitations`, and so
+  JavaScriptCore, but the launch time is not measured. A document with no
+  `bibliography:` or `references:` line near the start of a frontmatter stops at
+  `CitationGate`: no engine, no bundle load, no JavaScript. The self-test checks this.
+- Startup with a bibliography: the bench uses APA. In the app, with the default style
+  (Chicago author-date), en-US and one entry, the first `analyse` of an engine took 3.6 s
+  in each self-test run. A changed bibliography builds a new citeproc engine, so it costs
+  the same. For the first report the preview shows the literal keys, because there is no
+  earlier report to keep. After a changed bibliography it keeps the last preview.
+- Each window has its own engine, made on the first document that passes the gate.
+  Peak footprint of `--snapshot`, one run each, the same text with and without
+  `bibliography:`, two entries: 192 MB and 169 MB, so one engine costs about 23 MB. This is
+  one small document, not a limit, and the cost of more windows is not measured.
+- Typing with a slow engine (0.7 s for each report, in `--self-test`, one
+  release run of each): Insert p95 is 1.1 ms to 1.6 ms with and without the engine. The
+  longest run loop turn stays under the 350 ms limit of the check. A build that
+  waits on the engine from the main thread gave a 735 ms turn and failed the check,
+  and its Insert p95 stayed at 1.4 ms, so Insert p95 alone does not show this fault.
 - The cost is once per engine setup. A change of style, locale or entries builds a new
   engine, so it costs about the first engine time again.
-- Memory: the process footprint changes between 13 MB and 110 MB through these runs,
-  because the collector runs at different times. This is not a figure for one engine.
+- Memory in the bench: the process footprint changes between 13 MB and 110 MB through
+  these runs, because the collector runs at different times. This is not a figure for one
+  engine.
 - These runs use the JIT, because the ad-hoc build has no hardened runtime. A Developer
   ID build with the hardened runtime needs the `com.apple.security.cs.allow-jit`
   entitlement, or JavaScriptCore runs without the JIT. That build is not measured.

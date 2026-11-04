@@ -1,6 +1,7 @@
 import AppKit
 import CoreImage
 import Foundation
+import LoomingsCitations
 import LoomingsDocuments
 import LoomingsEditor
 import LoomingsMarkdown
@@ -895,6 +896,8 @@ enum SelfTest {
         window.orderOut(nil)
         document.close()
 
+        checkCitations(check)
+
         if failures.isEmpty {
             print("SELFTEST PASS")
             return 0
@@ -904,6 +907,292 @@ enum SelfTest {
             print("  - \(failure)")
         }
         return 1
+    }
+
+    // MARK: - Citations
+
+    private static let citationBib = """
+    @article{silva2020,
+      author = {Silva, Ana},
+      title = {Lung function at home},
+      journal = {Journal of Tests},
+      year = {2020}
+    }
+
+    """
+
+    private static let citationText = """
+    ---
+    bibliography: refs.bib
+    ---
+    # A title
+
+    A claim [@silva2020] in a line.
+
+    The next paragraph.
+
+    """
+
+    /// A window on a document in a new folder that holds `refs.bib`.
+    private static func citationDocument(
+        text: String,
+        folder: URL,
+        saved: Bool = true
+    ) throws -> (LoomingsDocument, EditorWindowController) {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data(citationBib.utf8).write(to: folder.appendingPathComponent("refs.bib"))
+        let document = LoomingsDocument()
+        document.fileType = "net.daringfireball.markdown"
+        if saved {
+            let url = folder.appendingPathComponent("paper.md")
+            try Data(text.utf8).write(to: url)
+            document.fileURL = url
+        }
+        NSDocumentController.shared.addDocument(document)
+        document.pendingText = text
+        document.makeWindowControllers()
+        guard let controller = document.windowControllers.first as? EditorWindowController else {
+            throw CocoaError(.featureUnsupported)
+        }
+        controller.showWindow(nil)
+        controller.showsExportStatusSheet = false
+        controller.editor.textView.isContinuousSpellCheckingEnabled = false
+        return (document, controller)
+    }
+
+    private static func closeCitationDocument(_ document: LoomingsDocument) {
+        document.updateChangeCount(.changeCleared)
+        document.close()
+    }
+
+    private static func checkCitations(_ check: (Bool, String) -> Void) {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("loomings-selftest-citations-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        do {
+            try checkFormattedDocument(check, folder: root.appendingPathComponent("formatted"))
+            try checkPlainDocument(check, folder: root.appendingPathComponent("plain"))
+            try checkDocumentsWithNoFolder(check, folder: root.appendingPathComponent("no-folder"))
+            try checkStaleReports(check, folder: root.appendingPathComponent("stale"))
+            try checkNoFlash(check, folder: root.appendingPathComponent("flash"))
+            try checkExportLimit(check, folder: root.appendingPathComponent("limit"))
+            try checkInsertWithSlowEngine(check, folder: root.appendingPathComponent("insert"))
+        } catch {
+            check(false, "citation setup (\(error))")
+        }
+    }
+
+    private static func checkFormattedDocument(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: citationText, folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.setViewMode(.split)
+        let shown = pump(timeout: 15) { controller.previewText.contains("(Silva 2020)") }
+        check(shown, "a document with refs.bib next to it shows a formatted citation")
+        check(!controller.previewText.contains("[@silva2020]"), "the preview has no literal key")
+        check(controller.previewText.contains("Lung Function at Home"), "the preview has the reference list")
+        check(controller.editor.source == citationText, "the document text does not change")
+        check(controller.citations.enginesCreated == 1, "a document with the key has one engine")
+
+        // The citation changes the length of its line: pairing goes by line.
+        let text = citationText as NSString
+        let next = text.range(of: "The next paragraph.")
+        controller.pairForTesting(editorLocation: next.location + 2)
+        check(controller.previewHighlightedBlockKind == "paragraph", "a line after a citation pairs with its block")
+        let blocks = controller.previewBlockCountForTesting
+        controller.pairForTesting(previewBlockAt: blocks - 1)
+        check(controller.editorPairedRange == nil, "the reference list pairs with no source")
+        controller.pairForTesting(previewBlockAt: blocks - 2)
+        check(controller.editorPairedRange?.location == next.location, "a block after a citation pairs with its source line")
+
+        controller.citations.exportLimit = 10
+        var written = false
+        let htmlURL = folder.appendingPathComponent("out.html")
+        controller.exportHTML(to: htmlURL) { written = true }
+        check(pump(timeout: 5) { written }, "the HTML export ends")
+        let html = (try? String(contentsOf: htmlURL, encoding: .utf8)) ?? ""
+        check(html.contains("(Silva 2020)") && !html.contains("[@silva2020]"), "the HTML export has the formatted citation")
+        check(controller.exportStatus == nil, "the export gives no status when the report is ready")
+        let pdf = PDFDocument(data: controller.renderedPDFForTesting())?.string ?? ""
+        check(pdf.contains("(Silva 2020)"), "the handout has the formatted citation")
+
+        // A change on disk is read on activation.
+        let renamed = citationBib.replacingOccurrences(of: "Silva, Ana", with: "Silva, Beatriz Longname")
+        try Data(renamed.utf8).write(to: folder.appendingPathComponent("refs.bib"))
+        document.checkCitationFiles()
+        check(pump(timeout: 15) { controller.previewText.contains("Silva, Beatriz Longname") }, "a changed bibliography is read again on activation")
+
+        try FileManager.default.removeItem(at: folder.appendingPathComponent("refs.bib"))
+        document.checkCitationFiles()
+        let gone = pump(timeout: 15) {
+            controller.citations.report(for: citationText)?.notes.contains { $0.message == "The file refs.bib is missing." } == true
+        }
+        check(gone, "a deleted bibliography gives a file note on activation")
+    }
+
+    private static func checkPlainDocument(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = "# Plain\n\nA line with [@silva2020].\n"
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.setViewMode(.split)
+        check(pump { controller.previewText.contains("[@silva2020]") }, "with no key the preview shows the source")
+        check(controller.previewInputForTesting == text, "with no key the source reaches the renderer unchanged")
+        _ = pump(timeout: 0.6) { false }
+        check(controller.citations.enginesCreated == 0, "a document with no key has no engine")
+        check(controller.citations.report(for: text) == nil, "a document with no key has no report")
+
+        // A key that is outside the frontmatter passes the gate. JS decides.
+        let late = "---\ntitle: T\n---\nbibliography: x\n\nA line with [@silva2020].\n"
+        controller.editor.setText(late)
+        check(pump(timeout: 15) { controller.citations.report(for: late) != nil }, "the gate lets a doubtful text through")
+        check(controller.citations.report(for: late)?.markdownSource == late, "the citation code leaves that text as it is")
+    }
+
+    private static func checkDocumentsWithNoFolder(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: citationText, folder: folder, saved: false)
+        defer { closeCitationDocument(document) }
+        let reported = pump(timeout: 15) { controller.citations.report(for: citationText) != nil }
+        check(reported, "an untitled document gets a report")
+        let notes = controller.citations.report(for: citationText)?.notes.map(\.message) ?? []
+        check(notes.first?.contains("no folder") == true, "an untitled document says that it has no folder")
+
+        // Saving gives the document a folder, so the file is found.
+        var saved = false
+        document.save(
+            to: folder.appendingPathComponent("saved.md"),
+            ofType: "net.daringfireball.markdown",
+            for: .saveAsOperation
+        ) { _ in saved = true }
+        check(pump { saved }, "the untitled document saves")
+        let found = pump(timeout: 15) {
+            controller.citations.report(for: citationText)?.citations.first?.markdown == "(Silva 2020)"
+        }
+        check(found, "saving next to refs.bib formats the citation")
+
+        let shelf = LocalShelf(root: folder.appendingPathComponent("shelf", isDirectory: true))
+        let entry = try shelf.create(title: "Shelved", data: Data(citationText.utf8), fileExtension: "md")
+        let shelved = LoomingsDocument()
+        shelved.shelf = shelf
+        shelved.fileURL = shelf.contentURL(for: entry)
+        check(shelved.citationDocumentURL == nil, "a shelf document has no folder for citations")
+    }
+
+    private static func checkStaleReports(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        let engine = try SlowCitationEngine(delay: 0.6)
+        let citations = CitationController(makeEngine: { engine })
+        var delivered: [String] = []
+        citations.onReport = { delivered.append($0.markdownSource) }
+
+        let url = folder.appendingPathComponent("paper.md")
+        let older = citationText + "Older text.\n"
+        let newer = citationText + "Newer text.\n"
+        citations.update(source: older, documentURL: url)
+        check(pump { engine.analyses > 0 }, "the first report starts")
+        citations.update(source: newer, documentURL: url)
+        check(pump(timeout: 15) { citations.report(for: newer) != nil }, "the newest report arrives")
+        _ = pump(timeout: 0.1) { false }
+        check(citations.droppedReports == 1, "a stale report is dropped")
+        check(delivered.count == 1 && delivered[0].contains("Newer text."), "only the newest report is delivered")
+        check(citations.report(for: older) == nil, "the stale report is not kept")
+        citations.close()
+        _ = controller
+    }
+
+    private static func checkNoFlash(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0.5))
+        controller.setViewMode(.split)
+        controller.editor.setText(citationText)
+        check(pump(timeout: 15) { controller.previewText.contains("(Silva 2020)") }, "the slow engine gives a report")
+
+        controller.editor.textView.setSelectedRange(NSRange(location: (citationText as NSString).length, length: 0))
+        let renders = controller.previewRendersForTesting
+        controller.editor.textView.insertText("New words.", replacementRange: controller.editor.textView.selectedRange())
+        // Longer than the preview's own delay, shorter than the report.
+        _ = pump(timeout: 0.5) { false }
+        check(controller.previewRendersForTesting == renders, "an edit keeps the last preview while the report is on the way")
+        check(controller.previewText.contains("(Silva 2020)"), "literal keys do not flash after an edit")
+        check(pump(timeout: 15) { controller.previewText.contains("New words.") }, "the report brings the new text")
+        check(controller.previewText.contains("(Silva 2020)"), "the new preview has the formatted citation")
+    }
+
+    private static func checkExportLimit(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 1))
+        controller.citations.exportLimit = 0.1
+        controller.editor.setText(citationText)
+        let start = Date()
+        var written = false
+        let url = folder.appendingPathComponent("late.html")
+        controller.exportHTML(to: url) { written = true }
+        check(!written, "the export does not block the main thread")
+        check(pump { written }, "the export ends at the limit")
+        check(Date().timeIntervalSince(start) < 1, "the export ends before the slow report")
+        let html = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        check(html.contains("[@silva2020]"), "the late export has the literal key")
+        check(controller.exportStatus?.contains("not ready") == true, "the late export gives a clear status")
+        check(pump(timeout: 15) { controller.citations.report(for: citationText) != nil }, "the report still arrives")
+    }
+
+    /// Runs the run loop, and gives the longest single turn in milliseconds.
+    private static func longestTurn(_ seconds: TimeInterval) -> Double {
+        let deadline = Date().addingTimeInterval(seconds)
+        var longest = 0.0
+        while Date() < deadline {
+            let start = DispatchTime.now().uptimeNanoseconds
+            RunLoop.main.run(until: Date().addingTimeInterval(0.002))
+            longest = max(longest, Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+        }
+        return longest
+    }
+
+    /// Each sample is one `insertText` call. Bursts leave pauses, so the slow
+    /// engine is at work during the later bursts. A wait on the main thread
+    /// falls between two calls, so the longest run loop turn shows it.
+    private static func typing(_ controller: EditorWindowController) -> (insertP95: Double, longestTurn: Double) {
+        let textView = controller.editor.textView
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        var samples: [Double] = []
+        var turn = 0.0
+        for _ in 0..<3 {
+            for _ in 0..<40 {
+                let start = DispatchTime.now().uptimeNanoseconds
+                textView.insertText("x", replacementRange: textView.selectedRange())
+                samples.append(Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000)
+                turn = max(turn, longestTurn(0.002))
+            }
+            turn = max(turn, longestTurn(0.5))
+        }
+        samples.sort()
+        return (samples[Int(Double(samples.count - 1) * 0.95)], turn)
+    }
+
+    private static func checkInsertWithSlowEngine(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let body = String(repeating: "A line of text for the insert measure.\n\n", count: 200)
+        let (plain, plainController) = try citationDocument(text: body, folder: folder.appendingPathComponent("plain"))
+        plainController.setViewMode(.split)
+        check(pump { plainController.editor.lastAppliedRevision == plainController.editor.revision }, "the plain document parses")
+        _ = typing(plainController)
+        let baseline = typing(plainController)
+        closeCitationDocument(plain)
+
+        let (cited, citedController) = try citationDocument(text: "Empty.\n", folder: folder.appendingPathComponent("cited"))
+        defer { closeCitationDocument(cited) }
+        let engine = try SlowCitationEngine(delay: 0.7)
+        citedController.citations.useEngineForTesting(engine)
+        citedController.setViewMode(.split)
+        citedController.editor.setText(citationText + body)
+        check(pump(timeout: 15) { citedController.citations.report(for: citationText + body) != nil }, "the slow document has a report")
+        _ = typing(citedController)
+        let slow = typing(citedController)
+        let times = [baseline.insertP95, slow.insertP95, baseline.longestTurn, slow.longestTurn].map { String(format: "%.2f", $0) }
+        print("insert p95: \(times[0]) ms plain, \(times[1]) ms with a slow engine; longest turn: \(times[2]) ms, \(times[3]) ms")
+        check(engine.analyses >= 3, "the slow engine worked during the typing")
+        check(slow.insertP95 <= max(baseline.insertP95 * 1.5, baseline.insertP95 + 4), "Insert p95 stays the same with a slow engine")
+        check(slow.longestTurn < 350, "the main thread does not wait for a slow engine")
     }
 
     private static func pump(timeout: TimeInterval = 5, until condition: () -> Bool) -> Bool {
@@ -937,5 +1226,35 @@ enum SelfTest {
         guard let bitmap = view.bitmapImageRepForCachingDisplay(in: sample) else { return nil }
         view.cacheDisplay(in: sample, to: bitmap)
         return bitmap.colorAt(x: 0, y: 0)?.usingColorSpace(.sRGB)
+    }
+}
+
+/// The real engine, with a delay before each report, and a count of reports.
+private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Sendable {
+    private let engine: CitationEngine
+    private let delay: TimeInterval
+    private let lock = NSLock()
+    private var count = 0
+
+    init(delay: TimeInterval) throws {
+        guard let root = Bundle.main.resourceURL else { throw CocoaError(.fileNoSuchFile) }
+        engine = try CitationEngine(resources: root.appendingPathComponent("Citations"))
+        self.delay = delay
+    }
+
+    var analyses: Int { lock.withLock { count } }
+
+    func analyse(_ source: String) -> CitationReport {
+        lock.withLock { count += 1 }
+        Thread.sleep(forTimeInterval: delay)
+        return engine.analyse(source)
+    }
+
+    func setSources(_ sources: CitationSources) { engine.setSources(sources) }
+    func readMeta(_ source: String) throws -> CitationMeta { try engine.readMeta(source) }
+    func bundledStyle(_ id: String) -> String? { engine.bundledStyle(id) }
+    func bundledLocale(_ tag: String) -> String? { engine.bundledLocale(tag) }
+    func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan {
+        try engine.resolveNative(request, known: known)
     }
 }

@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import LoomingsCitations
 import PDFKit
 
 /// Draws the editor window to PNG files without screen-recording access, for
@@ -10,6 +11,8 @@ import PDFKit
 /// `-LoomingsSnapshotPairLocation <n>` lights the pair at that source location in Split;
 /// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption;
 /// `-LoomingsSnapshotCompareWith <file>` also writes compare.png.
+/// The input file is the base for relative images and bibliographies. The
+/// document stays untitled, so nothing writes to that file.
 /// Writes write.png, split.png and preview.png, then exits.
 @MainActor
 enum Snapshot {
@@ -40,7 +43,9 @@ enum Snapshot {
         window.setContentSize(NSSize(width: width > 0 ? width : 1180, height: 760))
         controller.showWindow(nil)
         controller.applyPreferences()
+        document.snapshotFileURL = input
         controller.editor.setText(text)
+        settleCitations(controller, text: text)
         if UserDefaults.standard.bool(forKey: "LoomingsSnapshotProjector") {
             controller.toggleProjectorMode(nil)
             controller.editor.textView.setSelectedRange(NSRange(location: 2, length: 0))
@@ -93,6 +98,15 @@ enum Snapshot {
         controller.editor.setText("")
         window.close()
         return 0
+    }
+
+    /// The first report takes about 2 s. A shot must not show literal keys.
+    private static func settleCitations(_ controller: EditorWindowController, text: String) {
+        guard CitationGate.applies(to: text) else { return }
+        let until = Date().addingTimeInterval(15)
+        while controller.citations.report(for: text) == nil, Date() < until {
+            settle(0.05)
+        }
     }
 
     private static func settle(_ seconds: TimeInterval) {

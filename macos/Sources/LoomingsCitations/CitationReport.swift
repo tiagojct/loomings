@@ -56,6 +56,7 @@ public struct CitationSources: Encodable, Sendable {
     public var fallbackLocaleXml: String?
     public var lang: String?
     public var missing: [String]?
+    public var missingNotes: [String: String]?
     public var styleError: String?
 
     public init(
@@ -65,6 +66,7 @@ public struct CitationSources: Encodable, Sendable {
         fallbackLocaleXml: String? = nil,
         lang: String? = nil,
         missing: [String]? = nil,
+        missingNotes: [String: String]? = nil,
         styleError: String? = nil
     ) {
         self.bibs = bibs
@@ -73,6 +75,7 @@ public struct CitationSources: Encodable, Sendable {
         self.fallbackLocaleXml = fallbackLocaleXml
         self.lang = lang
         self.missing = missing
+        self.missingNotes = missingNotes
         self.styleError = styleError
     }
 }
@@ -107,6 +110,83 @@ public struct CitationMeta: Decodable, Sendable, Equatable {
         referenceCount = try container.decode([AnyEntry].self, forKey: .references).count
         referencesDropped = try container.decode(Int.self, forKey: .referencesDropped)
     }
+}
+
+extension CitationMeta {
+    public var sourceRequest: CitationSourceRequest {
+        CitationSourceRequest(bibliography: bibliography, csl: csl, lang: lang)
+    }
+}
+
+/// The keys of the frontmatter that decide which files a document uses.
+public struct CitationSourceRequest: Codable, Sendable, Hashable {
+    public var bibliography: [String]
+    public var csl: String?
+    public var lang: String?
+
+    public init(bibliography: [String], csl: String?, lang: String?) {
+        self.bibliography = bibliography
+        self.csl = csl
+        self.lang = lang
+    }
+}
+
+/// What the app knows so far, for `resolveNative`: the fields of `NativeFiles`
+/// in `src/citations/library.js`.
+public struct CitationKnownFiles: Codable, Sendable, Equatable {
+    public struct File: Codable, Sendable, Equatable {
+        public var name: String
+        /// `bib` or `csl`.
+        public var kind: String
+        /// Only a style file carries its text. The plan does not read a `.bib`.
+        public var text: String?
+
+        public init(name: String, kind: String, text: String? = nil) {
+            self.name = name
+            self.kind = kind
+            self.text = text
+        }
+    }
+
+    public var files: [File]
+    public var tried: [String]
+    public var unreadable: [String]
+    public var noFolder: Bool
+
+    public init(
+        files: [File] = [],
+        tried: [String] = [],
+        unreadable: [String] = [],
+        noFolder: Bool = false
+    ) {
+        self.files = files
+        self.tried = tried
+        self.unreadable = unreadable
+        self.noFolder = noFolder
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        files = try container.decodeIfPresent([File].self, forKey: .files) ?? []
+        tried = try container.decodeIfPresent([String].self, forKey: .tried) ?? []
+        unreadable = try container.decodeIfPresent([String].self, forKey: .unreadable) ?? []
+        noFolder = try container.decodeIfPresent(Bool.self, forKey: .noFolder) ?? false
+    }
+}
+
+/// The result of `resolveNative`: the fields of `NativePlan` in
+/// `src/citations/library.js`. While `done` is false, read each name that is
+/// not tried, then ask again.
+public struct CitationPlan: Decodable, Sendable, Equatable {
+    public let bibFiles: [String]
+    public let stylePath: String?
+    public let styleId: String?
+    public let lang: String
+    public let fallbackLang: String
+    public let missing: [String]
+    public let missingNotes: [String: String]
+    public let styleError: String?
+    public let done: Bool
 }
 
 /// The result of `checkStyle`. When `ok` is true, `title` holds the title.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSources } from './library.js';
+import { planNativeSources, resolveSources } from './library.js';
 
 const DEP = '<style xmlns="http://purl.org/net/xbiblio/csl"><info><title>D</title><link href="http://www.zotero.org/styles/apa" rel="independent-parent"/></info></style>';
 const OWN = '<style xmlns="http://purl.org/net/xbiblio/csl"><info><title>Own</title></info><citation><layout/></citation></style>';
@@ -62,5 +62,85 @@ describe('resolveSources', () => {
     const r = await resolveSources(meta({ csl: 'd' }), [{ name: 'd.csl', kind: 'csl', text: dep('nlm-citation-sequence') }], a);
     expect(r.styleXml).toBe('<b vancouver/>');
     expect(r.styleError).toBeUndefined();
+  });
+});
+
+describe('planNativeSources', () => {
+  const nlm = DEP.replace('styles/apa', 'styles/nlm-citation-sequence');
+
+  it('asks for each bibliography as it is written, and needs no style file by default', () => {
+    const plan = planNativeSources(meta({ bibliography: ['refs.bib', '/abs/other.bib'] }), {});
+    expect(plan).toMatchObject({ bibFiles: ['refs.bib', '/abs/other.bib'], stylePath: null, styleId: 'chicago-author-date' });
+    expect(plan).toMatchObject({ lang: 'en-US', fallbackLang: 'en-US', done: false });
+  });
+  it('is done when the files are read, and lists only the files in use', () => {
+    const plan = planNativeSources(meta({ bibliography: ['refs.bib'] }), { files: [{ name: 'refs.bib', kind: 'bib' }], tried: ['refs.bib'] });
+    expect(plan).toMatchObject({ bibFiles: ['refs.bib'], missing: [], done: true });
+  });
+  it('adds the .bib ending to a name with none', () => {
+    expect(planNativeSources(meta({ bibliography: ['x/refs'] }), {}).bibFiles).toEqual(['x/refs.bib']);
+  });
+  it('moves a file that could not be read to missing', () => {
+    const plan = planNativeSources(meta({ bibliography: ['gone.bib'] }), { tried: ['gone.bib'] });
+    expect(plan).toMatchObject({ bibFiles: [], missing: ['gone.bib'], done: true });
+    expect(plan.missingNotes).toEqual({});
+  });
+  it('tries a style file first, as the web prefers a stored style', () => {
+    const plan = planNativeSources(meta({ csl: 'apa' }), {});
+    expect(plan).toMatchObject({ stylePath: 'apa.csl', styleId: null, done: false });
+    const next = planNativeSources(meta({ csl: 'apa' }), { tried: ['apa.csl'] });
+    expect(next).toMatchObject({ stylePath: null, styleId: 'apa', done: true });
+    expect(next.styleError).toBeUndefined();
+  });
+  it('uses a style file that is valid', () => {
+    const plan = planNativeSources(meta({ csl: 'styles/own.csl' }), { files: [{ name: 'styles/own.csl', kind: 'csl', text: OWN }], tried: ['styles/own.csl'] });
+    expect(plan).toMatchObject({ stylePath: 'styles/own.csl', styleId: null, done: true });
+  });
+  it('reports a style that is not found, and falls back to the default', () => {
+    const plan = planNativeSources(meta({ csl: 'nope.csl' }), { tried: ['nope.csl'] });
+    expect(plan).toMatchObject({ stylePath: null, styleId: 'chicago-author-date', missing: ['nope.csl'], done: true });
+    expect(plan.styleError).toMatch(/chicago-author-date/);
+  });
+  it('reads the parent of a dependent style from the same folder, then uses it', () => {
+    const dep = { name: 'csl/dep.csl', kind: 'csl', text: DEP.replace('/apa"', '/own"') };
+    const first = planNativeSources(meta({ csl: 'csl/dep.csl' }), { files: [dep], tried: ['csl/dep.csl'] });
+    expect(first).toMatchObject({ stylePath: 'csl/own.csl', done: false });
+    const parent = { name: 'csl/own.csl', kind: 'csl', text: OWN };
+    const next = planNativeSources(meta({ csl: 'csl/dep.csl' }), { files: [dep, parent], tried: ['csl/dep.csl', 'csl/own.csl'] });
+    expect(next).toMatchObject({ stylePath: 'csl/own.csl', styleId: null, done: true });
+    expect(next.styleError).toBeUndefined();
+  });
+  it('falls to a bundled parent through the alias', () => {
+    const dep = { name: 'dep.csl', kind: 'csl', text: nlm };
+    const plan = planNativeSources(meta({ csl: 'dep.csl' }), { files: [dep], tried: ['dep.csl', 'nlm-citation-sequence.csl'] });
+    expect(plan).toMatchObject({ stylePath: null, styleId: 'vancouver', done: true });
+    expect(plan.styleError).toBeUndefined();
+  });
+  it('names a parent that cannot be found', () => {
+    const dep = { name: 'dep.csl', kind: 'csl', text: DEP.replace('/apa"', '/zzz"') };
+    const plan = planNativeSources(meta({ csl: 'dep.csl' }), { files: [dep], tried: ['dep.csl', 'zzz.csl'] });
+    expect(plan.styleError).toBe('This style depends on zzz. Add that file.');
+    expect(plan).toMatchObject({ styleId: 'chicago-author-date', done: true });
+  });
+  it('rejects a style file that is not CSL', () => {
+    const bad = { name: 'bad.csl', kind: 'csl', text: 'not xml' };
+    const plan = planNativeSources(meta({ csl: 'bad.csl' }), { files: [bad], tried: ['bad.csl'] });
+    expect(plan.styleError).toBe('The style file is not valid CSL.');
+    expect(plan).toMatchObject({ stylePath: null, styleId: 'chicago-author-date', done: true });
+  });
+  it('chooses the locale with the web rule', () => {
+    expect(planNativeSources(meta({ lang: 'pt' }), {})).toMatchObject({ lang: 'pt-PT', fallbackLang: 'en-US' });
+    expect(planNativeSources(meta({ lang: 'en-AU' }), {}).lang).toBe('en-GB');
+  });
+  it('explains a relative name in a document with no folder', () => {
+    const entries = ['refs.bib', '/abs/gone.bib', '~/gone.bib'];
+    const plan = planNativeSources(meta({ bibliography: entries }), { tried: entries, noFolder: true });
+    expect(plan.missing).toEqual(entries);
+    expect(Object.keys(plan.missingNotes)).toEqual(['refs.bib']);
+    expect(plan.missingNotes['refs.bib']).toMatch(/no folder/);
+  });
+  it('says when a file exists but cannot be read as text', () => {
+    const plan = planNativeSources(meta({ bibliography: ['latin.bib'] }), { tried: ['latin.bib'], unreadable: ['latin.bib'] });
+    expect(plan.missingNotes['latin.bib']).toBe('The file latin.bib could not be read as text.');
   });
 });

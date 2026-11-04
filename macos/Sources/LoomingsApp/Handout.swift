@@ -33,11 +33,14 @@ enum Handout {
         return info
     }
 
-    static func view(source: String, documentURL: URL?, title: String) -> HandoutTextView {
+    /// - Parameters:
+    ///   - source: the document, for the share link.
+    ///   - markdown: the text to print, with its citations formatted.
+    static func view(source: String, markdown: String, documentURL: URL?, title: String) -> HandoutTextView {
         let manager = ThemeManager.shared
         let light = manager.library?.resolve(family: manager.family, mode: .light, systemIsDark: false)
         let theme = light.map { PreviewTheme.themed($0) } ?? .standard
-        let rendered = PreviewRenderer(theme: theme, producesHTML: false).render(source: source, documentURL: documentURL)
+        let rendered = PreviewRenderer(theme: theme, producesHTML: false).render(source: markdown, documentURL: documentURL)
 
         let content = NSMutableAttributedString(attributedString: rendered.attributed)
         content.append(qrBlock(source: source, theme: theme))

@@ -1,4 +1,5 @@
 import AppKit
+import LoomingsCitations
 import LoomingsDocuments
 import LoomingsEditor
 import LoomingsMarkdown
@@ -16,6 +17,7 @@ final class EditorWindowController: NSWindowController,
     NSMenuItemValidation
 {
     let editor = EditorController()
+    let citations = CitationController()
     weak var loomingsDocument: LoomingsDocument?
 
     enum ViewMode: Int {
@@ -39,6 +41,8 @@ final class EditorWindowController: NSWindowController,
     private var syncUntil = Date.distantPast
     private var previewGeneration = 0
     private let previewPipeline = PreviewPipeline()
+    /// Links the text in the preview to the editor's text, when they differ.
+    private var citationLines: CitationLineMap?
     private let previewQueue = DispatchQueue(
         label: "eu.tiagojacinto.loomings.preview",
         qos: .userInitiated
@@ -238,6 +242,8 @@ final class EditorWindowController: NSWindowController,
             self.applyTeachingReport()
             if self.editor.lastAppliedRevision == self.editor.revision, self.editor.revision > 0 {
                 self.history.textChanged(self.editor.source)
+                // The parse is done, so this is never on the edit path.
+                self.updateCitations()
             }
             self.scheduleStatusUpdate()
             self.lineRuler.needsDisplay = true
@@ -255,6 +261,9 @@ final class EditorWindowController: NSWindowController,
         }
         previewTextView.onScroll = { [weak self] in
             self?.syncEditorToPreview()
+        }
+        citations.onReport = { [weak self] _ in
+            self?.refreshPreview()
         }
         refreshCompanion()
         statusBar.onExerciseClick = { [weak self] in
@@ -274,6 +283,40 @@ final class EditorWindowController: NSWindowController,
             self?.pair(previewBlock: block)
         }
     }
+
+    // MARK: - Citations
+
+    func updateCitations() {
+        citations.update(source: editor.source, documentURL: loomingsDocument?.citationDocumentURL)
+    }
+
+    /// Runs `body` with the text to export: the source with its citations
+    /// formatted when the report for this text comes in time.
+    private func withExportText(_ body: @escaping (String) -> Void) {
+        citations.exportText(
+            source: editor.source,
+            documentURL: loomingsDocument?.citationDocumentURL
+        ) { [weak self] text in
+            body(text.markdown)
+            self?.showExportStatus(text.status)
+        }
+    }
+
+    private func showExportStatus(_ status: String?) {
+        exportStatus = status
+        guard let status, let window, showsExportStatusSheet else { return }
+        let alert = NSAlert()
+        alert.messageText = "The citations are not formatted."
+        alert.informativeText = status
+        alert.beginSheetModal(for: window)
+    }
+
+    private(set) var exportStatus: String?
+    var showsExportStatusSheet = true
+
+    /// The text of the last render that reached the preview pipeline.
+    private(set) var previewInputForTesting: String?
+    private(set) var previewRendersForTesting = 0
 
     // MARK: - View modes and preview
 
@@ -472,6 +515,7 @@ final class EditorWindowController: NSWindowController,
 
     func windowWillClose(_ notification: Notification) {
         history.flush()
+        citations.close()
         replayController?.close()
         removeSentFiles()
     }
@@ -620,7 +664,7 @@ final class EditorWindowController: NSWindowController,
         }
         previewTextView.highlightedBlockIndex = PreviewDocument.blockIndex(
             in: previewTextView.blocks,
-            containing: location
+            containing: citationLines?.markdownLocation(forSource: location) ?? location
         )
     }
 
@@ -630,7 +674,14 @@ final class EditorWindowController: NSWindowController,
             editor.pairedRange = nil
             return
         }
-        editor.pairedRange = block?.sourceRange
+        editor.pairedRange = block.flatMap(sourceRange(of:))
+    }
+
+    /// A block's range in the editor. With citations, a block's range is in
+    /// the formatted text, and the reference list has no source.
+    private func sourceRange(of block: PreviewBlock) -> NSRange? {
+        guard let citationLines else { return block.sourceRange }
+        return citationLines.sourceRange(forMarkdown: block.sourceRange)
     }
 
     private func clearPairing() {
@@ -642,6 +693,7 @@ final class EditorWindowController: NSWindowController,
     func pairForTesting(previewBlockAt index: Int) {
         pair(previewBlock: previewTextView.blocks.indices.contains(index) ? previewTextView.blocks[index] : nil)
     }
+    var previewBlockCountForTesting: Int { previewTextView.blocks.count }
     var previewHighlightedBlockKind: String? {
         previewTextView.highlightedBlockIndex.map { previewTextView.blocks[$0].kind.rawValue }
     }
@@ -651,7 +703,7 @@ final class EditorWindowController: NSWindowController,
     func pairBothForSnapshot(editorLocation location: Int) {
         pair(editorLocation: location)
         if let index = previewTextView.highlightedBlockIndex {
-            editor.pairedRange = previewTextView.blocks[index].sourceRange
+            editor.pairedRange = sourceRange(of: previewTextView.blocks[index])
         }
     }
 
@@ -731,27 +783,39 @@ final class EditorWindowController: NSWindowController,
 
     private func refreshPreview() {
         guard viewMode != .write else { return }
+        let source = editor.source
+        var markdown = source
+        switch citations.previewText(for: source) {
+        case .render(let text):
+            markdown = text
+        case .keepLast:
+            // The report comes soon. Literal keys must not flash until then.
+            if !previewTextView.blocks.isEmpty { return }
+        }
+        previewInputForTesting = markdown
+        previewRendersForTesting += 1
         previewGeneration += 1
         let generation = previewGeneration
-        let source = editor.source
-        let documentURL = loomingsDocument?.fileURL
+        let documentURL = loomingsDocument?.linkBaseURL
         let resolved = ThemeManager.shared.resolved()
         let theme = previewTheme(resolved)
 
         let pipeline = previewPipeline
         previewQueue.async { [weak self] in
             let rendered = pipeline.render(
-                source: source,
+                source: markdown,
                 documentURL: documentURL,
                 palette: resolved,
                 theme: theme
             )
+            let lines = markdown == source ? nil : CitationLineMap(source: source, markdown: markdown)
             DispatchQueue.main.async {
                 guard let self,
                       generation == self.previewGeneration,
                       self.viewMode != .write else {
                     return
                 }
+                self.citationLines = lines
                 self.previewTextView.render(rendered, documentURL: documentURL)
             }
         }
@@ -920,10 +984,20 @@ final class EditorWindowController: NSWindowController,
         previewTextView.scroll(toSourceLine: line)
     }
 
+    /// With no report for the current text, the output has the literal keys.
     func renderedHTMLForTesting() -> String {
+        documentHTML(markdown: currentMarkdown)
+    }
+
+    private var currentMarkdown: String {
+        let source = editor.source
+        return citations.report(for: source)?.markdownSource ?? source
+    }
+
+    private func documentHTML(markdown: String) -> String {
         let rendered = PreviewRenderer().render(
-            source: editor.source,
-            documentURL: loomingsDocument?.fileURL
+            source: markdown,
+            documentURL: loomingsDocument?.linkBaseURL
         )
         return PreviewHTMLExport.document(
             title: exportTitle,
@@ -936,12 +1010,17 @@ final class EditorWindowController: NSWindowController,
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("loomings-handout-\(UUID().uuidString).pdf")
         defer { try? FileManager.default.removeItem(at: url) }
-        Handout.writePDF(makeHandout(), to: url)
+        Handout.writePDF(makeHandout(markdown: currentMarkdown), to: url)
         return (try? Data(contentsOf: url)) ?? Data()
     }
 
-    private func makeHandout() -> HandoutTextView {
-        Handout.view(source: editor.source, documentURL: loomingsDocument?.fileURL, title: exportTitle)
+    private func makeHandout(markdown: String) -> HandoutTextView {
+        Handout.view(
+            source: editor.source,
+            markdown: markdown,
+            documentURL: loomingsDocument?.linkBaseURL,
+            title: exportTitle
+        )
     }
 
     func refreshStatus() {
@@ -1021,19 +1100,18 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "html") else {
             return
         }
-        let rendered = PreviewRenderer().render(
-            source: editor.source,
-            documentURL: loomingsDocument?.fileURL
-        )
-        let html = PreviewHTMLExport.document(
-            title: exportTitle,
-            bodyHTML: rendered.html,
-            palette: ThemeManager.shared.resolved()
-        )
-        do {
-            try html.data(using: .utf8)?.write(to: url, options: .atomic)
-        } catch {
-            NSAlert(error: error).runModal()
+        exportHTML(to: url)
+    }
+
+    func exportHTML(to url: URL, completion: (() -> Void)? = nil) {
+        withExportText { [weak self] markdown in
+            defer { completion?() }
+            guard let self else { return }
+            do {
+                try self.documentHTML(markdown: markdown).data(using: .utf8)?.write(to: url, options: .atomic)
+            } catch {
+                NSAlert(error: error).runModal()
+            }
         }
     }
 
@@ -1041,7 +1119,8 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "pdf") else {
             return
         }
-        if !Handout.writePDF(makeHandout(), to: url) {
+        withExportText { [weak self] markdown in
+            guard let self, !Handout.writePDF(self.makeHandout(markdown: markdown), to: url) else { return }
             let alert = NSAlert()
             alert.messageText = "The PDF could not be written."
             alert.informativeText = "Check that the folder can be written to, then try again."
@@ -1050,10 +1129,13 @@ final class EditorWindowController: NSWindowController,
     }
 
     @objc func printPreview(_ sender: Any?) {
-        let operation = NSPrintOperation(view: makeHandout(), printInfo: Handout.printInfo())
-        operation.showsPrintPanel = true
-        operation.showsProgressPanel = true
-        operation.run()
+        withExportText { [weak self] markdown in
+            guard let self else { return }
+            let operation = NSPrintOperation(view: self.makeHandout(markdown: markdown), printInfo: Handout.printInfo())
+            operation.showsPrintPanel = true
+            operation.showsProgressPanel = true
+            operation.run()
+        }
     }
 
     // MARK: - Formatting actions

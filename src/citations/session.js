@@ -21,7 +21,9 @@ import { checkStyle } from './style.js';
  * @typedef {import('./bib.js').CslItem} CslItem
  * @typedef {import('./output.js').CitationOutput} CitationOutput
  * @typedef {{bibs?: {name: string, text: string}[], styleXml?: string|null, localeXml?: string|null,
- *   fallbackLocaleXml?: string, lang?: string, missing?: string[], styleError?: string|null}} CitationSources
+ *   fallbackLocaleXml?: string, lang?: string, missing?: string[], missingNotes?: Record<string, string>,
+ *   styleError?: string|null}} CitationSources
+ *   `missingNotes` gives a better note than the default for a name in `missing`.
  * @typedef {{key: string, authors: string, year: string, title: string, cited: boolean}} LibraryEntry
  * @typedef {{from: number, to: number, message: string, file?: string, line?: number}} CitationNote
  *   A note about a file has from 0, to 0, `line` (from 0) and `file` when a file is named.
@@ -288,7 +290,10 @@ export function createSession({ makeEngine = createEngine } = {}) {
     const citedKeys = new Set(citations.flatMap((c) => c.items.map((it) => it.key)));
     const missingFiles = sources.missing ?? [];
     /** @type {CitationNote[]} */
-    const notes = [...bibNotes, ...missingFiles.map((name) => fileNote(name, 0, `The file ${name} is missing.`))];
+    const notes = [
+      ...bibNotes,
+      ...missingFiles.map((name) => fileNote(name, 0, sources.missingNotes?.[name] ?? `The file ${name} is missing.`)),
+    ];
     if (meta.referencesDropped) notes.push(fileNote(null, 0, droppedMessage(meta.referencesDropped)));
     const styleFile = meta.csl;
     const unusableKeys = (/** @type {Citation} */ c) =>

@@ -6,6 +6,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCitationMeta, setCitationMeta } from '../../src/citations/frontmatter.js';
+import { planNativeSources } from '../../src/citations/library.js';
 import { createSession } from '../../src/citations/session.js';
 import { checkStyle } from '../../src/citations/style.js';
 
@@ -191,7 +192,30 @@ const edits = [
 
 const styles = [DEPENDENT_STYLE, styleFile('vancouver'), 'not a style', '<style><info></style>'];
 
+// Each step of the resolve round trip of the native app. The rules are in
+// library.js: the Swift test only proves that the bundle gives the same plan.
+const OWN_STYLE = styleFile('vancouver');
+const plans = [
+  { request: { bibliography: ['refs.bib', '/abs/more.bib'], csl: 'apa', lang: 'pt' }, known: {} },
+  {
+    request: { bibliography: ['refs.bib', '/abs/more.bib'], csl: 'apa', lang: 'pt' },
+    known: { files: [{ name: 'refs.bib', kind: 'bib' }], tried: ['refs.bib', '/abs/more.bib', 'apa.csl'] },
+  },
+  { request: { bibliography: ['refs'], csl: null, lang: null }, known: { tried: ['refs.bib'], noFolder: true } },
+  {
+    request: { bibliography: [], csl: 'csl/dep.csl', lang: 'en-AU' },
+    known: { files: [{ name: 'csl/dep.csl', kind: 'csl', text: DEPENDENT_STYLE }], tried: ['csl/dep.csl'] },
+  },
+  {
+    request: { bibliography: [], csl: 'dep.csl', lang: null },
+    known: { files: [{ name: 'dep.csl', kind: 'csl', text: DEPENDENT_STYLE }], tried: ['dep.csl', 'apa.csl'] },
+  },
+  { request: { bibliography: [], csl: 'nope.csl', lang: null }, known: { tried: ['nope.csl'] } },
+  { request: { bibliography: ['latin.bib'], csl: 'own.csl', lang: null }, known: { files: [{ name: 'own.csl', kind: 'csl', text: OWN_STYLE }], tried: ['latin.bib', 'own.csl'], unreadable: ['latin.bib'] } },
+];
+
 const out = {
+  plans: plans.map((p) => ({ ...p, plan: planNativeSources(p.request, p.known) })),
   reports: cases.map((c) => ({ ...c, report: report(c) })),
   meta: metaSources.map((source) => ({ source, meta: readCitationMeta(source) })),
   edits: edits.map((e) => ({ ...e, result: setCitationMeta(e.source, e.key, e.value) })),

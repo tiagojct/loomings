@@ -15,6 +15,17 @@ public enum CitationEngineError: Error, Equatable, CustomStringConvertible {
     }
 }
 
+/// What the citation controller needs from an engine. The self-test puts a
+/// slow engine in its place.
+public protocol CitationEngineProtocol: AnyObject, Sendable {
+    func setSources(_ sources: CitationSources)
+    func analyse(_ source: String) -> CitationReport
+    func readMeta(_ source: String) throws -> CitationMeta
+    func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan
+    func bundledStyle(_ id: String) -> String?
+    func bundledLocale(_ tag: String) -> String?
+}
+
 /// Runs the citation code of `src/citations` in JavaScriptCore, so that its
 /// rules are not repeated in Swift.
 ///
@@ -23,7 +34,7 @@ public enum CitationEngineError: Error, Equatable, CustomStringConvertible {
 /// take 500 ms: do not call from the main thread. The bundle loads on the
 /// first call that needs it, so a document with no citations costs nothing.
 /// `init` only finds the file.
-public final class CitationEngine: @unchecked Sendable {
+public final class CitationEngine: CitationEngineProtocol, @unchecked Sendable {
     private let resources: URL
     private let queue = DispatchQueue(label: "eu.tiagojacinto.loomings.citations", qos: .userInitiated)
 
@@ -76,6 +87,14 @@ public final class CitationEngine: @unchecked Sendable {
 
     public func readMeta(_ source: String) throws -> CitationMeta {
         try queue.sync { try call("readMeta", [source]) }
+    }
+
+    /// The next step to find the files of a document.
+    public func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan {
+        let encoder = JSONEncoder()
+        let meta = String(decoding: try encoder.encode(request), as: UTF8.self)
+        let files = String(decoding: try encoder.encode(known), as: UTF8.self)
+        return try queue.sync { try call("resolveNative", [meta, files]) }
     }
 
     /// Sets or removes one frontmatter key. A nil value removes the key.
@@ -172,7 +191,7 @@ public final class CitationEngine: @unchecked Sendable {
 
 extension CitationReport {
     /// The report of a failure: the session's empty report with one note.
-    init(failure message: String, source: String) {
+    public init(failure message: String, source: String) {
         citations = []
         bibliography = []
         bibliographyMarkdown = ""

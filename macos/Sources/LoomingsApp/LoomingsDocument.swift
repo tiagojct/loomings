@@ -147,6 +147,7 @@ final class LoomingsDocument: NSDocument {
             try? shelf.touch(id: entry.id, at: Date())
             applyTitle()
         }
+        refreshCitations()
     }
 
     // MARK: - Shelf
@@ -165,6 +166,39 @@ final class LoomingsDocument: NSDocument {
     var imageLinkDirectory: URL? {
         guard let url = fileURL, !shelf.contains(url) else { return nil }
         return url.deletingLastPathComponent()
+    }
+
+    /// Snapshot mode only: the input file, for relative images and
+    /// bibliographies. The document never writes to it.
+    var snapshotFileURL: URL?
+
+    /// The file that relative links in the preview and export start from.
+    var linkBaseURL: URL? { snapshotFileURL ?? fileURL }
+
+    /// The file that relative citation files start from. A shelf document has
+    /// no folder for the writer, as for images.
+    var citationDocumentURL: URL? {
+        snapshotFileURL ?? (imageLinkDirectory == nil ? nil : fileURL)
+    }
+
+    /// The document's text or home changed in a way the editor cannot see.
+    private func refreshCitations() {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                for controller in self?.windowControllers ?? [] {
+                    (controller as? EditorWindowController)?.updateCitations()
+                }
+            }
+        }
+    }
+
+    /// Reads the citation files again if they changed on disk.
+    func checkCitationFiles() {
+        MainActor.assumeIsolated {
+            for controller in windowControllers {
+                (controller as? EditorWindowController)?.citations.checkFiles()
+            }
+        }
     }
 
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
@@ -200,6 +234,7 @@ final class LoomingsDocument: NSDocument {
                 NSDocumentController.shared.noteNewRecentDocumentURL(shelf.contentURL(for: entry))
             }
             applyTitle()
+            refreshCitations()
         } catch {
             presentError(error)
         }

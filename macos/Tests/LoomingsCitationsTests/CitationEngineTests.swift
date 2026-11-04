@@ -44,6 +44,13 @@ private struct Fixtures: Decodable {
         let result: CitationStyleCheck
     }
 
+    struct Plan: Decodable {
+        let request: CitationSourceRequest
+        let known: CitationKnownFiles
+        let plan: CitationPlan
+    }
+
+    let plans: [Plan]
     let reports: [Report]
     let meta: [Meta]
     let edits: [Edit]
@@ -146,6 +153,17 @@ struct CitationEngineTests {
         }
         for fixture in fixtures.styles {
             #expect(try engine.checkStyle(fixture.xml) == fixture.result)
+        }
+    }
+
+    @Test("Gives the plan of the web code at each step of the round trip")
+    func plansMatchTheWeb() throws {
+        let fixtures = try Fixtures.load()
+        let engine = try CitationEngine(resources: resources)
+        #expect(fixtures.plans.contains { !$0.plan.done })
+        #expect(fixtures.plans.contains { $0.plan.styleError != nil })
+        for fixture in fixtures.plans {
+            #expect(try engine.resolveNative(fixture.request, known: fixture.known) == fixture.plan)
         }
     }
 
