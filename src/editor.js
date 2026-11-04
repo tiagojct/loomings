@@ -39,7 +39,7 @@ import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
 import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
-import { createCitationDocument, citedHtml } from './citations/document.js';
+import { createCitationDocument, citedHtml, citationsLeftLiteral } from './citations/document.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -1158,13 +1158,6 @@ const citations = createCitationDocument({
   onChange: () => updatePreview({ onlyIfChanged: true }),
 });
 
-// The report of this text, or null. A report of an older text is not used:
-// its offsets are wrong for this text, so the citations stay literal.
-function citationReport(text) {
-  const held = citations.current();
-  return held && held.text === text ? held.report : null;
-}
-
 function markDirty() {
   session.markEdited();
   scheduleStats();
@@ -1273,6 +1266,7 @@ async function exportHtml() {
   const title = currentFile ? displayName(currentFile) : 'Untitled';
   const text = getText();
   const report = await citations.flush(text);
+  const partial = citationsLeftLiteral(text, report);
   const rendered = await renderDiagramsInHtml(citedHtml(text, report, renderMarkdown));
   const html = `<!DOCTYPE html>
 <html lang="en">
@@ -1322,7 +1316,7 @@ ${rendered}
 `;
   try {
     const path = await downloadHtml(html, title + '.html');
-    if (path) flashStatus('Exported ' + basename(path));
+    if (path) flashStatus('Exported ' + basename(path) + (partial ? '; citations were not ready' : ''));
   } catch (err) {
     flashStatus('Export failed: ' + (err?.message || err));
   }
@@ -1631,7 +1625,7 @@ let previewGeneration = 0;
 function updatePreview({ onlyIfChanged = false } = {}) {
   if (!previewShown()) return;
   const text = getText();
-  const html = citedHtml(text, citationReport(text), renderPreview);
+  const html = citedHtml(text, citations.reportFor(text), renderPreview);
   if (onlyIfChanged && html === previewHtml) return;
   previewHtml = html;
   const generation = ++previewGeneration;
@@ -1659,6 +1653,7 @@ const QR_TOO_LONG = 'This document is too long for a QR code; share it as a link
 async function printPreview() {
   const text = getText();
   const report = await citations.flush(text);
+  if (citationsLeftLiteral(text, report)) flashStatus('Citations are not ready; printing without them');
   let qr = '';
   if (text.trim()) {
     /** @type {string|null} */ let url = null;

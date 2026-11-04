@@ -2,14 +2,17 @@
 // Loomings — the citations of the open document (web only)
 // Connects the editor to the citation client. It knows which report belongs
 // to which text, and it asks for one text at a time, so a print or an export
-// always gets the report of its own text. A document with no `bibliography:`
-// and no `references:` loads nothing: the client and the assets come in as
-// functions that load them.
+// always gets the report of its own text. While a new report is on its way,
+// `reportFor` moves the last one to the new text, so the preview keeps its
+// citations and references. A document with no `bibliography:` and no
+// `references:` loads nothing: the client and the assets come in as functions
+// that load them.
 // ========================================
 
 import { escapeHtml } from '../html.js';
 import { readCitationMeta } from './frontmatter.js';
 import { applyCitations } from './output.js';
+import { scanCitations } from './scan.js';
 
 /**
  * @typedef {import('./session.js').CitationReport} CitationReport
@@ -19,9 +22,59 @@ import { applyCitations } from './output.js';
  */
 
 const WAIT = 300;
+const FLUSH_LIMIT = 10000;
 
 /** @param {import('./frontmatter.js').CitationMeta} meta */
 const usesCitations = (meta) => meta.bibliography.length > 0 || meta.references.length > 0 || meta.referencesDropped !== 0;
+
+/** @param {import('./frontmatter.js').CitationMeta} meta */
+const metaKey = (meta) => JSON.stringify([meta.bibliography, meta.csl, meta.lang, meta.references]);
+
+/**
+ * True when the text has a citation with no output in the report, so a print
+ * or an export shows it as source text. An unknown key has an output.
+ *
+ * @param {string} source
+ * @param {CitationReport|null} report
+ * @returns {boolean}
+ */
+export function citationsLeftLiteral(source, report) {
+  if (!usesCitations(readCitationMeta(source))) return false;
+  return scanCitations(source).length > (report?.citations.length ?? 0);
+}
+
+/**
+ * The report of an older text, with the offsets of a new text. Each citation
+ * keeps the output of the same source slice. Equal slices match in order, and
+ * an added copy takes the last one. A slice with no match gets no output, so
+ * it stays literal. The other fields are those of the older report, so
+ * `markdownSource` is for the older text.
+ *
+ * @param {HeldReport} held
+ * @param {string} text
+ * @returns {CitationReport}
+ */
+function moveReport(held, text) {
+  /** @type {Map<string, import('./output.js').CitationOutput[]>} */
+  const bySlice = new Map();
+  for (const output of held.report.citations) {
+    const slice = held.text.slice(output.from, output.to);
+    bySlice.set(slice, [...(bySlice.get(slice) ?? []), output]);
+  }
+  /** @type {Map<string, number>} */
+  const used = new Map();
+  /** @type {import('./output.js').CitationOutput[]} */
+  const citations = [];
+  for (const { from, to } of scanCitations(text)) {
+    const slice = text.slice(from, to);
+    const outputs = bySlice.get(slice);
+    if (!outputs) continue;
+    const n = used.get(slice) ?? 0;
+    used.set(slice, n + 1);
+    citations.push({ ...outputs[Math.min(n, outputs.length - 1)], from, to });
+  }
+  return { ...held.report, citations };
+}
 
 /**
  * The reference list. The entries are clean HTML from the session.
@@ -58,7 +111,8 @@ export function citedHtml(source, report, render) {
  *   `onChange` runs when the report of the latest text arrives or goes.
  *   `library` is lazy too, and tests replace it: a real import takes real time.
  * @returns {{update(text: string|(() => string)): void, flush(text: string): Promise<CitationReport|null>,
- *   refresh(): Promise<CitationReport|null>, current(): HeldReport|null}}
+ *   refresh(): Promise<CitationReport|null>, current(): HeldReport|null,
+ *   reportFor(text: string): CitationReport|null}}
  */
 export function createCitationDocument({ client, listFiles, assets, onChange, library = () => import('./library.js') }) {
   /** @type {ReturnType<typeof setTimeout>|null} */
@@ -67,7 +121,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
   let latest = null;
   /** @type {string|null} the text that waits for its turn */
   let typed = null;
-  /** @type {{text: string, resolve: (report: CitationReport|null) => void}[]} */
+  /** @type {{text: string, resolve: (report: CitationReport|null) => void, limit?: ReturnType<typeof setTimeout>}[]} */
   const flushes = [];
   /** @type {HeldReport|null} */
   let held = null;
@@ -109,7 +163,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
    * @returns {Promise<boolean>}  true when the client got new sources
    */
   async function syncSources(loaded, meta) {
-    const key = JSON.stringify([meta.bibliography, meta.csl, meta.lang]);
+    const key = metaKey(meta);
     if (!filesStale && key === sourcesKey) return false;
     const reload = filesStale;
     // Clear the flag first: a refresh during the read sets it again.
@@ -166,7 +220,11 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
       const changed = report !== (held?.report ?? null);
       held = report ? { text, report } : null;
       for (const flush of served) {
-        flushes.splice(flushes.indexOf(flush), 1);
+        const at = flushes.indexOf(flush);
+        // A flush past its time limit has left the list and has its answer.
+        if (at < 0) continue;
+        flushes.splice(at, 1);
+        clearTimeout(flush.limit);
         flush.resolve(report);
       }
       if (changed && text === latest) {
@@ -180,12 +238,35 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     running = false;
   }
 
+  /**
+   * The report of exactly this text, or else the last report at the offsets
+   * of this text. A change of style, language or files makes the last report
+   * wrong, so this gives null, and the citations stay literal.
+   *
+   * @param {string} text
+   * @returns {CitationReport|null}
+   */
+  function reportFor(text) {
+    if (!held) return null;
+    if (held.text === text) return held.report;
+    const meta = readCitationMeta(text);
+    if (!usesCitations(meta) || metaKey(meta) !== metaKey(readCitationMeta(held.text))) return null;
+    return moveReport(held, text);
+  }
+
   function flush(/** @type {string} */ text) {
     if (timer) clearTimeout(timer);
     timer = null;
     latest = text;
     return new Promise((resolve) => {
-      flushes.push({ text, resolve });
+      /** @type {typeof flushes[number]} */
+      const entry = { text, resolve };
+      // A worker that hangs must not stop a print. A late answer still counts as a report.
+      entry.limit = setTimeout(() => {
+        flushes.splice(flushes.indexOf(entry), 1);
+        resolve(reportFor(text));
+      }, FLUSH_LIMIT);
+      flushes.push(entry);
       run();
     });
   }
@@ -209,5 +290,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     },
 
     current: () => held,
+
+    reportFor,
   };
 }

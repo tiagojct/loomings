@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { createCitationDocument, citedHtml, referencesHtml } from './document.js';
+import { createCitationDocument, citedHtml, referencesHtml, citationsLeftLiteral } from './document.js';
 import * as library from './library.js';
 import { createSession } from './session.js';
 import { renderPreview, renderMarkdown } from '../markdown.js';
@@ -275,6 +275,196 @@ describe('createCitationDocument', () => {
     await settle();
     await typed(doc, 'no front matter');
     expect(doc.current()).toBe(null);
+  });
+});
+
+describe('reportFor', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const head = '---\nbibliography: refs.bib\n---\n\n';
+  /** A report for `text`, with one output for each citation slice. */
+  const reportOf = (text, slices) => ({
+    ...report(),
+    citations: slices.map(([slice, html, at = 0]) => {
+      const from = text.indexOf(slice, at);
+      return { from, to: from + slice.length, html, markdown: html, missing: [] };
+    }),
+    bibliography: ['<div class="csl-entry">A.</div>'],
+    notes: [{ from: 0, to: 0, message: 'a note' }],
+  });
+  async function held(text, slices) {
+    const set = setup();
+    await typed(set.doc, text);
+    const given = reportOf(text, slices);
+    set.client.answer(given);
+    await settle();
+    return { ...set, given };
+  }
+
+  it('gives null with no report', () => {
+    expect(setup().doc.reportFor(WITH_BIB)).toBe(null);
+  });
+
+  it('gives the report itself for its own text', async () => {
+    const text = `${head}Text [@a].\n`;
+    const { doc, given } = await held(text, [['[@a]', '(A 2020)']]);
+    expect(doc.reportFor(text)).toBe(given);
+  });
+
+  it('moves a citation after an edit before it, with no call to the worker', async () => {
+    const text = `${head}Text [@a].\n`;
+    const { doc, client, given } = await held(text, [['[@a]', '(A 2020)']]);
+    const edited = `${head}New words. Text [@a].\n`;
+    const moved = doc.reportFor(edited);
+    expect(moved.citations).toHaveLength(1);
+    expect(moved.citations[0].html).toBe('(A 2020)');
+    expect(edited.slice(moved.citations[0].from, moved.citations[0].to)).toBe('[@a]');
+    expect(moved.bibliography).toEqual(given.bibliography);
+    expect(moved.notes).toEqual(given.notes);
+    expect(client.asked).toHaveLength(1);
+  });
+
+  it('keeps the citations and the references in the preview during an edit', async () => {
+    const text = `${head}Text [@a].\n`;
+    const { doc } = await held(text, [['[@a]', '(A 2020)']]);
+    const edited = `${head}New words. Text [@a].\n`;
+    const html = citedHtml(edited, doc.reportFor(edited), renderPreview);
+    expect(html).toContain('<span class="cite">(A 2020)</span>');
+    expect(html).not.toContain('[@a]');
+    expect(html).toContain('<section class="references">');
+  });
+
+  it('leaves a new slice literal until its report arrives', async () => {
+    const text = `${head}Text [@a].\n`;
+    const { doc } = await held(text, [['[@a]', '(A 2020)']]);
+    const edited = `${head}Text [@a] and [@new].\n`;
+    const moved = doc.reportFor(edited);
+    expect(moved.citations.map((c) => c.html)).toEqual(['(A 2020)']);
+    const html = citedHtml(edited, moved, renderPreview);
+    expect(html).toContain('<span class="cite">(A 2020)</span>');
+    expect(html).toContain('[@new]');
+    expect(html).not.toContain('cite-missing');
+  });
+
+  it('reuses equal slices in order, and the last one for an added copy', async () => {
+    const text = `${head}One [@a]. Two [@a].\n`;
+    const { doc } = await held(text, [['[@a]', 'first'], ['[@a]', 'second', text.indexOf('Two')]]);
+    const edited = `${head}Zero. One [@a]. Two [@a]. Three [@a].\n`;
+    expect(doc.reportFor(edited).citations.map((c) => c.html)).toEqual(['first', 'second', 'second']);
+  });
+
+  it('keeps the unknown mark of a moved citation', async () => {
+    const text = `${head}Text [@a].\n`;
+    const set = setup();
+    await typed(set.doc, text);
+    const given = reportOf(text, [['[@a]', '[@a]']]);
+    given.citations[0].missing = ['a'];
+    set.client.answer(given);
+    await settle();
+    expect(set.doc.reportFor(`${head}More. Text [@a].\n`).citations[0].missing).toEqual(['a']);
+  });
+
+  it('gives null when the style, the language or the files change', async () => {
+    const text = `${head}Text [@a].\n`;
+    const { doc } = await held(text, [['[@a]', '(A 2020)']]);
+    expect(doc.reportFor(text.replace('---\n\n', 'csl: apa\n---\n\n'))).toBe(null);
+    expect(doc.reportFor(text.replace('---\n\n', 'lang: pt-PT\n---\n\n'))).toBe(null);
+    expect(doc.reportFor(text.replace('refs.bib', 'other.bib'))).toBe(null);
+  });
+
+  it('gives null when the document no longer uses citations', async () => {
+    const text = `${head}Text [@a].\n`;
+    const { doc } = await held(text, [['[@a]', '(A 2020)']]);
+    expect(doc.reportFor('Text [@a].\n')).toBe(null);
+  });
+});
+
+describe('the time limit of flush', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('gives the moved report after 10 s when the worker does not answer', async () => {
+    const { doc, client } = setup();
+    const first = WITH_BIB;
+    await typed(doc, first);
+    const from = first.indexOf('[@a]');
+    client.answer({ ...report(), citations: [{ from, to: from + 4, html: '(A)', markdown: '(A)', missing: [] }] });
+    await settle();
+    const edited = first.replace('Text', 'Some text');
+    let done;
+    doc.flush(edited).then((r) => { done = r; });
+    await vi.advanceTimersByTimeAsync(9999);
+    expect(done).toBe(undefined);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(done.citations[0].html).toBe('(A)');
+    expect(edited.slice(done.citations[0].from, done.citations[0].to)).toBe('[@a]');
+  });
+
+  it('gives null after 10 s with no earlier report', async () => {
+    const { doc } = setup();
+    let done;
+    doc.flush(WITH_BIB).then((r) => { done = r; });
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(done).toBe(null);
+  });
+
+  it('leaves no timer after an answer in time', async () => {
+    const { doc, client } = setup();
+    const flushed = doc.flush(WITH_BIB);
+    await settle();
+    client.answer(report());
+    await flushed;
+    await settle();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('takes a late answer as the held report', async () => {
+    const { doc, client } = setup();
+    doc.flush(WITH_BIB);
+    await vi.advanceTimersByTimeAsync(10000);
+    const late = report('late');
+    client.answer(late);
+    await settle();
+    expect(doc.reportFor(WITH_BIB)).toBe(late);
+  });
+
+  it('goes on with the next text after a late answer', async () => {
+    const { doc, client } = setup();
+    doc.flush(WITH_BIB);
+    await vi.advanceTimersByTimeAsync(10000);
+    await typed(doc, `${WITH_BIB}more`);
+    client.answer(report());
+    await settle();
+    expect(client.asked).toEqual([WITH_BIB, `${WITH_BIB}more`]);
+  });
+});
+
+describe('citationsLeftLiteral', () => {
+  const source = '---\nbibliography: r.bib\n---\n\nText [@a] and [@b].\n';
+  const at = (slice) => {
+    const from = source.indexOf(slice);
+    return { from, to: from + slice.length, html: 'x', markdown: 'x', missing: [] };
+  };
+
+  it('is false with no bibliography, also with a citation in the text', () => {
+    expect(citationsLeftLiteral('Text [@a].\n', null)).toBe(false);
+  });
+  it('is false when each citation has an output', () => {
+    expect(citationsLeftLiteral(source, { ...report(), citations: [at('[@a]'), at('[@b]')] })).toBe(false);
+  });
+  it('is false for an unknown key, because the report has its output', () => {
+    const missing = { ...at('[@b]'), missing: ['b'] };
+    expect(citationsLeftLiteral(source, { ...report(), citations: [at('[@a]'), missing] })).toBe(false);
+  });
+  it('is true when a citation has no output', () => {
+    expect(citationsLeftLiteral(source, { ...report(), citations: [at('[@a]')] })).toBe(true);
+  });
+  it('is true with no report', () => {
+    expect(citationsLeftLiteral(source, null)).toBe(true);
+  });
+  it('is false for a document with a bibliography and no citations', () => {
+    expect(citationsLeftLiteral('---\nbibliography: r.bib\n---\n\nNo keys.\n', null)).toBe(false);
   });
 });
 
