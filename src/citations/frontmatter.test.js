@@ -65,6 +65,35 @@ describe('readCitationMeta', () => {
     expect(readCitationMeta('---\nreferences:\n---\n').references).toEqual([]);
   });
 
+  it('removes a comment after references', () => {
+    const src = '---\nreferences: [{"id":"a","t":"x # y"}] # note\n---\n';
+    expect(readCitationMeta(src).references).toEqual([{ id: 'a', t: 'x # y' }]);
+  });
+
+  it('keeps an apostrophe inside a flow list name', () => {
+    expect(readCitationMeta("---\nbibliography: [o'brien.bib, b.bib]\n---\n").bibliography).toEqual([
+      "o'brien.bib",
+      'b.bib',
+    ]);
+  });
+
+  it('reads a flow list over several lines', () => {
+    const src = '---\nbibliography: [a.bib, # first\n  b.bib,\n  "c d.bib"]\ncsl: x.csl\n---\n';
+    const meta = readCitationMeta(src);
+    expect(meta.bibliography).toEqual(['a.bib', 'b.bib', 'c d.bib']);
+    expect(meta.csl).toBe('x.csl');
+  });
+
+  it('reads the first of duplicate keys', () => {
+    expect(readCitationMeta('---\ncsl: a.csl\ncsl: b.csl\n---\n').csl).toBe('a.csl');
+  });
+
+  it('accepts a closing line at line 50', () => {
+    const src = '---\n' + 'x: 1\n'.repeat(47) + 'bibliography: a.bib\n---\n';
+    expect(src.split('\n')[49]).toBe('---');
+    expect(readCitationMeta(src).bibliography).toEqual(['a.bib']);
+  });
+
   it('reads CRLF sources', () => {
     expect(readCitationMeta('---\r\nbibliography: a.bib\r\n---\r\n').bibliography).toEqual(['a.bib']);
   });
@@ -121,5 +150,37 @@ describe('setCitationMeta', () => {
     expect(out).toBe('---\ntitle: T\nreferences: ' + json + '\n---\n');
     expect(readCitationMeta(out).references).toEqual([{ id: 'a', title: 'A # b' }]);
     expect(setCitationMeta(out, 'references', null)).toBe('---\ntitle: T\n---\n');
+  });
+
+  it('replaces the first duplicate and removes the others', () => {
+    expect(setCitationMeta('---\ncsl: a.csl\nx: 1\ncsl: b.csl\n---\n', 'csl', 'c.csl')).toBe(
+      '---\ncsl: c.csl\nx: 1\n---\n',
+    );
+    expect(setCitationMeta('---\ncsl: a.csl\nx: 1\ncsl: b.csl\n---\n', 'csl', null)).toBe('---\nx: 1\n---\n');
+  });
+
+  it('works when the closing line is line 50', () => {
+    const src = '---\n' + 'x: 1\n'.repeat(47) + '---\n';
+    expect(readCitationMeta(setCitationMeta(src, 'csl', 'a.csl')).csl).toBe('a.csl');
+  });
+
+  it('rejects a value with a line break, for every key', () => {
+    for (const key of ['bibliography', 'csl', 'references']) {
+      expect(() => setCitationMeta('', key, 'a\nb')).toThrow(/line break/);
+      expect(() => setCitationMeta('', key, 'a\rb')).toThrow(/line break/);
+    }
+  });
+
+  it('rejects references that are not a JSON array', () => {
+    expect(() => setCitationMeta('', 'references', '{"id":"a"}')).toThrow(/JSON array/);
+    expect(() => setCitationMeta('', 'references', '[{"id":')).toThrow(/JSON array/);
+  });
+
+  it('writes a well-formed flow list raw and quotes other bracket values', () => {
+    expect(setCitationMeta('', 'bibliography', '[a.bib, b.bib]')).toBe('---\nbibliography: [a.bib, b.bib]\n---\n');
+    const out = setCitationMeta('', 'bibliography', '[x].bib');
+    expect(readCitationMeta(out).bibliography).toEqual(['[x].bib']);
+    const out2 = setCitationMeta('', 'bibliography', '[a.bib, [b].bib]');
+    expect(readCitationMeta(out2).bibliography).toEqual(['[a.bib, [b].bib]']);
   });
 });

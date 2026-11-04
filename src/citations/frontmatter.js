@@ -56,6 +56,42 @@ function stripComment(text) {
   return text;
 }
 
+/** Remove a comment after a JSON value: whitespace and `#` outside a string. */
+function stripJsonComment(text) {
+  let inString = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+    } else if (c === '#' && (i === 0 || /\s/.test(text[i - 1]))) {
+      return text.slice(0, i);
+    }
+  }
+  return text;
+}
+
+/** True when the text is one flow list with no nested brackets. */
+function isFlowList(text) {
+  if (text.length < 2 || text[0] !== '[' || text[text.length - 1] !== ']') return false;
+  const body = text.slice(1, -1);
+  let quote = '';
+  for (let i = 0; i < body.length; i++) {
+    const c = body[i];
+    if (quote) {
+      if (c === '\\' && quote === '"') i++;
+      else if (c === quote) quote = '';
+    } else if (c === '"' || c === "'") {
+      if (i === 0 || /[\s[,]/.test(body[i - 1])) quote = c;
+    } else if (c === '[' || c === ']') {
+      return false;
+    }
+  }
+  return quote === '';
+}
+
 /** One scalar: trimmed, with matching quotes removed. */
 function unquote(text) {
   const t = text.trim();
@@ -84,7 +120,7 @@ function splitFlow(body) {
       if (c === '\\' && quote === '"') i++;
       else if (c === quote) quote = '';
     } else if (c === '"' || c === "'") {
-      quote = c;
+      if (i === 0 || /[\s[,]/.test(body[i - 1])) quote = c;
     } else if (c === ',') {
       parts.push(body.slice(from, i));
       from = i + 1;
@@ -102,7 +138,14 @@ function splitFlow(body) {
  * @returns {string[]}
  */
 function listValue(lines, entry) {
-  const rest = stripComment(entry.rest).trim();
+  let rest = stripComment(entry.rest).trim();
+  if (rest[0] === '[' && rest[rest.length - 1] !== ']') {
+    for (let n = entry.start + 1; n <= entry.end; n++) {
+      rest += ' ' + stripComment(lines[n].text).trim();
+      if (rest[rest.length - 1] === ']') break;
+    }
+    rest = rest.trim();
+  }
   /** @type {string[]} */
   let values;
   if (rest === '') {
@@ -158,7 +201,7 @@ export function readCitationMeta(source) {
   const title = first('reference-section-title');
   if (title) meta.title = scalarValue(lines, title);
   const refs = first('references');
-  if (refs) meta.references = parseReferences(refs.rest.trim());
+  if (refs) meta.references = parseReferences(stripJsonComment(refs.rest).trim());
   return meta;
 }
 
@@ -170,7 +213,8 @@ function formatScalar(value) {
 
 /**
  * Set or remove one key. `null` removes the key. A `bibliography` value that
- * starts with `[` is written as it is (a flow list). A `references` value is
+ * is a well-formed flow list is written as it is. A value with a line break
+ * throws, and so does a `references` value that is not a JSON array. A `references` value is
  * written as it is (one line of JSON). Other values are quoted when needed.
  * Without a frontmatter, one is made when the value is not null.
  *
@@ -180,9 +224,21 @@ function formatScalar(value) {
  * @returns {string}
  */
 export function setCitationMeta(source, key, value) {
+  if (value !== null && /[\r\n]/.test(value)) {
+    throw new Error(`setCitationMeta: the value of "${key}" has a line break.`);
+  }
+  if (key === 'references' && value !== null) {
+    let ok = false;
+    try {
+      ok = Array.isArray(JSON.parse(value));
+    } catch {
+      /* not JSON */
+    }
+    if (!ok) throw new Error('setCitationMeta: "references" must be a JSON array on one line.');
+  }
   const lines = splitLines(source);
   const fm = frontmatterLines(lines);
-  const raw = key === 'references' || (key === 'bibliography' && value !== null && value.startsWith('['));
+  const raw = key === 'references' || (key === 'bibliography' && value !== null && isFlowList(value));
   const text = value === null ? null : `${key}: ${raw ? value : formatScalar(value)}`;
   if (!fm) {
     if (text === null) return source;
