@@ -68,7 +68,7 @@ let package = Package(
         ),
         .testTarget(
             name: "LoomingsCitationsTests",
-            dependencies: ["LoomingsCitations", "LoomingsDocuments", "LoomingsTeaching"],
+            dependencies: ["LoomingsCitations", "LoomingsDocuments", "LoomingsShare", "LoomingsTeaching"],
             resources: [.copy("Fixtures")]
         ),
         .testTarget(

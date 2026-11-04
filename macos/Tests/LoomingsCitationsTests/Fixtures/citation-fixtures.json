@@ -21,6 +21,7 @@
         "fallbackLang": "en-US",
         "missing": [],
         "missingNotes": {},
+        "ignoredPaths": [],
         "done": false
       }
     },
@@ -58,6 +59,7 @@
           "/abs/more.bib"
         ],
         "missingNotes": {},
+        "ignoredPaths": [],
         "done": true
       }
     },
@@ -87,6 +89,7 @@
         "missingNotes": {
           "refs": "The file refs is missing. This document has no folder. Save the document, or use an absolute path."
         },
+        "ignoredPaths": [],
         "done": true
       }
     },
@@ -116,6 +119,7 @@
         "fallbackLang": "en-US",
         "missing": [],
         "missingNotes": {},
+        "ignoredPaths": [],
         "done": false
       }
     },
@@ -146,6 +150,7 @@
         "fallbackLang": "en-US",
         "missing": [],
         "missingNotes": {},
+        "ignoredPaths": [],
         "done": true
       }
     },
@@ -170,8 +175,9 @@
           "nope.csl"
         ],
         "missingNotes": {},
+        "ignoredPaths": [],
         "done": true,
-        "styleError": "The style nope.csl was not found. The default style is chicago-author-date."
+        "styleNote": "The style nope.csl was not found. The default style is chicago-author-date."
       }
     },
     {
@@ -214,6 +220,7 @@
           "c/refs.bib"
         ],
         "missingNotes": {},
+        "ignoredPaths": [],
         "done": true
       }
     },
@@ -253,8 +260,94 @@
         "missingNotes": {
           "latin.bib": "The file latin.bib could not be read as text."
         },
+        "ignoredPaths": [],
         "done": true
       }
+    },
+    {
+      "request": {
+        "bibliography": [
+          "refs.bib",
+          "/abs/more.bib",
+          "../up.bib",
+          "~/home.bib"
+        ],
+        "csl": "/abs/own.csl",
+        "lang": null
+      },
+      "known": {
+        "noFolder": true,
+        "allowPaths": false,
+        "tried": [
+          "refs.bib"
+        ]
+      },
+      "plan": {
+        "bibFiles": [],
+        "stylePath": null,
+        "styleId": "chicago-author-date",
+        "lang": "en-US",
+        "fallbackLang": "en-US",
+        "missing": [
+          "refs.bib"
+        ],
+        "missingNotes": {
+          "refs.bib": "The file refs.bib is missing. This document has no folder. Save the document, or use an absolute path."
+        },
+        "ignoredPaths": [
+          "/abs/more.bib",
+          "../up.bib",
+          "~/home.bib",
+          "/abs/own.csl"
+        ],
+        "done": true
+      }
+    }
+  ],
+  "shares": [
+    {
+      "name": "apa",
+      "source": "---\nbibliography: refs.bib\ncsl: apa\n---\nOne [@jacome2020] and [see @smith2019, p. 3].\n",
+      "style": "apa",
+      "missing": [
+        "refs.bib"
+      ],
+      "styleNote": null,
+      "shared": "---\nbibliography: refs.bib\ncsl: apa\nreferences: [{\"container-title\":\"Journal of Tests\",\"author\":[{\"given\":\"Cristina\",\"family\":\"Jácome\"},{\"given\":\"Rute\",\"family\":\"Almeida\"},{\"given\":\"João A.\",\"family\":\"Fonseca\"}],\"DOI\":\"10.1000/xyz\",\"type\":\"article-journal\",\"id\":\"jacome2020\",\"issue\":\"3\",\"issued\":{\"date-parts\":[[2020]]},\"page\":\"101-110\",\"title\":\"Mobile health tools for COPD\",\"volume\":\"12\"},{\"publisher-place\":\"Porto\",\"author\":[{\"given\":\"John\",\"family\":\"Smith\"}],\"type\":\"book\",\"id\":\"smith2019\",\"issued\":{\"date-parts\":[[2019]]},\"publisher\":\"Press\",\"title\":\"A book on lung function\"}]\n---\nOne [@jacome2020] and [see @smith2019, p. 3].\n",
+      "payload": "z.fZBBbtswEEX3OsVg1qIqOatwFSNBgRooHDTZCVqMpJHFlOIIJBXUMXyYoEfJxQo6deMCRXcE533yv1FKZa1prZGdp3nca_A8hKI1bdYFq4FmyjwP7Nl1HDTUB-zERTKOvYomWkaNG1m8IwsywCOHGDBHWuIoHnV9wJ15Zocab70J0TjCHAeajN2n5NtrJxPjMf_gvi2RL5m1ndj09BezkbefAuvikvssLnBHeGxyvNt-QY1VWVRlWX76sX_BHON-TmXJR9NZVk_vpTFH06PGJ0pFVuWqTDchLIm9Op971AfsKbKayceAuq4T2jTHHGfa8emzSlVVSp_X8lVaYxlGJhtHiCI2wCAebrf3d5jjs9hlOiVXJ7d5aa0JI3s1W-rS4F58lH8vcyOju5R_mEwcT-q_NVuR72e3kIarsrr-r051_a5zrpEKeA7hwmgN6VkQB3ZxOxgW10UjDo9NppTKto6hvvnYZAPkeqgDM9z86ZDDXMBVU2S_AA",
+      "linkNote": null,
+      "html": [
+        "(Jácome et al., 2020)",
+        "(see Smith, 2019, p. 3)"
+      ],
+      "bibliography": [
+        "<div class=\"csl-entry\">Jácome, C., Almeida, R., &#38; Fonseca, J. A. (2020). Mobile health tools for COPD. <i>Journal of Tests</i>, <i>12</i>(3), 101–110. <a href=\"https://doi.org/10.1000/xyz\">https://doi.org/10.1000/xyz</a></div>",
+        "<div class=\"csl-entry\">Smith, J. (2019). <i>A book on lung function</i>. Press.</div>"
+      ],
+      "notes": []
+    },
+    {
+      "name": "uploaded-style",
+      "source": "---\nbibliography: refs.bib\ncsl: own-journal.csl\n---\nOne [@silva2021].\n",
+      "style": "chicago-author-date",
+      "missing": [
+        "refs.bib",
+        "own-journal.csl"
+      ],
+      "styleNote": "The style own-journal.csl was not found. The default style is chicago-author-date.",
+      "shared": "---\nbibliography: refs.bib\ncsl: own-journal.csl\nreferences: [{\"author\":[{\"given\":\"Ana\",\"family\":\"Silva\"}],\"container-title\":\"Livro de fisiologia\",\"editor\":[{\"given\":\"Rui\",\"family\":\"Costa\"}],\"type\":\"chapter\",\"id\":\"silva2021\",\"issued\":{\"date-parts\":[[2021]]},\"page\":\"5-9\",\"publisher\":\"Porto Editora\",\"title\":\"Capítulo sobre espirometria\"}]\n---\nOne [@silva2021].\n",
+      "payload": "z.Xc7BSsRADIDhe59iyLmz6IIH56Qs3gRFj6WHaZu2WWYnQzKtlGUfyafwxWQURbwm5Mtvra066gLxJD7NmzOCo-466qpegzP8Fu2RF4k-7HoNleCIgrFHdaY5g1_yzAKuOcNEK0ZwcB891DD6E4UNHLxSWD1c2hp6jtlTRLGZckBw8EirsBnQjKTEgScqpzhQ_me-LPTXPLDmbzNvqUD97FNGgRpoAAdafu6v9tdloLrgAO4Mg89ok5es4JqmrNv2UkPyUyFu7C3UkJYukM4o4OCZJbN5-KopXT_VB58-3vMS2Ch3ggY1kfAJs1CJqqy11VNE09z9drS76hM",
+      "linkNote": "The link carries the citations; the style own-journal.csl stays here, so the reader sees the default style.",
+      "html": [
+        "(Silva 2021)"
+      ],
+      "bibliography": [
+        "<div class=\"csl-entry\">Silva, Ana. 2021. “Capítulo Sobre Espirometria.” In <i>Livro de Fisiologia</i>, edited by Rui Costa. Porto Editora.</div>"
+      ],
+      "notes": [
+        "The file own-journal.csl is missing.",
+        "The style own-journal.csl was not found. The default style is chicago-author-date."
+      ]
     }
   ],
   "reports": [
@@ -679,20 +772,22 @@
         "missing": [
           "nowhere"
         ],
-        "styleError": "The style nowhere was not found. The default style is chicago-author-date."
+        "styleNote": "The style nowhere was not found. The default style is chicago-author-date."
       },
       "report": {
         "citations": [
           {
             "from": 46,
             "to": 58,
-            "html": "[@smith2019]",
-            "markdown": "[@smith2019]",
+            "html": "(Smith, 2019)",
+            "markdown": "(Smith, 2019)",
             "missing": []
           }
         ],
-        "bibliography": [],
-        "bibliographyMarkdown": "",
+        "bibliography": [
+          "<div class=\"csl-entry\">Smith, J. (2019). <i>A book on lung function</i>. Press.</div>"
+        ],
+        "bibliographyMarkdown": "Smith, J. (2019). *A book on lung function*. Press.",
         "library": [
           {
             "key": "jacome2020",
@@ -739,7 +834,7 @@
             "message": "The style nowhere was not found. The default style is chicago-author-date."
           }
         ],
-        "markdownSource": "---\nbibliography: refs.bib\ncsl: nowhere\n---\nA [@smith2019].\n"
+        "markdownSource": "---\nbibliography: refs.bib\ncsl: nowhere\n---\nA (Smith, 2019).\n\nSmith, J. (2019). *A book on lung function*. Press."
       }
     },
     {

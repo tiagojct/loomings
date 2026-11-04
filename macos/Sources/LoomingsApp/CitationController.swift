@@ -22,9 +22,19 @@ final class CitationController {
         let status: String?
     }
 
-    private struct Request {
+    /// The text for a share link. `failure` says why it has no cited entries.
+    /// `styleNote` says that the style stays with the writer.
+    struct ShareText: Sendable {
+        let source: String
+        let failure: String?
+        let styleNote: String?
+    }
+
+    private struct Request: Equatable {
         let source: String
         let documentURL: URL?
+        /// False for a document from a share link that is not saved.
+        let allowPaths: Bool
 
         var folder: URL? { documentURL?.deletingLastPathComponent() }
     }
@@ -33,7 +43,7 @@ final class CitationController {
     typealias TextEdit = @Sendable (any CitationEngineProtocol, String) throws -> String
 
     var onReport: ((CitationReport) -> Void)?
-    /// How long an export waits for its report.
+    /// How long an export waits for its report, and a share link for its text.
     var exportLimit: TimeInterval = 10
     private(set) var droppedReports = 0
     var enginesCreated: Int { worker.enginesCreated }
@@ -63,13 +73,13 @@ final class CitationController {
 
     /// Asks for a report of `source` after a pause. Text with no citation keys
     /// costs only the gate.
-    func update(source: String, documentURL: URL?) {
+    func update(source: String, documentURL: URL?, allowPaths: Bool = true) {
         guard CitationGate.applies(to: source) else {
             forget()
             return
         }
-        if let requested, requested.documentURL == documentURL, requested.source == source { return }
-        let request = Request(source: source, documentURL: documentURL)
+        let request = Request(source: source, documentURL: documentURL, allowPaths: allowPaths)
+        if let requested, requested == request { return }
         requested = request
         generation &+= 1
         worker.markNewest(generation)
@@ -138,7 +148,12 @@ final class CitationController {
     /// Calls `completion` on the main actor with the report's text for exactly
     /// this `source`, or with `source` and a status after `exportLimit`. The
     /// main thread does not wait.
-    func exportText(source: String, documentURL: URL?, completion: @escaping (ExportText) -> Void) {
+    func exportText(
+        source: String,
+        documentURL: URL?,
+        allowPaths: Bool = true,
+        completion: @escaping (ExportText) -> Void
+    ) {
         guard CitationGate.applies(to: source) else {
             completion(ExportText(markdown: source, status: nil))
             return
@@ -155,10 +170,10 @@ final class CitationController {
             waiting = nil
             done(text)
         }
-        let request = Request(source: source, documentURL: documentURL)
+        let request = Request(source: source, documentURL: documentURL, allowPaths: allowPaths)
         let worker = self.worker
         worker.queue.async {
-            let report = worker.report(for: request.source, folder: request.folder)
+            let report = worker.report(for: request.source, folder: request.folder, allowPaths: request.allowPaths)
             DispatchQueue.main.async {
                 finish(Self.exportText(of: report))
             }
@@ -169,6 +184,41 @@ final class CitationController {
                 markdown: source,
                 status: "The citations were not ready after \(Int(limit.rounded())) seconds, so the export shows the citation keys. Export again in a moment."
             ))
+        }
+    }
+
+    /// Calls `completion` on the main actor with the text for a share link.
+    /// Text with no citation keys comes back at once, with no engine. After
+    /// the limit, `completion` gets `source` and a failure. The main thread
+    /// does not wait, and the document does not change.
+    /// - Parameter limit: the time to wait. The default is `exportLimit`.
+    func shareText(
+        source: String,
+        documentURL: URL?,
+        allowPaths: Bool = true,
+        limit: TimeInterval? = nil,
+        completion: @escaping (ShareText) -> Void
+    ) {
+        guard CitationGate.applies(to: source) else {
+            completion(ShareText(source: source, failure: nil, styleNote: nil))
+            return
+        }
+        var waiting: ((ShareText) -> Void)? = completion
+        let finish = { (text: ShareText) in
+            guard let done = waiting else { return }
+            waiting = nil
+            done(text)
+        }
+        let request = Request(source: source, documentURL: documentURL, allowPaths: allowPaths)
+        let worker = self.worker
+        worker.queue.async {
+            let text = worker.shareText(for: request.source, folder: request.folder, allowPaths: request.allowPaths)
+            DispatchQueue.main.async {
+                finish(text)
+            }
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + (limit ?? exportLimit)) {
+            finish(ShareText(source: source, failure: CitationWorker.shareFailure, styleNote: nil))
         }
     }
 
@@ -194,14 +244,14 @@ final class CitationController {
     private func requestAgain() {
         guard let request = requested else { return }
         requested = nil
-        update(source: request.source, documentURL: request.documentURL)
+        update(source: request.source, documentURL: request.documentURL, allowPaths: request.allowPaths)
     }
 
     private func start(_ request: Request, generation: UInt64) {
         let worker = self.worker
         worker.queue.async { [weak self] in
             guard worker.isNewest(generation) else { return }
-            let report = worker.report(for: request.source, folder: request.folder)
+            let report = worker.report(for: request.source, folder: request.folder, allowPaths: request.allowPaths)
             DispatchQueue.main.async {
                 self?.deliver(report, source: request.source, generation: generation)
             }
@@ -221,6 +271,8 @@ final class CitationController {
 /// The state of one engine. Use the state only on `queue`. An engine call
 /// waits, so it must not run on the main thread.
 private final class CitationWorker: @unchecked Sendable {
+    static let shareFailure = "The citations are not ready; the link has only the text."
+
     let queue = DispatchQueue(label: "eu.tiagojacinto.loomings.citation-controller", qos: .userInitiated)
 
     private let makeEngine: CitationController.EngineFactory
@@ -232,6 +284,7 @@ private final class CitationWorker: @unchecked Sendable {
     private var engine: (any CitationEngineProtocol)?
     private var request: CitationSourceRequest?
     private var folder: URL?
+    private var allowPaths = true
     private var load: CitationLoad?
 
     init(makeEngine: @escaping CitationController.EngineFactory) {
@@ -250,20 +303,40 @@ private final class CitationWorker: @unchecked Sendable {
 
     /// The sources change only when the frontmatter keys, the folder or a file
     /// changes, because a new set costs a new citeproc engine.
-    func report(for source: String, folder: URL?) -> CitationReport {
+    private func useSources(
+        of source: String,
+        folder: URL?,
+        allowPaths: Bool,
+        engine: any CitationEngineProtocol
+    ) throws {
+        let wanted = try engine.readMeta(source).sourceRequest
+        guard load == nil || wanted != request || folder != self.folder || allowPaths != self.allowPaths else { return }
+        let next = try CitationSourceReader.load(wanted, folder: folder, allowPaths: allowPaths, engine: engine)
+        engine.setSources(next.sources)
+        load = next
+        request = wanted
+        self.folder = folder
+        self.allowPaths = allowPaths
+    }
+
+    func report(for source: String, folder: URL?, allowPaths: Bool) -> CitationReport {
         do {
             let engine = try currentEngine()
-            let wanted = try engine.readMeta(source).sourceRequest
-            if load == nil || wanted != request || folder != self.folder {
-                let next = try CitationSourceReader.load(wanted, folder: folder, engine: engine)
-                engine.setSources(next.sources)
-                load = next
-                request = wanted
-                self.folder = folder
-            }
+            try useSources(of: source, folder: folder, allowPaths: allowPaths, engine: engine)
             return engine.analyse(source)
         } catch {
             return CitationReport(failure: String(describing: error), source: source)
+        }
+    }
+
+    func shareText(for source: String, folder: URL?, allowPaths: Bool) -> CitationController.ShareText {
+        do {
+            let engine = try currentEngine()
+            try useSources(of: source, folder: folder, allowPaths: allowPaths, engine: engine)
+            let shared = try engine.shareSource(source)
+            return .init(source: shared, failure: nil, styleNote: try engine.shareStyleNote(shared))
+        } catch {
+            return .init(source: source, failure: Self.shareFailure, styleNote: nil)
         }
     }
 

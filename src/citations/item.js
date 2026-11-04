@@ -18,6 +18,18 @@ const NAME_FIELDS = new Set([
 ]);
 const DATE_FIELDS = new Set(['accessed', 'available-date', 'container', 'event-date', 'issued', 'original-date', 'submitted']);
 const DATE_TEXT = ['raw', 'literal', 'season', 'circa'];
+// The text fields that citeproc can print or read. A share link does not carry
+// an abstract, a keyword list or the fields of another program.
+const TEXT_FIELDS = new Set([
+  'id', 'type', 'archive', 'archive-place', 'archive_collection', 'archive_location', 'authority', 'call-number',
+  'chapter-number', 'collection-number', 'collection-title', 'container-title', 'container-title-short', 'dimensions',
+  'division', 'DOI', 'edition', 'event', 'event-place', 'event-title', 'genre', 'ISBN', 'ISSN', 'issue',
+  'journalAbbreviation', 'jurisdiction', 'language', 'medium', 'note', 'number', 'number-of-pages', 'number-of-volumes',
+  'original-publisher', 'original-publisher-place', 'original-title', 'page', 'part-number', 'part-title', 'PMCID', 'PMID',
+  'printing-number', 'publisher', 'publisher-place', 'reviewed-genre', 'reviewed-title', 'scale', 'section', 'shortTitle',
+  'source', 'status', 'supplement-number', 'title', 'title-short', 'URL', 'version', 'volume', 'volume-title',
+  'volume-title-short',
+]);
 
 const isObject = (/** @type {unknown} */ v) => typeof v === 'object' && v !== null && !Array.isArray(v);
 
@@ -88,5 +100,18 @@ export function sanitiseItem(item) {
     const repaired = NAME_FIELDS.has(key) ? repairNames(value) : DATE_FIELDS.has(key) ? repairDate(value) : toText(value);
     if (repaired !== undefined) kept.push([key, repaired]);
   }
+  return /** @type {CslItem} */ (Object.fromEntries(kept));
+}
+
+/**
+ * The form of an entry in a share link: repaired, and with only the fields
+ * that citeproc needs.
+ *
+ * @param {CslItem} item
+ * @returns {CslItem}
+ */
+export function shareItem(item) {
+  const kept = Object.entries(sanitiseItem(item))
+    .filter(([key]) => TEXT_FIELDS.has(key) || NAME_FIELDS.has(key) || DATE_FIELDS.has(key));
   return /** @type {CslItem} */ (Object.fromEntries(kept));
 }

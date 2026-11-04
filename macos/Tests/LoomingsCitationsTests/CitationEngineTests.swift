@@ -1,4 +1,5 @@
 import Foundation
+import LoomingsShare
 import Testing
 @testable import LoomingsCitations
 
@@ -13,6 +14,7 @@ private struct Fixtures: Decodable {
         let locale: String
         let missing: [String]?
         let styleError: String?
+        let styleNote: String?
     }
 
     struct Bib: Decodable {
@@ -50,7 +52,22 @@ private struct Fixtures: Decodable {
         let plan: CitationPlan
     }
 
+    struct Share: Decodable {
+        let name: String
+        let source: String
+        let style: String
+        let missing: [String]
+        let styleNote: String?
+        let shared: String
+        let payload: String
+        let linkNote: String?
+        let html: [String]
+        let bibliography: [String]
+        let notes: [String]
+    }
+
     let plans: [Plan]
+    let shares: [Share]
     let reports: [Report]
     let meta: [Meta]
     let edits: [Edit]
@@ -111,7 +128,8 @@ struct CitationEngineTests {
                 fallbackLocaleXml: fallback,
                 lang: fixture.sources.locale,
                 missing: fixture.sources.missing,
-                styleError: fixture.sources.styleError
+                styleError: fixture.sources.styleError,
+                styleNote: fixture.sources.styleNote
             ))
             expectEqual(engine.analyse(fixture.source), fixture.report, fixture.name)
         }
@@ -161,7 +179,8 @@ struct CitationEngineTests {
         let fixtures = try Fixtures.load()
         let engine = try CitationEngine(resources: resources)
         #expect(fixtures.plans.contains { !$0.plan.done })
-        #expect(fixtures.plans.contains { $0.plan.styleError != nil })
+        #expect(fixtures.plans.contains { $0.plan.styleNote != nil })
+        #expect(fixtures.plans.contains { $0.plan.ignoredPaths.count == 4 })
         for fixture in fixtures.plans {
             #expect(try engine.resolveNative(fixture.request, known: fixture.known) == fixture.plan)
         }
@@ -350,6 +369,120 @@ struct CitationEngineTests {
         #expect(report.citations.allSatisfy { $0.markdown.contains("Author") })
     }
 
+    /// The sources of a writer who has the file `refs.bib`.
+    private func writerEngine(_ fixture: Fixtures.Share, bib: String) throws -> CitationEngine {
+        let engine = try CitationEngine(resources: resources)
+        engine.setSources(CitationSources(
+            bibs: [.init(name: "refs.bib", text: bib)],
+            styleXml: engine.bundledStyle(fixture.style),
+            localeXml: engine.bundledLocale("en-US"),
+            fallbackLocaleXml: engine.bundledLocale("en-US"),
+            lang: "en-US"
+        ))
+        return engine
+    }
+
+    /// The sources of a reader with no files.
+    private func readerSources(_ fixture: Fixtures.Share, engine: CitationEngine) -> CitationSources {
+        CitationSources(
+            styleXml: engine.bundledStyle(fixture.style),
+            localeXml: engine.bundledLocale("en-US"),
+            fallbackLocaleXml: engine.bundledLocale("en-US"),
+            lang: "en-US",
+            missing: fixture.missing,
+            styleNote: fixture.styleNote
+        )
+    }
+
+    @Test("A web share link gives the same citations in JavaScriptCore with no files")
+    func readsWebShareLink() throws {
+        for fixture in try Fixtures.load().shares {
+            let text = try ShareLink.decode(fixture.payload)
+            #expect(text == fixture.shared, Comment(rawValue: fixture.name))
+            let engine = try CitationEngine(resources: resources)
+            engine.setSources(readerSources(fixture, engine: engine))
+            let report = engine.analyse(text)
+            #expect(report.citations.map(\.html) == fixture.html, Comment(rawValue: fixture.name))
+            #expect(report.bibliography == fixture.bibliography, Comment(rawValue: fixture.name))
+            #expect(report.notes.map(\.message) == fixture.notes, Comment(rawValue: fixture.name))
+        }
+    }
+
+    @Test("The engine makes the text of the web code, and a note for a style that stays")
+    func makesShareText() throws {
+        let fixtures = try Fixtures.load()
+        for fixture in fixtures.shares {
+            let bib = try #require(fixtures.reports.first { $0.name == "apa-en-US" }).sources.bibs[0].text
+            let engine = try writerEngine(fixture, bib: bib)
+            let shared = try engine.shareSource(fixture.source)
+            #expect(shared == fixture.shared, Comment(rawValue: fixture.name))
+            #expect(try engine.shareStyleNote(shared) == fixture.linkNote, Comment(rawValue: fixture.name))
+        }
+        #expect(fixtures.shares[1].linkNote?.contains("own-journal.csl") == true)
+    }
+
+    @Test("A text with no citations stays as it is")
+    func shareSourceLeavesPlainText() throws {
+        let engine = try CitationEngine(resources: resources)
+        #expect(try engine.shareSource("# Plain\n") == "# Plain\n")
+    }
+
+    @Test("A native share link gives the same citations to the web code in Node")
+    func webReadsNativeShareLink() throws {
+        let repo = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent() // LoomingsCitationsTests
+            .deletingLastPathComponent() // Tests
+            .deletingLastPathComponent() // macos
+            .deletingLastPathComponent() // repo root
+        let share = repo.appendingPathComponent("src/share.js").absoluteString
+        let session = repo.appendingPathComponent("src/citations/session.js").absoluteString
+        let citations = repo.appendingPathComponent("src/citations")
+        let fixtures = try Fixtures.load()
+        for fixture in fixtures.shares {
+            let bib = try #require(fixtures.reports.first { $0.name == "apa-en-US" }).sources.bibs[0].text
+            let engine = try writerEngine(fixture, bib: bib)
+            let payload = try ShareLink.encode(try engine.shareSource(fixture.source))
+            let writer = engine.analyse(fixture.source)
+
+            let script = """
+            import { readFileSync } from 'node:fs';
+            import { decodeDoc } from '\(share)';
+            import { createSession } from '\(session)';
+            let input = '';
+            for await (const chunk of process.stdin) input += chunk;
+            const folder = \(String(decoding: try JSONEncoder().encode(citations.path + "/"), as: UTF8.self));
+            const reader = createSession();
+            reader.setSources({
+              bibs: [], lang: 'en-US', missing: \(String(decoding: try JSONEncoder().encode(fixture.missing), as: UTF8.self)),
+              styleXml: readFileSync(`${folder}styles/\(fixture.style).csl`, 'utf8'),
+              localeXml: readFileSync(`${folder}locales/locales-en-US.xml`, 'utf8'),
+              styleNote: \(String(decoding: try JSONEncoder().encode(fixture.styleNote), as: UTF8.self)),
+            });
+            const report = reader.analyse(await decodeDoc(input.trim()));
+            process.stdout.write(JSON.stringify({ html: report.citations.map((c) => c.html), bibliography: report.bibliography }));
+            """
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+            process.arguments = ["node", "--input-type=module", "-e", script]
+            let input = Pipe()
+            let output = Pipe()
+            let errors = Pipe()
+            process.standardInput = input
+            process.standardOutput = output
+            process.standardError = errors
+            try process.run()
+            input.fileHandleForWriting.write(Data(payload.utf8))
+            try input.fileHandleForWriting.close()
+            let data = output.fileHandleForReading.readDataToEndOfFile()
+            let failure = errors.fileHandleForReading.readDataToEndOfFile()
+            process.waitUntilExit()
+            #expect(process.terminationStatus == 0, Comment(rawValue: String(decoding: failure, as: UTF8.self)))
+            let received = try JSONDecoder().decode(NodeReport.self, from: data)
+            #expect(received.html == writer.citations.map(\.html), Comment(rawValue: fixture.name))
+            #expect(received.bibliography == writer.bibliography, Comment(rawValue: fixture.name))
+        }
+    }
+
     @Test("Gives nil for a bundled file that does not exist")
     func unknownBundledFile() throws {
         let engine = try CitationEngine(resources: resources)
@@ -357,6 +490,11 @@ struct CitationEngineTests {
         #expect(engine.bundledLocale("xx-XX") == nil)
         #expect(engine.bundledStyle("../citations") == nil)
     }
+}
+
+private struct NodeReport: Decodable {
+    let html: [String]
+    let bibliography: [String]
 }
 
 private final class ReportBox: @unchecked Sendable {

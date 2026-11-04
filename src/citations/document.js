@@ -12,17 +12,26 @@
 import { escapeHtml } from '../html.js';
 import { readCitationMeta } from './frontmatter.js';
 import { applyCitations } from './output.js';
+import { shareStyleNote } from './panel.js';
 import { scanCitations } from './scan.js';
 
 /**
  * @typedef {import('./session.js').CitationReport} CitationReport
  * @typedef {{update(source: string): void, setSources(sources: import('./session.js').CitationSources): Promise<void>,
+ *   shareSource(source: string): Promise<string|null>,
  *   onReport(listener: (report: CitationReport) => void): void}} CitationClient
  * @typedef {{text: string, report: CitationReport}} HeldReport
+ * @typedef {{text: string, failure: string|null, styleNote: string|null}} SharedText
+ *   The text for a share link. `failure` says why it has no cited entries.
+ *   `styleNote` says that the style stays with the writer.
+ * @typedef {{text: string, doc: number, resolve: (answer: any) => void, share?: boolean,
+ *   limit?: ReturnType<typeof setTimeout>}} Flush
+ *   Each flush gets a report. A share flush gets its shared text, or null.
  */
 
 const WAIT = 300;
 const FLUSH_LIMIT = 10000;
+const SHARE_FAILURE = 'The citations are not ready; the link has only the text';
 // frontmatterLines in teaching/parse.js looks for the closing line in this many lines.
 const FRONTMATTER_LINES = 50;
 
@@ -140,6 +149,7 @@ export function citedHtml(source, report, render) {
  *   `onChange` runs when the report of the latest text arrives or goes.
  *   `library` is lazy too, and tests replace it: a real import takes real time.
  * @returns {{update(text: string|(() => string)): void, flush(text: string): Promise<CitationReport|null>,
+ *   shareSource(text: string): Promise<SharedText>,
  *   refresh(): Promise<CitationReport|null>, reset(): void, current(): HeldReport|null,
  *   reportFor(text: string): CitationReport|null, library(): import('./session.js').LibraryEntry[]}}
  */
@@ -150,7 +160,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
   let latest = null;
   /** @type {string|null} the text that waits for its turn */
   let typed = null;
-  /** @type {{text: string, doc: number, resolve: (report: CitationReport|null) => void, limit?: ReturnType<typeof setTimeout>}[]} */
+  /** @type {Flush[]} */
   const flushes = [];
   // Counts the loaded documents. A report of an earlier document is not held.
   let doc = 0;
@@ -231,6 +241,21 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     });
   }
 
+  /**
+   * @param {string} text
+   * @returns {Promise<string|null>}
+   */
+  async function sharedText(text) {
+    // The session has no .bib when its sources did not load.
+    if (filesStale) return null;
+    try {
+      const loaded = await loadClient();
+      return loaded ? await loaded.shareSource(text) : null;
+    } catch {
+      return null;
+    }
+  }
+
   /** Works through the texts, one at a time. A flush goes before a typed text. */
   async function run() {
     if (running) return;
@@ -253,13 +278,15 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
       const goesBack = text !== latest && held?.text === latest;
       const changed = owner === doc && !goesBack && report !== (held?.report ?? null);
       if (changed) held = report ? { text, report } : null;
+      // The session has the sources of this text now.
+      const shared = served.some((f) => f.share) ? await sharedText(text) : null;
       for (const flush of served) {
         const at = flushes.indexOf(flush);
         // A flush past its time limit has left the list and has its answer.
         if (at < 0) continue;
         flushes.splice(at, 1);
         clearTimeout(flush.limit);
-        flush.resolve(report);
+        flush.resolve(flush.share ? shared : report);
       }
       if (changed && text === latest) {
         try {
@@ -288,21 +315,42 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     return moveReport(held, text);
   }
 
-  function flush(/** @type {string} */ text) {
+  /**
+   * @param {string} text
+   * @param {boolean} share  the answer is the shared text
+   * @returns {Promise<any>}
+   */
+  function enqueue(text, share) {
     if (timer) clearTimeout(timer);
     timer = null;
     latest = text;
     return new Promise((resolve) => {
-      /** @type {typeof flushes[number]} */
-      const entry = { text, doc, resolve };
+      /** @type {Flush} */
+      const entry = { text, doc, resolve, share };
       // A worker that hangs must not stop a print. A late answer still counts as a report.
       entry.limit = setTimeout(() => {
         flushes.splice(flushes.indexOf(entry), 1);
-        resolve(entry.doc === doc ? reportFor(text) : null);
+        resolve(!share && entry.doc === doc ? reportFor(text) : null);
       }, FLUSH_LIMIT);
       flushes.push(entry);
       run();
     });
+  }
+
+  const flush = (/** @type {string} */ text) => enqueue(text, false);
+
+  /**
+   * The text for a share link. A text with no citation keys loads nothing.
+   *
+   * @param {string} text
+   * @returns {Promise<SharedText>}
+   */
+  async function shareSource(text) {
+    if (!usesCitations(documentMeta(text))) return { text, failure: null, styleNote: null };
+    /** @type {string|null} */
+    const shared = await enqueue(text, true);
+    if (shared === null) return { text, failure: SHARE_FAILURE, styleNote: null };
+    return { text: shared, failure: null, styleNote: shareStyleNote(shared) };
   }
 
   return {
@@ -317,6 +365,8 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     },
 
     flush,
+
+    shareSource,
 
     // A text in the debounce is newer than `latest`, and its run reads the files.
     refresh() {

@@ -57,7 +57,12 @@ public struct CitationSources: Encodable, Sendable {
     public var lang: String?
     public var missing: [String]?
     public var missingNotes: [String: String]?
+    /// The citations stay literal.
     public var styleError: String?
+    /// The default style formats the citations, and the note says so.
+    public var styleNote: String?
+    /// The paths that a shared document names and the app did not read.
+    public var ignoredPaths: [String]?
 
     public init(
         bibs: [Bib] = [],
@@ -67,7 +72,9 @@ public struct CitationSources: Encodable, Sendable {
         lang: String? = nil,
         missing: [String]? = nil,
         missingNotes: [String: String]? = nil,
-        styleError: String? = nil
+        styleError: String? = nil,
+        styleNote: String? = nil,
+        ignoredPaths: [String]? = nil
     ) {
         self.bibs = bibs
         self.styleXml = styleXml
@@ -77,6 +84,8 @@ public struct CitationSources: Encodable, Sendable {
         self.missing = missing
         self.missingNotes = missingNotes
         self.styleError = styleError
+        self.styleNote = styleNote
+        self.ignoredPaths = ignoredPaths
     }
 }
 
@@ -163,17 +172,21 @@ public struct CitationKnownFiles: Codable, Sendable, Equatable {
     public var tried: [String]
     public var unreadable: [String]
     public var noFolder: Bool
+    /// False for a document from a share link that is not saved.
+    public var allowPaths: Bool
 
     public init(
         files: [File] = [],
         tried: [String] = [],
         unreadable: [String] = [],
-        noFolder: Bool = false
+        noFolder: Bool = false,
+        allowPaths: Bool = true
     ) {
         self.files = files
         self.tried = tried
         self.unreadable = unreadable
         self.noFolder = noFolder
+        self.allowPaths = allowPaths
     }
 
     public init(from decoder: Decoder) throws {
@@ -182,6 +195,7 @@ public struct CitationKnownFiles: Codable, Sendable, Equatable {
         tried = try container.decodeIfPresent([String].self, forKey: .tried) ?? []
         unreadable = try container.decodeIfPresent([String].self, forKey: .unreadable) ?? []
         noFolder = try container.decodeIfPresent(Bool.self, forKey: .noFolder) ?? false
+        allowPaths = try container.decodeIfPresent(Bool.self, forKey: .allowPaths) ?? true
     }
 }
 
@@ -197,6 +211,8 @@ public struct CitationPlan: Decodable, Sendable, Equatable {
     public let missing: [String]
     public let missingNotes: [String: String]
     public let styleError: String?
+    public let styleNote: String?
+    public let ignoredPaths: [String]
     public let done: Bool
 }
 

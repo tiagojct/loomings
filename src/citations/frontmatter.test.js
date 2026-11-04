@@ -241,3 +241,10 @@ describe('setCitationMeta', () => {
     expect(setCitationMeta(src, 'csl', null)).toBe(src);
   });
 });
+
+describe('setCitationMeta: a references line with a number sign', () => {
+  it('replaces only its own line', () => {
+    const src = '---\nreferences: [{"id":"a","title":"Issue #1"}]\ntags: [a, b]\n---\n';
+    expect(setCitationMeta(src, 'references', '[]')).toBe('---\nreferences: []\ntags: [a, b]\n---\n');
+  });
+});

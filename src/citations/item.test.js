@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { sanitiseItem } from './item.js';
+import { sanitiseItem, shareItem } from './item.js';
 import { createEngine } from './engine.js';
 
 const style = (n) => readFileSync(new URL(`./styles/${n}.csl`, import.meta.url), 'utf8');
@@ -67,4 +67,19 @@ describe('sanitised items and citeproc', () => {
     }
     expect(failed).toEqual([]);
   }, 30000);
+});
+
+describe('shareItem', () => {
+  it('keeps what citeproc reads, and removes the other fields', () => {
+    const item = {
+      id: 'a', type: 'book', title: 'T', 'title-short': 'S', DOI: '10/x', language: 'pt', note: 'N', volume: 3,
+      author: [{ family: 'Silva' }], issued: { 'date-parts': [[2020]] },
+      abstract: 'Long', annote: 'A', keyword: 'k', 'citation-key': 'a', 'citation-label': 'L', custom: 'C', file: 'f.pdf',
+      _graph: [{ type: '@biblatex/text', data: 'x' }],
+    };
+    expect(shareItem(item)).toEqual({
+      id: 'a', type: 'book', title: 'T', 'title-short': 'S', DOI: '10/x', language: 'pt', note: 'N', volume: '3',
+      author: [{ family: 'Silva' }], issued: { 'date-parts': [[2020]] },
+    });
+  });
 });

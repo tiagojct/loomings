@@ -181,10 +181,11 @@ struct CitationSourceReaderTests {
         #expect(result.sources.styleError == nil)
     }
 
-    @Test("Passes the style error of the plan, with the default style")
-    func styleError() throws {
+    @Test("Passes the style note of the plan, with the default style")
+    func styleNote() throws {
         let result = try load(request(csl: "nope.csl"), folder: nil)
-        #expect(result.sources.styleError?.contains("nope.csl") == true)
+        #expect(result.sources.styleNote?.contains("nope.csl") == true)
+        #expect(result.sources.styleError == nil)
         #expect(result.sources.styleXml?.contains("chicago") == true)
     }
 
@@ -204,6 +205,39 @@ struct CitationSourceReaderTests {
         #expect(result.files[file]?.exists == false)
         try bib.write(to: file, atomically: true, encoding: .utf8)
         #expect(result.changedFiles())
+    }
+
+    @Test("A shared document does not read a path outside its folder")
+    func sharedDocumentPaths() throws {
+        let folder = try temporaryFolder()
+        let outside = folder.appendingPathComponent("outside.bib")
+        try bib.write(to: outside, atomically: true, encoding: .utf8)
+        let engine = try CitationEngine(resources: resources)
+        let wanted = request(bibliography: [outside.path], csl: "../own.csl")
+
+        let shared = try CitationSourceReader.load(wanted, folder: nil, allowPaths: false, engine: engine)
+        #expect(shared.sources.bibs.isEmpty)
+        #expect(shared.files.isEmpty)
+        #expect(shared.sources.ignoredPaths == [outside.path, "../own.csl"])
+
+        let source = "---\nbibliography: \(outside.path)\ncsl: ../own.csl\n---\nText [@a2020].\n"
+        engine.setSources(shared.sources)
+        let report = engine.analyse(source)
+        let note = "This shared document names a file on this computer. It stays unread until you save the document."
+        #expect(report.notes.map(\.message).filter { $0 == note }.count == 2)
+
+        let saved = try CitationSourceReader.load(wanted, folder: folder, engine: engine)
+        #expect(saved.sources.bibs.map(\.name) == [outside.path])
+        #expect(saved.sources.ignoredPaths == [])
+    }
+
+    @Test("A shared document reads a name in its folder")
+    func sharedDocumentFolder() throws {
+        let folder = try temporaryFolder()
+        try bib.write(to: folder.appendingPathComponent("refs.bib"), atomically: true, encoding: .utf8)
+        let engine = try CitationEngine(resources: resources)
+        let result = try CitationSourceReader.load(request(bibliography: ["refs.bib"]), folder: folder, allowPaths: false, engine: engine)
+        #expect(result.sources.bibs.map(\.name) == ["refs.bib"])
     }
 
     @Test("A report from the request gives the same notes as the sources say")

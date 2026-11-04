@@ -22,6 +22,8 @@ public enum CitationEngineError: Error, Equatable, CustomStringConvertible {
 public protocol CitationEngineProtocol: AnyObject, Sendable {
     func setSources(_ sources: CitationSources)
     func analyse(_ source: String) -> CitationReport
+    func shareSource(_ source: String) throws -> String
+    func shareStyleNote(_ shared: String) throws -> String?
     func readMeta(_ source: String) throws -> CitationMeta
     func resolveNative(_ request: CitationSourceRequest, known: CitationKnownFiles) throws -> CitationPlan
     func setMeta(_ source: String, key: String, value: String?) throws -> String
@@ -91,6 +93,18 @@ public final class CitationEngine: CitationEngineProtocol, @unchecked Sendable {
                 return CitationReport(failure: String(describing: error), source: source)
             }
         }
+    }
+
+    /// The text for a share link: the source with one `references:` line that
+    /// holds the cited entries. It does not format, so it is short work. The
+    /// sources must be set. The text in the editor stays as it is.
+    public func shareSource(_ source: String) throws -> String {
+        try queue.sync { try call("shareSource", [source]) }
+    }
+
+    /// What the writer must know about the style of a share link, if anything.
+    public func shareStyleNote(_ shared: String) throws -> String? {
+        try queue.sync { try call("shareStyleNote", [shared]) }
     }
 
     public func readMeta(_ source: String) throws -> CitationMeta {

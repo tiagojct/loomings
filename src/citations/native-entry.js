@@ -9,7 +9,8 @@
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { planNativeSources } from './library.js';
 import {
-  choiceIsOn, fileChange as changeFor, insertCitation as insertionFor, languageChoices, styleChoices, withBibliography,
+  choiceIsOn, fileChange as changeFor, insertCitation as insertionFor, languageChoices, shareStyleNote as styleNoteFor,
+  styleChoices, withBibliography,
 } from './panel.js';
 import { createSession } from './session.js';
 import { checkStyle as check } from './style.js';
@@ -27,6 +28,22 @@ export function setSources(json) {
  */
 export function analyse(source) {
   return JSON.stringify(session.analyse(source));
+}
+
+/**
+ * @param {string} source
+ * @returns {string}  the text for a share link as a JSON string
+ */
+export function shareSource(source) {
+  return JSON.stringify(session.shareSource(source));
+}
+
+/**
+ * @param {string} shared  the text of a share link
+ * @returns {string}  the note as a JSON string, or JSON null
+ */
+export function shareStyleNote(shared) {
+  return JSON.stringify(styleNoteFor(shared));
 }
 
 /**

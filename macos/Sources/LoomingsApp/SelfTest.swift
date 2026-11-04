@@ -990,9 +990,149 @@ enum SelfTest {
             try checkReferenceRefusals(check, folder: root.appendingPathComponent("refusals"))
             try checkReferencesColumn(check, folder: root.appendingPathComponent("column"))
             try checkReferenceInsertion(check, folder: root.appendingPathComponent("insertion"))
+            try checkShareLinks(check, folder: root.appendingPathComponent("share"))
+            try checkShareStyle(check, folder: root.appendingPathComponent("share-style"))
+            try checkShareOnPaper(check, folder: root.appendingPathComponent("share-paper"))
+            try checkShareFallback(check, folder: root.appendingPathComponent("share-fallback"))
+            try checkSharedPaths(check, folder: root.appendingPathComponent("share-paths"))
         } catch {
             check(false, "citation setup (\(error))")
         }
+    }
+
+    // MARK: - Share links with citations
+
+    /// A window on the text of a share link, as Open Share Link makes it.
+    private static func sharedDocument(text: String) throws -> (LoomingsDocument, EditorWindowController) {
+        let document = LoomingsDocument.shared(text: text)
+        document.fileType = "net.daringfireball.markdown"
+        NSDocumentController.shared.addDocument(document)
+        document.makeWindowControllers()
+        guard let controller = document.windowControllers.first as? EditorWindowController else {
+            throw CocoaError(.featureUnsupported)
+        }
+        controller.showWindow(nil)
+        controller.showsExportStatusSheet = false
+        return (document, controller)
+    }
+
+    /// The link that Copy Share Link gives for the controller's document.
+    private static func copiedLink(_ controller: EditorWindowController) throws -> SharePayload {
+        NSPasteboard.general.clearContents()
+        controller.copyShareLink(nil)
+        guard pump(timeout: 15, until: { NSPasteboard.general.string(forType: .string) != nil }) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+        return try ShareLink.parse(string: NSPasteboard.general.string(forType: .string) ?? "")
+    }
+
+    private static func checkShareLinks(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: citationText, folder: folder)
+        defer { closeCitationDocument(document) }
+        let payload = try copiedLink(controller)
+        check(payload.text.contains("references: [{") && payload.text.contains("Lung function at home"), "the link has the cited entry")
+        check(payload.text.contains("bibliography: refs.bib"), "the link keeps the bibliography line")
+        check(controller.editor.source == citationText, "the writer's document does not change")
+        check(controller.shareStatus == nil, "a link with a bundled style has no status")
+        check(document.cameFromShareLink == false, "a document from a file is not a shared document")
+
+        controller.showQRCodeForTesting()
+        check(pump(timeout: 15) { controller.qrSourceForTesting == payload.text }, "the QR code has the same text as the link")
+        controller.window?.makeKeyAndOrderFront(nil)
+
+        let (received, reader) = try sharedDocument(text: payload.text)
+        defer { closeCitationDocument(received) }
+        let reported = pump(timeout: 15) { reader.citations.report(for: payload.text) != nil }
+        check(reported, "a shared document gets a report")
+        let report = reader.citations.report(for: payload.text)
+        check(report?.citations.first?.markdown == "(Silva 2020)", "the reader sees the citation with no file")
+        check(report?.bibliography.first?.contains("Silva") == true, "the reader sees the reference list")
+        check(report?.notes.isEmpty == true, "an absent bibliography gives no note when the link holds the entries")
+    }
+
+    private static func checkShareStyle(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let text = citationText.replacingOccurrences(of: "bibliography: refs.bib", with: "bibliography: refs.bib\ncsl: own-journal.csl")
+        let (document, controller) = try citationDocument(text: text, folder: folder)
+        defer { closeCitationDocument(document) }
+        let payload = try copiedLink(controller)
+        check(
+            controller.shareStatus == "The link carries the citations; the style own-journal.csl stays here, so the reader sees the default style.",
+            "the status says that an uploaded style stays here"
+        )
+        check(payload.text.contains("csl: own-journal.csl"), "the shared text keeps the name of the style")
+
+        let (received, reader) = try sharedDocument(text: payload.text)
+        defer { closeCitationDocument(received) }
+        check(pump(timeout: 15) { reader.citations.report(for: payload.text) != nil }, "a shared document with another style gets a report")
+        let report = reader.citations.report(for: payload.text)
+        check(report?.citations.first?.markdown == "(Silva 2020)", "the reader gets the default style")
+        check(
+            report?.notes.last?.message == "The style own-journal.csl was not found. The default style is chicago-author-date.",
+            "the reader gets a note about the style"
+        )
+    }
+
+    private static func checkShareOnPaper(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: citationText, folder: folder)
+        defer { closeCitationDocument(document) }
+        var printed: HandoutTextView?
+        controller.printHookForTesting = { printed = $0 }
+        controller.printPreview(nil)
+        check(pump(timeout: 15) { printed != nil }, "the handout prints")
+        check(printed?.sharedSource.contains("references: [{") == true, "the handout's QR code has the cited entries")
+        check(printed?.string.contains("(Silva 2020)") == true, "the handout has the formatted citation")
+        check(controller.editor.source == citationText, "the print does not change the document")
+    }
+
+    private static func checkShareFallback(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: "Empty.\n", folder: folder)
+        defer { closeCitationDocument(document) }
+        let status = "The citations are not ready; the link has only the text."
+
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0, shareDelay: 1))
+        controller.citations.exportLimit = 0.2
+        controller.editor.setText(citationText)
+        let late = try copiedLink(controller)
+        check(late.text == citationText, "a late share falls back to the plain text")
+        check(controller.shareStatus == status, "a late share says so")
+        let link = NSPasteboard.general.string(forType: .string)
+        _ = pump(timeout: 1.2) { false }
+        check(NSPasteboard.general.string(forType: .string) == link, "a late answer does not change the pasteboard")
+
+        controller.citations.useEngineForTesting(try FailingCitationEngine())
+        let failed = try copiedLink(controller)
+        check(failed.text == citationText, "a failed share falls back to the plain text")
+        check(controller.shareStatus == status, "a failed share says so")
+    }
+
+    private static func checkSharedPaths(_ check: (Bool, String) -> Void, folder: URL) throws {
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let outside = folder.appendingPathComponent("outside.bib")
+        try Data(citationBib.utf8).write(to: outside)
+        let text = citationText.replacingOccurrences(of: "bibliography: refs.bib", with: "bibliography: \(outside.path)")
+        let note = "This shared document names a file on this computer. It stays unread until you save the document."
+
+        let (document, controller) = try sharedDocument(text: text)
+        defer { closeCitationDocument(document) }
+        check(pump(timeout: 15) { controller.citations.report(for: text) != nil }, "a shared document with a path gets a report")
+        var report = controller.citations.report(for: text)
+        check(report?.notes.first?.message == note, "a shared document says that a path stays unread")
+        check(report?.citations.first?.markdown != "(Silva 2020)", "a shared document does not read an absolute path")
+
+        let archive = NSKeyedArchiver(requiringSecureCoding: false)
+        document.encodeRestorableState(with: archive)
+        let restored = LoomingsDocument()
+        restored.restoreState(with: try NSKeyedUnarchiver(forReadingFrom: archive.encodedData))
+        check(restored.cameFromShareLink, "a restored document stays a shared document")
+
+        var saved = false
+        document.save(to: folder.appendingPathComponent("kept.md"), ofType: "net.daringfireball.markdown", for: .saveAsOperation) { _ in saved = true }
+        check(pump(timeout: 5) { saved }, "the shared document saves")
+        check(document.cameFromShareLink == false, "a save ends the mark")
+        let read = pump(timeout: 15) { controller.citations.report(for: text)?.citations.first?.markdown == "(Silva 2020)" }
+        check(read, "a saved document reads its paths")
+        report = controller.citations.report(for: text)
+        check(report?.notes.contains { $0.message == note } == false, "the note goes after the save")
     }
 
     private static func checkFormattedDocument(_ check: (Bool, String) -> Void, folder: URL) throws {
@@ -2215,13 +2355,15 @@ enum SelfTest {
 private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Sendable {
     private let engine: CitationEngine
     private let delay: TimeInterval
+    private let shareDelay: TimeInterval
     private let lock = NSLock()
     private var count = 0
 
-    init(delay: TimeInterval) throws {
+    init(delay: TimeInterval, shareDelay: TimeInterval = 0) throws {
         guard let root = Bundle.main.resourceURL else { throw CocoaError(.fileNoSuchFile) }
         engine = try CitationEngine(resources: root.appendingPathComponent("Citations"))
         self.delay = delay
+        self.shareDelay = shareDelay
     }
 
     var analyses: Int { lock.withLock { count } }
@@ -2233,6 +2375,11 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
     }
 
     func setSources(_ sources: CitationSources) { engine.setSources(sources) }
+    func shareSource(_ source: String) throws -> String {
+        Thread.sleep(forTimeInterval: shareDelay)
+        return try engine.shareSource(source)
+    }
+    func shareStyleNote(_ shared: String) throws -> String? { try engine.shareStyleNote(shared) }
     func readMeta(_ source: String) throws -> CitationMeta { try engine.readMeta(source) }
     func bundledStyle(_ id: String) -> String? { engine.bundledStyle(id) }
     func bundledLocale(_ tag: String) -> String? { engine.bundledLocale(tag) }
@@ -2271,6 +2418,10 @@ private final class FailingCitationEngine: CitationEngineProtocol, @unchecked Se
     }
 
     func setSources(_ sources: CitationSources) {}
+    func shareSource(_ source: String) throws -> String {
+        throw CitationEngineError.script("The citation code failed.")
+    }
+    func shareStyleNote(_ shared: String) throws -> String? { nil }
     func readMeta(_ source: String) throws -> CitationMeta { try engine.readMeta(source) }
     func bundledStyle(_ id: String) -> String? { engine.bundledStyle(id) }
     func bundledLocale(_ tag: String) -> String? { engine.bundledLocale(tag) }

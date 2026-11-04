@@ -31,7 +31,16 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 - `src/palettes.js` — the ten Ensigns colour families. The only place a colour
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
-- `src/share.js` — document ⇄ URL fragment. Pure, tested.
+- `src/share.js` — document ⇄ URL fragment. Pure, tested. A share link always
+  carries the cited entries: `session.shareSource` adds one `references:` line
+  (sanitised CSL JSON, only the fields that citeproc needs) to the shared text,
+  and never to the writer's document. It parses and scans and does not format.
+  `document.js` `shareSource` calls it after the sources are in, with the flush
+  limit, and falls back to the plain text with a status. Every `shareUrl` caller
+  in `editor.js` goes through it. An absent `.bib` gives no note when
+  `references:` holds every cited key. A bundled `csl:` travels by name; another
+  style stays with the writer (`shareStyleNote`), and the reader gets the
+  default style with a note (`styleNote` formats; `styleError` keeps keys).
 - `src/citations/` — citations and references. This JS is the only
   implementation of the citation rules: the native app runs the same code
   in JavaScriptCore. `scan.js` finds the citations, `frontmatter.js` reads and
@@ -228,6 +237,15 @@ Stage 2 decisions worth preserving:
   `macos/Resources/AppIcon.icns`; `build-app.sh` copies that. Do not feed
   `icons/rendered` or the Icon Composer export to the native bundle: they are
   full-bleed and glassy.
+- Share links with citations: `CitationController.shareText` runs
+  `CitationEngine.shareSource` on the citation queue, with `exportLimit`, and
+  gives the plain text and a failure after the limit. Copy Share Link, Show QR
+  Code and the Handout QR code use it. `LoomingsDocument.cameFromShareLink`
+  (Open Share Link, cleared on a save, kept by a copy and by restoration)
+  sets `allowPaths: false` in `planNativeSources`: an absolute or parent path
+  in `bibliography:` or `csl:` stays unread, with a note, until the save.
+  `citation-fixtures.json` has the `shares` cases; the Swift tests also send a
+  native link through the web code in Node.
 - Share fixtures are generated with `node macos/scripts/render-share-fixtures.mjs`;
   the Swift tests decode those and also run the web decoder through Node, so
   both directions are exercised. No custom URL scheme or universal link is

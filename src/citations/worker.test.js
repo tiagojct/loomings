@@ -28,4 +28,20 @@ describe('citation worker', () => {
     expect(last.report.citations[0].markdown).toBe('[@a]');
     vi.unstubAllGlobals();
   });
+  it('answers a share message with the text, and with null when the text has no room', async () => {
+    const postMessage = vi.fn();
+    const self = { postMessage, onmessage: null };
+    vi.stubGlobal('self', self);
+    vi.resetModules();
+    await import('./worker.js');
+    const bib = '@book{a, author = {Smith, J}, title = {T}, year = {2019}}';
+    self.onmessage({ data: { id: 1, type: 'sources', sources: { bibs: [{ name: 'r.bib', text: bib }], styleXml: style, localeXml: locale, lang: 'en-US' } } });
+    self.onmessage({ data: { share: 7, type: 'share', text: '---\nbibliography: r.bib\n---\n[@a]' } });
+    expect(postMessage.mock.calls[0][0].share).toBe(7);
+    expect(postMessage.mock.calls[0][0].shared).toContain('references: [{');
+    const filler = Array.from({ length: 47 }, (_, i) => `k${i}: v`).join('\n');
+    self.onmessage({ data: { share: 8, type: 'share', text: `---\nbibliography: r.bib\n${filler}\n---\n[@a]` } });
+    expect(postMessage.mock.calls[1][0]).toEqual({ share: 8, shared: null });
+    vi.unstubAllGlobals();
+  });
 });

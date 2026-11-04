@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
 import {
+  shareStyleNote,
   filterLibrary, insertCitation, renderLibrary, bibliographyChoices, toggleBibliography, fileChange, styleChoices,
   languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView, withBibliography, choiceIsOn,
 } from './panel.js';
@@ -466,5 +467,25 @@ describe('createReferencesView', () => {
     expect(view.apply(split(false))).toEqual({ tabs: false, references: false, switched: true });
     expect(view.tab).toBe('references');
     expect(view.apply(split(true))).toEqual({ tabs: true, references: true, switched: true });
+  });
+});
+
+describe('shareStyleNote', () => {
+  const shared = (head, body = '[@a]\n') => `---\nreferences: [{"id":"a"}]\n${head}\n---\n${body}`;
+
+  it('names a style that is not bundled', () => {
+    expect(shareStyleNote(shared('csl: journal.csl'))).toBe(
+      'The link carries the citations; the style journal.csl stays here, so the reader sees the default style.',
+    );
+    expect(shareStyleNote(shared('csl: /Users/me/journal.csl'))).toContain('the style journal.csl stays here');
+  });
+  it('says nothing for a bundled style or for no style', () => {
+    expect(shareStyleNote(shared('csl: apa'))).toBe(null);
+    expect(shareStyleNote(shared('csl: vancouver.csl'))).toBe(null);
+    expect(shareStyleNote(shared('title: T'))).toBe(null);
+  });
+  it('says nothing when the link carries no citations', () => {
+    expect(shareStyleNote(shared('csl: journal.csl', 'No citations.\n'))).toBe(null);
+    expect(shareStyleNote('---\nbibliography: refs.bib\ncsl: journal.csl\n---\n[@a]\n')).toBe(null);
   });
 });

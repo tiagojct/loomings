@@ -8,7 +8,7 @@
 import { foldText } from '../accents.js';
 import { escapeHtml } from '../html.js';
 import { frontmatterLines, splitLines } from '../teaching/parse.js';
-import { setCitationMeta } from './frontmatter.js';
+import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { scanCitations } from './scan.js';
 import { BUNDLED_LOCALES, BUNDLED_STYLES, DEFAULT_STYLE, LOCALE_LABELS, fileBaseName, localeFor } from './style.js';
 
@@ -20,6 +20,21 @@ import { BUNDLED_LOCALES, BUNDLED_STYLES, DEFAULT_STYLE, LOCALE_LABELS, fileBase
  */
 
 const MAX_ROWS = 200;
+
+/**
+ * What the writer must know about the style of a share link. A bundled style
+ * travels by name. Another style file stays with the writer.
+ *
+ * @param {string} shared  the text of the link
+ * @returns {string|null}
+ */
+export function shareStyleNote(shared) {
+  const { csl, references } = readCitationMeta(shared);
+  if (!csl || !references.length || BUNDLED_STYLES.some((style) => style.id === fileBaseName(csl))) return null;
+  if (!scanCitations(shared).length) return null;
+  const name = csl.split(/[\\/]/).pop();
+  return `The link carries the citations; the style ${name} stays here, so the reader sees the default style.`;
+}
 
 /**
  * The entries with every word of the query in the key, the authors, the year

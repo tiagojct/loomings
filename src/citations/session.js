@@ -10,8 +10,8 @@
 import { escapeHtml } from '../html.js';
 import { parseBibliography } from './bib.js';
 import { createEngine } from './engine.js';
-import { readCitationMeta } from './frontmatter.js';
-import { sanitiseItem } from './item.js';
+import { readCitationMeta, setCitationMeta } from './frontmatter.js';
+import { sanitiseItem, shareItem } from './item.js';
 import { cleanCitationHtml, toMarkdown, withReferences } from './output.js';
 import { scanCitations } from './scan.js';
 import { checkStyle } from './style.js';
@@ -22,8 +22,11 @@ import { checkStyle } from './style.js';
  * @typedef {import('./output.js').CitationOutput} CitationOutput
  * @typedef {{bibs?: {name: string, text: string}[], styleXml?: string|null, localeXml?: string|null,
  *   fallbackLocaleXml?: string, lang?: string, missing?: string[], missingNotes?: Record<string, string>,
- *   styleError?: string|null}} CitationSources
+ *   styleError?: string|null, styleNote?: string|null, ignoredPaths?: string[]}} CitationSources
  *   `missingNotes` gives a better note than the default for a name in `missing`.
+ *   `styleError` keeps the citations literal. `styleNote` does not: the default
+ *   style formats them. `ignoredPaths` holds the paths that a shared document
+ *   names and the app did not read.
  * @typedef {{key: string, authors: string, year: string, title: string, cited: boolean}} LibraryEntry
  * @typedef {{from: number, to: number, message: string, file?: string, line?: number}} CitationNote
  *   A note about a file has from 0, to 0, `line` (from 0) and `file` when a file is named.
@@ -68,6 +71,12 @@ function libraryEntry(item) {
   };
 }
 
+const IGNORED_PATH = 'This shared document names a file on this computer. It stays unread until you save the document.';
+
+/** JSON on one line. JSON leaves these two line separators as they are. */
+const oneLine = (/** @type {unknown} */ value) =>
+  JSON.stringify(value).replace(/[\u2028\u2029]/g, (c) => `\\u${c.charCodeAt(0).toString(16)}`);
+
 /** @param {number} dropped  the count from readCitationMeta */
 function droppedMessage(dropped) {
   if (dropped < 0) return 'The references line is not a JSON list. It is not used.';
@@ -97,7 +106,8 @@ function styleProblem(styleXml) {
 
 /**
  * @param {{makeEngine?: typeof createEngine}} [options]  tests replace the engine
- * @returns {{setSources(sources: CitationSources): void, analyse(source: string): CitationReport}}
+ * @returns {{setSources(sources: CitationSources): void, analyse(source: string): CitationReport,
+ *   shareSource(source: string): string}}
  */
 export function createSession({ makeEngine = createEngine } = {}) {
   /** @type {CitationSources} */
@@ -163,6 +173,14 @@ export function createSession({ makeEngine = createEngine } = {}) {
       itemsKey = key;
       invalidate();
     }
+  }
+
+  /** @param {import('./frontmatter.js').CitationMeta} meta */
+  function readReferences(meta) {
+    const refs = JSON.stringify(meta.references);
+    if (refs === referencesKey) return;
+    referencesKey = refs;
+    mergeItems(/** @type {CslItem[]} */ (meta.references));
   }
 
   /** True for a key with an entry that citeproc accepts. */
@@ -280,22 +298,25 @@ export function createSession({ makeEngine = createEngine } = {}) {
     const meta = readCitationMeta(source);
     if (!meta.bibliography.length && !meta.references.length && !meta.referencesDropped) return emptyReport(source);
 
-    const refs = JSON.stringify(meta.references);
-    if (refs !== referencesKey) {
-      referencesKey = refs;
-      mergeItems(/** @type {CslItem[]} */ (meta.references));
-    }
+    readReferences(meta);
 
     const citations = scanCitations(source);
     const citedKeys = new Set(citations.flatMap((c) => c.items.map((it) => it.key)));
     const missingFiles = sources.missing ?? [];
+    const { styleNote } = sources;
+    // An absent .bib loses nothing when the document holds each cited entry.
+    const carried = new Set(meta.references.map((entry) => entry.id));
+    const covered = carried.size > 0 && [...citedKeys].every((key) => carried.has(key));
+    const noted = missingFiles.filter((name) => !(covered && meta.bibliography.includes(name)));
     /** @type {CitationNote[]} */
     const notes = [
       ...bibNotes,
-      ...missingFiles.map((name) => fileNote(name, 0, sources.missingNotes?.[name] ?? `The file ${name} is missing.`)),
+      ...noted.map((name) => fileNote(name, 0, sources.missingNotes?.[name] ?? `The file ${name} is missing.`)),
+      ...(sources.ignoredPaths ?? []).map((name) => fileNote(name, 0, IGNORED_PATH)),
     ];
     if (meta.referencesDropped) notes.push(fileNote(null, 0, droppedMessage(meta.referencesDropped)));
     const styleFile = meta.csl;
+    if (styleNote) notes.push(fileNote(styleFile, 0, styleNote));
     const unusableKeys = (/** @type {Citation} */ c) =>
       [...new Set(c.items.map((it) => it.key).filter((key) => !usable(key)))];
     const literal = (/** @type {Citation} */ c, /** @type {string[]} */ missing) => {
@@ -363,6 +384,20 @@ export function createSession({ makeEngine = createEngine } = {}) {
       } catch (e) {
         return { ...emptyReport(source), notes: [fileNote('', 0, message(e))] };
       }
+    },
+
+    /**
+     * The source with one `references:` line that holds the cited entries,
+     * for a share link. It does not format. It throws when the frontmatter
+     * cannot take the line.
+     */
+    shareSource(source) {
+      const meta = readCitationMeta(source);
+      if (!meta.bibliography.length && !meta.references.length && !meta.referencesDropped) return source;
+      readReferences(meta);
+      const cited = new Set(scanCitations(source).flatMap((c) => c.items.map((it) => it.key)));
+      const entries = items.filter((item) => cited.has(item.id)).map(shareItem);
+      return entries.length ? setCitationMeta(source, 'references', oneLine(entries)) : source;
     },
   };
 }

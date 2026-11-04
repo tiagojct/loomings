@@ -1193,10 +1193,10 @@ window.addEventListener('pagehide', () => session.flushScratch());
 
 /** @type {ReturnType<typeof setTimeout>|null} */ let statusTimer = null;
 
-function flashStatus(msg) {
+function flashStatus(msg, ms = 2000) {
   statusApp.textContent = msg;
   if (statusTimer) clearTimeout(statusTimer);
-  statusTimer = setTimeout(refreshStatusBar, 2000);
+  statusTimer = setTimeout(refreshStatusBar, ms);
 }
 
 function basename(p) {
@@ -1869,6 +1869,16 @@ attachMenu(el('tb-references'), referencesMenuEl, {
 const QR_CAPTION = 'Scan to open this document in Loomings.';
 const QR_TOO_LONG = 'This document is too long for a QR code; share it as a link.';
 
+// A share link carries the cited entries. A long sentence stays longer on the status bar.
+const SHARE_STATUS_TIME = 6000;
+
+function textToShare(/** @type {string} */ text) {
+  return withWaitStatus(citations.shareSource(text), () => {
+    if (statusTimer) clearTimeout(statusTimer);
+    statusApp.textContent = 'Preparing citations for the link';
+  }, refreshStatusBar);
+}
+
 async function printHandout() {
   const text = getText();
   // Take the title now: the user can open another document during the wait.
@@ -1877,11 +1887,15 @@ async function printHandout() {
     if (statusTimer) clearTimeout(statusTimer);
     statusApp.textContent = 'Preparing citations for print';
   }, refreshStatusBar);
-  if (citationsLeftLiteral(text, report)) flashStatus('Citations are not ready; printing without them');
+  // Citations that are not ready have used the whole wait. The link then has only the text.
+  const literal = citationsLeftLiteral(text, report);
+  const shared = literal ? { text, failure: null } : await textToShare(text);
+  if (literal) flashStatus('Citations are not ready; printing without them');
+  else if (shared.failure) flashStatus(shared.failure, SHARE_STATUS_TIME);
   let qr = '';
   if (text.trim()) {
     /** @type {string|null} */ let url = null;
-    try { url = await shareUrl(text, location.href); } catch (_) { url = null; }
+    try { url = await shareUrl(shared.text, location.href); } catch (_) { url = null; }
     const side = url ? qrPrintSide(url) : null;
     const svg = url && side ? qrSvg(url, 1, `${side}pt`) : null;
     qr = `<section class="handout-qr">${svg || ''}<p>${svg ? QR_CAPTION : QR_TOO_LONG}</p></section>`;
@@ -1936,9 +1950,11 @@ const qrCaption = el('qr-caption');
 async function showQrCode() {
   const text = getText();
   if (!text.trim()) { flashStatus('Nothing to share yet'); return; }
+  const shared = await textToShare(text);
   let url;
-  try { url = await shareUrl(text, location.href); }
+  try { url = await shareUrl(shared.text, location.href); }
   catch (err) { flashStatus('Could not build link: ' + (err?.message || err)); return; }
+  if (shared.failure) flashStatus(shared.failure, SHARE_STATUS_TIME);
   const svg = qrSvg(url, 4);
   const paper = roles(themeFamily, 'light');
   qrCodeEl.innerHTML = svg || '';
@@ -2406,14 +2422,22 @@ async function copyShareLink() {
   const text = getText();
   if (!text.trim()) { flashStatus('Nothing to share yet'); return; }
   try {
-    const url = await shareUrl(text, location.href);
+    const shared = await textToShare(text);
+    const url = await shareUrl(shared.text, location.href);
     const kb = Math.max(1, Math.round(url.length / 1024));
+    // The wait for the citations can end the click's right to the clipboard.
+    let copied = false;
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      flashStatus(`Link copied (${kb} KB); the whole document travels in it`);
-    } else {
-      window.prompt('Copy this link:', url);
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch (_) { copied = false; }
     }
+    if (!copied) window.prompt('Copy this link:', url);
+    const status = shared.failure ?? shared.styleNote;
+    const done = `Link copied (${kb} KB)`;
+    if (status) flashStatus(copied ? `${done}. ${status}` : status, SHARE_STATUS_TIME);
+    else if (copied) flashStatus(`${done}; the whole document travels in it`);
   } catch (err) {
     flashStatus('Could not build link: ' + (err?.message || err));
   }

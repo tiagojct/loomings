@@ -18,9 +18,11 @@ const PARENT_ALIASES = /** @type {Record<string, string>} */ ({
  * @typedef {{loadBundledStyle(id: string): Promise<string|null>,
  *   loadLocale(lang: string|null|undefined): Promise<{lang: string, xml: string}>}} CitationAssets
  * @typedef {{bibs: StoredFile[], unfound: string[], style: {file: StoredFile}|{id: string}, parent?: string,
- *   missing: string[], styleError?: string}} SourcePlan
+ *   missing: string[], styleError?: string, styleNote?: string}} SourcePlan
  *   `unfound` holds the bibliography entries with no file. `parent` is the
  *   parent of a dependent style, also when the style comes from another file.
+ *   With `styleError`, the citations stay literal. With `styleNote`, the
+ *   default style formats them and the note says so.
  */
 
 const isBundled = (/** @type {string} */ id) => BUNDLED_STYLES.some((s) => s.id === id);
@@ -73,6 +75,8 @@ export function planSources(meta, files, sameFile = sameBaseName) {
   let parent;
   /** @type {string|undefined} */
   let styleError;
+  /** @type {string|undefined} */
+  let styleNote;
   const wanted = meta.csl ? baseName(meta.csl) : DEFAULT_STYLE;
   const stored = files.find((f) => f.kind === 'csl' && sameFile(f, meta.csl ?? DEFAULT_STYLE));
   if (stored) {
@@ -91,12 +95,13 @@ export function planSources(meta, files, sameFile = sameBaseName) {
     style = { id: wanted };
   } else {
     missing.push(meta.csl ?? wanted);
-    styleError = `The style ${meta.csl ?? wanted} was not found. The default style is ${DEFAULT_STYLE}.`;
+    styleNote = `The style ${meta.csl ?? wanted} was not found. The default style is ${DEFAULT_STYLE}.`;
   }
   /** @type {SourcePlan} */
   const plan = { bibs, unfound, style: style ?? { id: DEFAULT_STYLE }, missing };
   if (parent) plan.parent = parent;
   if (styleError) plan.styleError = styleError;
+  if (styleNote) plan.styleNote = styleNote;
   return plan;
 }
 
@@ -105,7 +110,7 @@ export function planSources(meta, files, sameFile = sameBaseName) {
  * @param {StoredFile[]} files
  * @param {CitationAssets} assets
  * @returns {Promise<{bibs: {name: string, text: string}[], styleXml: string|null, localeXml: string|null,
- *   fallbackLocaleXml: string, lang: string, missing: string[], styleError?: string}>}
+ *   fallbackLocaleXml: string, lang: string, missing: string[], styleError?: string, styleNote?: string}>}
  */
 export async function resolveSources(meta, files, assets) {
   const plan = planSources(meta, files);
@@ -123,22 +128,26 @@ export async function resolveSources(meta, files, assets) {
     missing: plan.missing,
   };
   if (plan.styleError) out.styleError = plan.styleError;
+  if (plan.styleNote) out.styleNote = plan.styleNote;
   return out;
 }
 
 /**
  * @typedef {{files?: {name: string, kind: 'bib'|'csl', text?: string}[], tried?: string[],
- *   unreadable?: string[], noFolder?: boolean}} NativeFiles
+ *   unreadable?: string[], noFolder?: boolean, allowPaths?: boolean}} NativeFiles
  *   What the native app knows so far. `files` are the files it read, each named
  *   as a plan asked for it (a style file carries its text). `tried` holds each
  *   name it tried, and `unreadable` the names of files it found but could not
  *   read as text. `noFolder` is true for a document with no folder.
+ *   `allowPaths` is false for a document from a share link that is not saved:
+ *   the writer of the link chose its names, so no name can leave the folder.
  * @typedef {{bibFiles: string[], stylePath: string|null, styleId: string|null, lang: string,
  *   fallbackLang: string, missing: string[], missingNotes: Record<string, string>,
- *   styleError?: string, done: boolean}} NativePlan
+ *   styleError?: string, styleNote?: string, ignoredPaths: string[], done: boolean}} NativePlan
  *   While `done` is false, the app reads each name that it has not tried, and
  *   asks again. When `done` is true, `bibFiles` are the files in use, and the
  *   style is the file `stylePath`, or else the bundled style `styleId`.
+ *   `ignoredPaths` holds the values that the plan did not follow.
  */
 
 /** @param {string} name  @param {string} ending  added to a name with no ending */
@@ -146,6 +155,9 @@ const withEnding = (name, ending) => (/\.[^./\\]+$/.test(name) ? name : `${name}
 
 /** @param {string} name  a path as the frontmatter writes it */
 const isRelative = (name) => !/^(?:[\\/~]|[A-Za-z]:)/.test(name);
+
+/** @param {string} name  True for a path that can leave the folder of the document. */
+const leavesFolder = (name) => !isRelative(name) || /(?:^|[\\/])\.\.(?:[\\/]|$)/.test(name);
 
 /** The name of a file in the folder of another file. */
 const sibling = (/** @type {string} */ path, /** @type {string} */ name) =>
@@ -162,18 +174,25 @@ const sibling = (/** @type {string} */ path, /** @type {string} */ name) =>
  * @returns {NativePlan}
  */
 export function planNativeSources(meta, known) {
-  const { tried = [], unreadable = [], noFolder = false } = known;
+  const { tried = [], unreadable = [], noFolder = false, allowPaths = true } = known;
+  const ignored = (/** @type {string|null|undefined} */ name) => !allowPaths && Boolean(name) && leavesFolder(/** @type {string} */ (name));
+  const ignoredPaths = [...(meta.bibliography ?? []), meta.csl].filter(ignored);
+  const usable = {
+    ...meta,
+    bibliography: (meta.bibliography ?? []).filter((entry) => !ignored(entry)),
+    csl: ignored(meta.csl) ? null : meta.csl,
+  };
   const files = /** @type {StoredFile[]} */ ((known.files ?? []).map((f) => ({ ...f, text: f.text ?? '' })));
   const bibName = (/** @type {string} */ entry) => withEnding(entry, '.bib');
   const styleName = (/** @type {string} */ entry) => withEnding(entry, '.csl');
   /** @type {(file: StoredFile, entry: string) => boolean} */
   const samePath = (file, entry) => file.name === (file.kind === 'bib' ? bibName(entry) : styleName(entry));
-  const plan = planSources(meta, files, samePath);
+  const plan = planSources(usable, files, samePath);
 
   const unread = plan.unfound.filter((entry) => !tried.includes(bibName(entry)));
   const unfound = plan.unfound.filter((entry) => !unread.includes(entry));
   const usedFile = 'file' in plan.style ? plan.style.file.name : null;
-  const { csl } = meta;
+  const { csl } = usable;
   const storedStyle = csl ? files.find((f) => f.kind === 'csl' && samePath(f, csl)) : null;
 
   /** @type {string|null} */
@@ -203,8 +222,10 @@ export function planNativeSources(meta, known) {
     fallbackLang: DEFAULT_LOCALE,
     missing,
     missingNotes,
+    ignoredPaths: /** @type {string[]} */ (ignoredPaths),
     done: unread.length === 0 && nextStyle === null,
   };
   if (plan.styleError && !nextStyle) out.styleError = plan.styleError;
+  if (plan.styleNote && !nextStyle) out.styleNote = plan.styleNote;
   return out;
 }

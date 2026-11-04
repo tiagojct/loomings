@@ -20,6 +20,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A References menu adds and removes `.bib` and `.csl` files and sets the
   bibliography, the style and the language in the frontmatter. Undo reverts a
   choice. Files stay in this browser. Nothing is uploaded.
+- A share link carries the cited entries in one `references:` line, so the
+  reader sees the same citations and the reference list with no file. The
+  writer's document does not change. The QR code and the print QR code use the
+  same text. A `.bib` of the same name at the reader wins, and an absent `.bib`
+  gives no note when the link holds every cited entry. A bundled style travels
+  by name. An uploaded style stays with the writer: the status says so, and the
+  reader gets the default style with a note.
+- A style that is not found no longer leaves the citations as keys. The default
+  style formats them, and the note says so.
 - About credits citeproc-js, citation-js and the CSL styles and locales.
   The citeproc-js and citation-js licences are in `public/licenses/`.
 - On a narrow screen, toolbar menus open under their button. The scrolling
@@ -54,6 +63,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cited key with no entry goes first. Return or a double click inserts
   `[@key]` with the web's rule, as one Undo step, and the focus goes back to
   the editor.
+- Share links carry the cited entries, as on the web: Copy Share Link, Show
+  QR Code and the print QR code. The menu command waits up to 10 seconds, then
+  gives the plain text and a status. A document from Open Share Link does not
+  read an absolute or parent path in `bibliography:` or `csl:` until it is
+  saved, and a note says so.
 - About credits citeproc-js, citation-js and the CSL styles and locales.
   `LICENSE-citation-js` is next to the citation bundle.
 

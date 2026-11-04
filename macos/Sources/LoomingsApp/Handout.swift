@@ -34,7 +34,7 @@ enum Handout {
     }
 
     /// - Parameters:
-    ///   - source: the document, for the share link.
+    ///   - source: the text of the share link.
     ///   - markdown: the text to print, with its citations formatted.
     static func view(source: String, markdown: String, documentURL: URL?, title: String) -> HandoutTextView {
         let manager = ThemeManager.shared

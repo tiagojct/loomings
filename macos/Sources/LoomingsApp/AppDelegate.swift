@@ -452,9 +452,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         do {
             let payload = try ShareLink.parse(string: value)
             applySharedAppearance(payload)
-            let document = LoomingsDocument()
-            document.pendingText = payload.text
-            document.displayName = "Shared Document"
+            let document = LoomingsDocument.shared(text: payload.text)
             NSDocumentController.shared.addDocument(document)
             document.makeWindowControllers()
             document.showWindows()

@@ -42,7 +42,8 @@ describe('resolveSources', () => {
     const r = await resolveSources(meta({ csl: 'nope.csl' }), [], assets);
     expect(r.missing).toEqual(['nope.csl']);
     expect(r.styleXml).toBe('<bundled chicago-author-date/>');
-    expect(r.styleError).toMatch(/chicago-author-date/);
+    expect(r.styleNote).toMatch(/chicago-author-date/);
+    expect(r.styleError).toBeUndefined();
   });
   it('names the parent of a dependent style', async () => {
     const files = [{ name: 'dep.csl', kind: 'csl', text: DEP.replace('/apa"', '/zzz"') }];
@@ -127,7 +128,8 @@ describe('planNativeSources', () => {
   it('reports a style that is not found, and falls back to the default', () => {
     const plan = planNativeSources(meta({ csl: 'nope.csl' }), { tried: ['nope.csl'] });
     expect(plan).toMatchObject({ stylePath: null, styleId: 'chicago-author-date', missing: ['nope.csl'], done: true });
-    expect(plan.styleError).toMatch(/chicago-author-date/);
+    expect(plan.styleNote).toMatch(/chicago-author-date/);
+    expect(plan.styleError).toBeUndefined();
   });
   it('reads the parent of a dependent style from the same folder, then uses it', () => {
     const dep = { name: 'csl/dep.csl', kind: 'csl', text: DEP.replace('/apa"', '/own"') };
@@ -170,5 +172,27 @@ describe('planNativeSources', () => {
   it('says when a file exists but cannot be read as text', () => {
     const plan = planNativeSources(meta({ bibliography: ['latin.bib'] }), { tried: ['latin.bib'], unreadable: ['latin.bib'] });
     expect(plan.missingNotes['latin.bib']).toBe('The file latin.bib could not be read as text.');
+  });
+});
+
+describe('planNativeSources: allowPaths', () => {
+  const closed = { allowPaths: false, noFolder: true };
+
+  it('does not ask for an absolute or a parent path', () => {
+    const entries = ['/Users/me/a.bib', '~/b.bib', '../c.bib', 'd/../../e.bib', 'C:\\f.bib'];
+    const plan = planNativeSources({ bibliography: entries, csl: '/Users/me/s.csl' }, closed);
+    expect(plan).toMatchObject({
+      bibFiles: [], stylePath: null, styleId: 'chicago-author-date', missing: [], done: true,
+      ignoredPaths: [...entries, '/Users/me/s.csl'],
+    });
+    expect(plan.styleNote).toBeUndefined();
+  });
+  it('still asks for a name in the folder', () => {
+    const plan = planNativeSources({ bibliography: ['refs.bib', 'a/b.bib', 'a..b.bib'], csl: 'apa' }, closed);
+    expect(plan).toMatchObject({ bibFiles: ['refs.bib', 'a/b.bib', 'a..b.bib'], stylePath: 'apa.csl', ignoredPaths: [], done: false });
+  });
+  it('reads every path by default', () => {
+    const plan = planNativeSources({ bibliography: ['/Users/me/a.bib'], csl: '../s.csl' }, {});
+    expect(plan).toMatchObject({ bibFiles: ['/Users/me/a.bib'], stylePath: '../s.csl', ignoredPaths: [], done: false });
   });
 });

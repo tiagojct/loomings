@@ -334,7 +334,11 @@ final class EditorWindowController: NSWindowController,
     // MARK: - Citations
 
     func updateCitations() {
-        citations.update(source: editor.source, documentURL: loomingsDocument?.citationDocumentURL)
+        citations.update(
+            source: editor.source,
+            documentURL: loomingsDocument?.citationDocumentURL,
+            allowPaths: citationPathsAllowed
+        )
         syncRightColumn()
         guard citations.isActive else {
             editor.clearCitations()
@@ -702,10 +706,17 @@ final class EditorWindowController: NSWindowController,
         }
     }
 
+    /// False for a document from a share link that is not saved.
+    private var citationPathsAllowed: Bool {
+        loomingsDocument?.cameFromShareLink != true
+    }
+
     /// One export, fixed when it starts: the page and the share link come from
     /// one text, and the writer can type during the wait.
     private struct ExportPage {
         let source: String
+        /// The text of the share link: the source with the cited entries.
+        let shareSource: String
         let markdown: String
         let documentURL: URL?
         let title: String
@@ -715,6 +726,7 @@ final class EditorWindowController: NSWindowController,
         let source = editor.source
         return ExportPage(
             source: source,
+            shareSource: source,
             markdown: citations.report(for: source)?.markdownSource ?? source,
             documentURL: loomingsDocument?.linkBaseURL,
             title: exportTitle
@@ -725,25 +737,51 @@ final class EditorWindowController: NSWindowController,
     /// formatted when the report for this text comes in time. The closure
     /// holds this window controller on purpose: a window that closes during
     /// the wait still gets its file, and the export limit bounds the wait.
-    /// - Parameter statusFirst: the status comes before `body`, not after it.
-    private func withExportPage(statusFirst: Bool = false, _ body: @escaping (ExportPage) -> Void) {
+    /// - Parameters:
+    ///   - statusFirst: the status comes before `body`, not after it.
+    ///   - sharing: the page has a share link. Its text gets the rest of the
+    ///     export limit, so one export never waits twice.
+    private func withExportPage(
+        statusFirst: Bool = false,
+        sharing: Bool = false,
+        _ body: @escaping (ExportPage) -> Void
+    ) {
         let start = currentPage
-        citations.exportText(
-            source: start.source,
-            documentURL: loomingsDocument?.citationDocumentURL
-        ) { text in
+        let started = Date()
+        let finish = { (text: CitationController.ExportText, shared: CitationController.ShareText?) in
             let page = ExportPage(
                 source: start.source,
+                shareSource: shared?.source ?? start.source,
                 markdown: text.markdown,
                 documentURL: start.documentURL,
                 title: start.title
             )
-            self.exportStatus = text.status
+            let status = text.status ?? shared?.failure
+            self.exportStatus = status
             if statusFirst {
-                self.showExportStatus(text.status) { body(page) }
+                self.showExportStatus(status) { body(page) }
             } else {
                 body(page)
-                self.showExportStatus(text.status)
+                self.showExportStatus(status)
+            }
+        }
+        citations.exportText(
+            source: start.source,
+            documentURL: loomingsDocument?.citationDocumentURL,
+            allowPaths: citationPathsAllowed
+        ) { text in
+            guard sharing else {
+                finish(text, nil)
+                return
+            }
+            let left = max(0, self.citations.exportLimit - Date().timeIntervalSince(started))
+            self.citations.shareText(
+                source: start.source,
+                documentURL: self.loomingsDocument?.citationDocumentURL,
+                allowPaths: self.citationPathsAllowed,
+                limit: left
+            ) { shared in
+                finish(text, shared)
             }
         }
     }
@@ -1507,7 +1545,7 @@ final class EditorWindowController: NSWindowController,
 
     private func makeHandout(_ page: ExportPage) -> HandoutTextView {
         Handout.view(
-            source: page.source,
+            source: page.shareSource,
             markdown: page.markdown,
             documentURL: page.documentURL,
             title: page.title
@@ -1609,7 +1647,7 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "pdf") else {
             return
         }
-        withExportPage { page in
+        withExportPage(sharing: true) { page in
             // No panel, so this run is not modal.
             if Handout.writePDF(self.makeHandout(page), to: url) { return }
             let alert = NSAlert()
@@ -1620,7 +1658,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     @objc func printPreview(_ sender: Any?) {
-        withExportPage(statusFirst: true) { page in
+        withExportPage(statusFirst: true, sharing: true) { page in
             self.print(page)
         }
     }
@@ -1659,19 +1697,37 @@ final class EditorWindowController: NSWindowController,
         editor.insertLink()
     }
 
+    /// Calls `body` with the text for a share link. The main thread does not
+    /// wait. A document with no citation keys gets its answer at once.
+    private func withShareText(_ body: @escaping (CitationController.ShareText) -> Void) {
+        citations.shareText(
+            source: editor.source,
+            documentURL: loomingsDocument?.citationDocumentURL,
+            allowPaths: citationPathsAllowed,
+            completion: body
+        )
+    }
+
     @objc func copyShareLink(_ sender: Any?) {
-        do {
-            let url = try ShareLink.url(
-                for: editor.source,
-                family: ThemeManager.shared.family,
-                mode: ThemeManager.shared.mode.rawValue
-            )
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(url.absoluteString, forType: .string)
-        } catch {
-            NSAlert(error: error).runModal()
+        withShareText { shared in
+            do {
+                let url = try ShareLink.url(
+                    for: shared.source,
+                    family: ThemeManager.shared.family,
+                    mode: ThemeManager.shared.mode.rawValue
+                )
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                self.shareStatus = shared.failure ?? shared.styleNote
+                if let status = self.shareStatus { self.markupOverlay.show(status) }
+            } catch {
+                self.present(NSAlert(error: error))
+            }
         }
     }
+
+    /// What the last Copy Share Link had to say.
+    private(set) var shareStatus: String?
 
     func jump(to item: OutlineItem) {
         let length = editor.textView.textStorage?.length ?? 0
@@ -1928,9 +1984,9 @@ final class EditorWindowController: NSWindowController,
     }
 
     /// The share link as a QR code to show a room, or why there is none.
-    private func qrContent() -> (image: NSImage?, caption: String) {
+    private func qrContent(for source: String) -> (image: NSImage?, caption: String) {
         let manager = ThemeManager.shared
-        guard let url = try? ShareLink.url(for: editor.source, family: manager.family, mode: manager.mode.rawValue),
+        guard let url = try? ShareLink.url(for: source, family: manager.family, mode: manager.mode.rawValue),
               let code = ShareQRCode.image(for: url, side: 720) else {
             return (nil, "This document is too long for a QR code; share it as a link.")
         }
@@ -1938,7 +1994,15 @@ final class EditorWindowController: NSWindowController,
     }
 
     @objc private func showQRCode(_ sender: Any?) {
-        let content = qrContent()
+        withShareText { shared in
+            if let failure = shared.failure { self.markupOverlay.show(failure) }
+            self.showQRCode(for: shared.source)
+        }
+    }
+
+    private func showQRCode(for source: String) {
+        qrSourceForTesting = source
+        let content = qrContent(for: source)
         var rows: [NSView] = []
         if let image = content.image {
             let view = NSImageView(image: image)
@@ -1954,7 +2018,9 @@ final class EditorWindowController: NSWindowController,
     }
 
     var shareMenuTitlesForTesting: [String] { makeShareMenu().items.map(\.title) }
-    var qrCaptionForTesting: String? { qrContent().caption }
+    var qrCaptionForTesting: String? { qrContent(for: editor.source).caption }
+    private(set) var qrSourceForTesting: String?
+    func showQRCodeForTesting() { showQRCode(nil) }
 }
 
 /// Owns the preview renderer and its block cache. Only ever called on the

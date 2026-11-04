@@ -53,6 +53,7 @@ function unavailableReport(source) {
  *
  * @param {{spawn?: () => Worker}} [options]  tests replace the worker
  * @returns {{update(source: string): void, setSources(sources: CitationSources): Promise<void>,
+ *   shareSource(source: string): Promise<string|null>,
  *   onReport(listener: (report: CitationReport) => void): void, latest(): CitationReport|null}}
  */
 export function createCitationClient({ spawn = startWorker } = {}) {
@@ -66,6 +67,14 @@ export function createCitationClient({ spawn = startWorker } = {}) {
   let report = null;
   /** @type {((report: CitationReport) => void)[]} */
   const listeners = [];
+  let shareId = 0;
+  /** @type {Map<number, (shared: string|null) => void>} */
+  const shares = new Map();
+
+  function endShares() {
+    for (const resolve of shares.values()) resolve(null);
+    shares.clear();
+  }
 
   const deliver = (/** @type {number} */ answer, /** @type {CitationReport} */ next) => {
     if (answer !== id) return;
@@ -76,10 +85,19 @@ export function createCitationClient({ spawn = startWorker } = {}) {
   function start() {
     try {
       const started = spawn();
-      started.onmessage = (event) => deliver(event.data.id, event.data.report);
+      started.onmessage = (event) => {
+        const { share, shared } = event.data;
+        if (share === undefined) {
+          deliver(event.data.id, event.data.report);
+          return;
+        }
+        shares.get(share)?.(shared);
+        shares.delete(share);
+      };
       started.onerror = () => {
         started.terminate();
         worker = null;
+        endShares();
         if (text !== null) update(text);
       };
       return started;
@@ -115,6 +133,17 @@ export function createCitationClient({ spawn = startWorker } = {}) {
       if (request !== sourcesRequest) return;
       post({ id: ++id, type: 'sources', sources: full });
       if (text !== null) update(text);
+    },
+
+    // This answer does not go through the ids of the reports, so a new report
+    // cannot drop it. Null: the text cannot be made.
+    shareSource(source) {
+      return new Promise((resolve) => {
+        const share = ++shareId;
+        shares.set(share, resolve);
+        post({ share, type: 'share', text: source });
+        if (!worker) endShares();
+      });
     },
 
     onReport(listener) {

@@ -23,6 +23,7 @@ function fakeClient() {
   c.onReport = (listener) => c.listeners.push(listener);
   c.setSources = vi.fn(async (s) => { c.sources.push(s); });
   c.update = vi.fn((text) => { c.asked.push(text); });
+  c.shareSource = vi.fn(async (text) => `${text}shared`);
   c.answer = (r) => { for (const l of c.listeners) l(r); };
   return c;
 }
@@ -761,5 +762,88 @@ describe('documentMeta and documentUsesCitations', () => {
     expect(documentUsesCitations('---\nreferences: [{"id": "a"}]\n---\n')).toBe(true);
     expect(documentUsesCitations('---\ncsl: apa\n---\n')).toBe(false);
     expect(documentUsesCitations('# Title\n')).toBe(false);
+  });
+});
+
+describe('shareSource', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const answered = async (client, r = report()) => {
+    await settle();
+    client.answer(r);
+    await settle();
+  };
+
+  it('loads nothing for a document with no citation keys', async () => {
+    const { doc, options } = setup();
+    await expect(doc.shareSource('# Plain\n')).resolves.toEqual({ text: '# Plain\n', failure: null, styleNote: null });
+    expect(options.client).not.toHaveBeenCalled();
+    expect(options.assets).not.toHaveBeenCalled();
+    expect(options.listFiles).not.toHaveBeenCalled();
+  });
+
+  it('asks the worker after its sources are in', async () => {
+    const { doc, client } = setup();
+    const shared = doc.shareSource(WITH_BIB);
+    await settle();
+    expect(client.sources).toHaveLength(1);
+    expect(client.shareSource).not.toHaveBeenCalled();
+    await answered(client);
+    expect(client.shareSource).toHaveBeenCalledWith(WITH_BIB);
+    await expect(shared).resolves.toEqual({ text: `${WITH_BIB}shared`, failure: null, styleNote: null });
+  });
+
+  it('falls back to the plain text with a status at the limit', async () => {
+    const { doc, client } = setup();
+    const shared = doc.shareSource(WITH_BIB);
+    await vi.advanceTimersByTimeAsync(10000);
+    await expect(shared).resolves.toEqual({
+      text: WITH_BIB, failure: 'The citations are not ready; the link has only the text', styleNote: null,
+    });
+    await answered(client);
+    expect(client.update).toHaveBeenCalled();
+  });
+
+  it('falls back when the worker gives no text or no client loads', async () => {
+    const { doc, client } = setup();
+    client.shareSource = vi.fn(async () => null);
+    const shared = doc.shareSource(WITH_BIB);
+    await answered(client);
+    await expect(shared).resolves.toMatchObject({ text: WITH_BIB, failure: expect.stringContaining('not ready') });
+    const offline = setup({ client: vi.fn(async () => { throw new Error('offline'); }) });
+    const late = offline.doc.shareSource(WITH_BIB);
+    await settle();
+    await expect(late).resolves.toMatchObject({ text: WITH_BIB, failure: expect.stringContaining('not ready') });
+  });
+
+  it('falls back when the sources cannot load', async () => {
+    const { doc, client } = setup({ listFiles: vi.fn(async () => { throw new Error('storage'); }) });
+    const shared = doc.shareSource(WITH_BIB);
+    await answered(client);
+    expect(client.shareSource).not.toHaveBeenCalled();
+    await expect(shared).resolves.toMatchObject({ text: WITH_BIB, failure: expect.stringContaining('not ready') });
+  });
+
+  it('says when a style stays here', async () => {
+    const { doc, client } = setup();
+    const head = '---\nbibliography: refs.bib\ncsl: styles/mine.csl\n---\n\nText [@a].\n';
+    client.shareSource = vi.fn(async (text) => text.replace('---\n\n', 'references: [{"id":"a"}]\n---\n\n'));
+    const shared = doc.shareSource(head);
+    await answered(client);
+    await expect(shared).resolves.toMatchObject({
+      failure: null,
+      styleNote: 'The link carries the citations; the style mine.csl stays here, so the reader sees the default style.',
+    });
+  });
+
+  it('gives a flush its report in the same run', async () => {
+    const { doc, client } = setup();
+    const flushed = doc.flush(WITH_BIB);
+    const shared = doc.shareSource(WITH_BIB);
+    const r = report('both');
+    await answered(client, r);
+    await expect(flushed).resolves.toBe(r);
+    await expect(shared).resolves.toMatchObject({ text: `${WITH_BIB}shared` });
   });
 });

@@ -4,6 +4,7 @@ import { createSession } from './session.js';
 import { createEngine } from './engine.js';
 import { applyCitations } from './output.js';
 import { renderMarkdown } from '../markdown.js';
+import { decodeDoc, payloadFromUrl, shareUrl } from '../share.js';
 
 // Each engine start parses a style and a locale. Under load this takes more than the default 5 s.
 vi.setConfig({ testTimeout: 20000 });
@@ -510,5 +511,118 @@ describe('locales', () => {
     const s = ready({ localeXml: locale('pt-PT'), fallbackLocaleXml: locale('en-US'), lang: 'pt-PT' });
     const r = s.analyse(doc('[@smith2019, chap. 3]'));
     expect(r.citations[0].html).toMatch(/Cap[ií]tulo 3/i);
+  });
+});
+
+describe('shareSource', () => {
+  const referencesOf = (text) => /^references: (.*)$/m.exec(text)?.[1];
+  const receiver = (extra = {}) => ready({ bibs: [], missing: ['refs.bib'], ...extra });
+
+  it('adds one line with the cited entries only', () => {
+    const src = doc('One [@jacome2020] and [@nokey].\n', 'title: T\nbibliography: refs.bib');
+    const shared = ready().shareSource(src);
+    const line = referencesOf(shared);
+    expect(shared.split('\n').length).toBe(src.split('\n').length + 1);
+    const entries = JSON.parse(line);
+    expect(entries.map((e) => e.id)).toEqual(['jacome2020']);
+    expect(entries[0].title).toBe('Mobile health tools');
+    expect(shared).toContain('bibliography: refs.bib');
+    expect(shared.endsWith('---\nOne [@jacome2020] and [@nokey].\n')).toBe(true);
+  });
+  it('keeps only the fields that citeproc needs', () => {
+    const s = createSession();
+    s.setSources(sources({ bibs: [{ name: 'refs.bib', text: '@article{a, title={T}, abstract={Long}, keywords={x}, year=2020}' }] }));
+    const [entry] = JSON.parse(referencesOf(s.shareSource(doc('[@a]'))));
+    expect(Object.keys(entry).sort()).toEqual(['id', 'issued', 'title', 'type']);
+  });
+  it('gives back a document with no citations, or with no citation keys', () => {
+    const s = ready();
+    expect(s.shareSource(doc('No citations.\n'))).toBe(doc('No citations.\n'));
+    expect(s.shareSource('[@jacome2020]\n')).toBe('[@jacome2020]\n');
+    expect(s.shareSource('---\ntitle: T\n---\n[@jacome2020]\n')).toBe('---\ntitle: T\n---\n[@jacome2020]\n');
+    expect(s.shareSource(doc('[@nokey]\n'))).toBe(doc('[@nokey]\n'));
+  });
+  it('replaces a references line, and keeps the cited entries of that line', () => {
+    const head = `bibliography: refs.bib\nreferences: [{"id":"own","title":"Issue #1"},{"id":"uncited","title":"U"}]\ntags: [a, b]`;
+    const shared = ready().shareSource(doc('[@own] [@smith2019]\n', head));
+    expect(shared.match(/^references:/gm).length).toBe(1);
+    expect(JSON.parse(referencesOf(shared)).map((e) => e.id)).toEqual(['smith2019', 'own']);
+    expect(shared).toContain('\ntags: [a, b]\n');
+  });
+  it('lets a .bib entry win over a references entry of the same key', () => {
+    const head = 'bibliography: refs.bib\nreferences: [{"id":"smith2019","title":"Old"}]';
+    expect(JSON.parse(referencesOf(ready().shareSource(doc('[@smith2019]\n', head))))[0].title).toBe('A book');
+  });
+  it('stays on one line when a title has a line separator', () => {
+    const s = ready();
+    const head = `references: [{"id":"a","title":"One\\u2028two"}]`;
+    const shared = s.shareSource(doc('[@a]\n', head));
+    expect(JSON.parse(referencesOf(shared))[0].title).toBe('One\u2028two');
+    expect(referencesOf(shared)).not.toContain('\u2028');
+  });
+  it('does not format', () => {
+    const makeEngine = vi.fn();
+    const s = createSession({ makeEngine });
+    s.setSources(sources());
+    s.shareSource(doc('[@jacome2020]\n'));
+    expect(makeEngine).not.toHaveBeenCalled();
+  });
+  it('throws when the frontmatter has no room for the line', () => {
+    const filler = Array.from({ length: 47 }, (_, i) => `k${i}: v`).join('\n');
+    expect(() => ready().shareSource(doc('[@smith2019]\n', `bibliography: refs.bib\n${filler}`))).toThrow(/line 50/);
+  });
+
+  it('round trip: the receiver has no files and gets the same citation texts', async () => {
+    const src = doc('# Title\n\nOne [@jacome2020] and [see @smith2019, p. 3].\n');
+    const writer = ready();
+    const shared = writer.shareSource(src);
+    const received = await decodeDoc(payloadFromUrl(await shareUrl(shared, 'https://example.test/app/')));
+    expect(received).toBe(shared);
+    const before = writer.analyse(src);
+    const after = receiver().analyse(received);
+    expect(after.citations.map((c) => c.html)).toEqual(before.citations.map((c) => c.html));
+    expect(after.bibliography).toEqual(before.bibliography);
+    expect(after.notes).toEqual([]);
+    expect(before.citations[0].html).toContain('Jácome');
+  });
+  it('round trip: a .bib of the same name at the receiver wins', () => {
+    const shared = ready().shareSource(doc('[@smith2019]\n'));
+    const r = createSession();
+    r.setSources(sources({ bibs: [{ name: 'refs.bib', text: '@book{smith2019, author={Other, Eva}, title={B}, year=1999}' }] }));
+    expect(r.analyse(shared).citations[0].html).toContain('Other');
+  });
+  it('keeps the note for an absent .bib when a cited key is not in references', () => {
+    const shared = ready().shareSource(doc('[@smith2019] [@late2024]\n'));
+    const r = receiver().analyse(shared);
+    expect(r.notes.map((n) => n.message)).toEqual(['The file refs.bib is missing.', 'No entry called late2024.']);
+  });
+  it('keeps the note for an absent .bib when no references line exists', () => {
+    expect(receiver().analyse(doc('No citations.\n')).notes.map((n) => n.message)).toEqual(['The file refs.bib is missing.']);
+  });
+  it('is silent for an absent .bib with a better note, when references holds the keys', () => {
+    const shared = ready().shareSource(doc('[@smith2019]\n'));
+    expect(receiver({ missingNotes: { 'refs.bib': 'No folder.' } }).analyse(shared).notes).toEqual([]);
+  });
+  it('keeps the note for a path that the app did not read', () => {
+    const shared = ready().shareSource(doc('[@smith2019]\n', 'bibliography: /Users/me/refs.bib'));
+    const r = ready({ bibs: [], ignoredPaths: ['/Users/me/refs.bib'] }).analyse(shared);
+    expect(r.notes).toEqual([{
+      from: 0, to: 0, line: 0, file: '/Users/me/refs.bib',
+      message: 'This shared document names a file on this computer. It stays unread until you save the document.',
+    }]);
+  });
+  it('formats with the default style, and keeps the notes, when a style is not found', () => {
+    const head = 'bibliography: refs.bib\ncsl: mine.csl';
+    const shared = ready().shareSource(doc('[@smith2019]\n', head));
+    const r = receiver({
+      styleXml: style('chicago-author-date'), missing: ['refs.bib', 'mine.csl'],
+      styleNote: 'The style mine.csl was not found. The default style is chicago-author-date.',
+    }).analyse(shared);
+    expect(r.citations[0].html).toBe('(Smith 2019)');
+    // The first note gives the writer a way to choose the file.
+    expect(r.notes.map((n) => n.message)).toEqual([
+      'The file mine.csl is missing.',
+      'The style mine.csl was not found. The default style is chicago-author-date.',
+    ]);
   });
 });

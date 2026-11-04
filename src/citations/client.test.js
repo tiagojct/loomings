@@ -115,4 +115,31 @@ describe('createCitationClient', () => {
     const client = createCitationClient({ spawn: fakeWorker });
     expect(() => { client.onReport = () => {}; }).toThrow(TypeError);
   });
+  it('gives the shared text for its own request, apart from the reports', async () => {
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    const seen = [];
+    client.onReport((r) => seen.push(r));
+    client.update('a');
+    const first = client.shareSource('one');
+    const second = client.shareSource('two');
+    const asked = w.sent.filter((m) => m.type === 'share');
+    expect(asked.map((m) => m.text)).toEqual(['one', 'two']);
+    w.onmessage({ data: { share: asked[1].share, shared: 'two shared' } });
+    w.onmessage({ data: { share: asked[0].share, shared: null } });
+    await expect(second).resolves.toBe('two shared');
+    await expect(first).resolves.toBe(null);
+    expect(seen).toEqual([]);
+    w.answer(w.sent[0].id, report('a'));
+    expect(seen).toEqual([report('a')]);
+  });
+  it('gives null for a share when no worker can start or a worker fails', async () => {
+    const none = createCitationClient({ spawn: () => { throw new Error('no'); } });
+    await expect(none.shareSource('a')).resolves.toBe(null);
+    const w = fakeWorker();
+    const client = createCitationClient({ spawn: () => w });
+    const pending = client.shareSource('a');
+    w.onerror();
+    await expect(pending).resolves.toBe(null);
+  });
 });

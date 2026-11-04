@@ -57,13 +57,17 @@ public enum CitationSourceReader {
     }
 
     /// Call this off the main thread.
-    /// - Parameter folder: the document's folder, or nil when it has none.
+    /// - Parameters:
+    ///   - folder: the document's folder, or nil when it has none.
+    ///   - allowPaths: false for a document from a share link that is not
+    ///     saved. No name can then leave the folder.
     public static func load(
         _ request: CitationSourceRequest,
         folder: URL?,
+        allowPaths: Bool = true,
         engine: any CitationEngineProtocol
     ) throws -> CitationLoad {
-        var known = CitationKnownFiles(noFolder: folder == nil)
+        var known = CitationKnownFiles(noFolder: folder == nil, allowPaths: allowPaths)
         var texts: [String: String] = [:]
         var stamps: [URL: FileStamp] = [:]
 
@@ -111,7 +115,9 @@ public enum CitationSourceReader {
             lang: plan.lang,
             missing: plan.missing,
             missingNotes: plan.missingNotes,
-            styleError: plan.styleError
+            styleError: plan.styleError,
+            styleNote: plan.styleNote,
+            ignoredPaths: plan.ignoredPaths
         )
     }
 

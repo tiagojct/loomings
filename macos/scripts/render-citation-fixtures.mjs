@@ -7,9 +7,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCitationMeta, setCitationMeta } from '../../src/citations/frontmatter.js';
 import { planNativeSources } from '../../src/citations/library.js';
-import { filterLibrary } from '../../src/citations/panel.js';
+import { filterLibrary, shareStyleNote } from '../../src/citations/panel.js';
 import { createSession } from '../../src/citations/session.js';
 import { checkStyle } from '../../src/citations/style.js';
+import { encodeDoc } from '../../src/share.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const citations = join(here, '..', '..', 'src', 'citations');
@@ -139,7 +140,7 @@ Volta ao início [@silva2021].
       style: 'apa',
       locale: 'en-US',
       missing: ['nowhere'],
-      styleError: 'The style nowhere was not found. The default style is chicago-author-date.',
+      styleNote: 'The style nowhere was not found. The default style is chicago-author-date.',
     },
   },
   {
@@ -217,7 +218,45 @@ const plans = [
     known: { files: [{ name: 'a/refs.bib', kind: 'bib' }, { name: 'b/refs.bib', kind: 'bib' }], tried: ['a/refs.bib', 'b/refs.bib', 'c/refs.bib'] },
   },
   { request: { bibliography: ['latin.bib'], csl: 'own.csl', lang: null }, known: { files: [{ name: 'own.csl', kind: 'csl', text: OWN_STYLE }], tried: ['latin.bib', 'own.csl'], unreadable: ['latin.bib'] } },
+  { request: { bibliography: ['refs.bib', '/abs/more.bib', '../up.bib', '~/home.bib'], csl: '/abs/own.csl', lang: null }, known: { noFolder: true, allowPaths: false, tried: ['refs.bib'] } },
 ];
+
+// A share link made on the web and read in JavaScriptCore with no files.
+const shareCases = [
+  {
+    name: 'apa',
+    source: '---\nbibliography: refs.bib\ncsl: apa\n---\nOne [@jacome2020] and [see @smith2019, p. 3].\n',
+    style: 'apa',
+    missing: ['refs.bib'],
+    styleNote: null,
+  },
+  {
+    name: 'uploaded-style',
+    source: '---\nbibliography: refs.bib\ncsl: own-journal.csl\n---\nOne [@silva2021].\n',
+    style: 'chicago-author-date',
+    missing: ['refs.bib', 'own-journal.csl'],
+    styleNote: 'The style own-journal.csl was not found. The default style is chicago-author-date.',
+  },
+];
+
+async function shareCase({ name, source, style, missing, styleNote }) {
+  const writer = createSession();
+  writer.setSources({ bibs: [refs], styleXml: styleFile(style), localeXml: localeFile('en-US'), lang: 'en-US' });
+  const shared = writer.shareSource(source);
+  const reader = createSession();
+  reader.setSources({
+    bibs: [], styleXml: styleFile(style), localeXml: localeFile('en-US'), lang: 'en-US', missing, styleNote,
+  });
+  const received = reader.analyse(shared);
+  return {
+    name, source, style, missing, styleNote, shared,
+    payload: await encodeDoc(shared),
+    linkNote: shareStyleNote(shared),
+    html: received.citations.map((c) => c.html),
+    bibliography: received.bibliography,
+    notes: received.notes.map((n) => n.message),
+  };
+}
 
 // The Swift filter must give the same keys as filterLibrary.
 const library = [
@@ -237,6 +276,7 @@ const filterQueries = ['', '   ', 'jacome', 'JÁCOME', 'saude ciencia', 'CIÊNCI
 
 const out = {
   plans: plans.map((p) => ({ ...p, plan: planNativeSources(p.request, p.known) })),
+  shares: await Promise.all(shareCases.map(shareCase)),
   reports: cases.map((c) => ({ ...c, report: report(c) })),
   meta: metaSources.map((source) => ({ source, meta: readCitationMeta(source) })),
   edits: edits.map((e) => ({ ...e, result: setCitationMeta(e.source, e.key, e.value) })),

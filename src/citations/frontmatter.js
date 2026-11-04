@@ -35,7 +35,8 @@ function findKey(lines, last, key) {
     if (!m || m[1] !== key) continue;
     let end = n;
     let flow = false;
-    const open = stripComment(m[2]).trim();
+    // The value of `references` is JSON, so a number sign in a title is text.
+    const open = (key === 'references' ? stripJsonComment : stripComment)(m[2]).trim();
     if (open[0] === '[' && open[open.length - 1] !== ']') {
       // A flow list can go on over lines of any indent, up to its closing bracket.
       let joined = open;
