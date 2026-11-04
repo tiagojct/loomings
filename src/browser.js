@@ -467,11 +467,6 @@ export async function saveCitationFile({ name, kind, text, handle, encodingNote 
     const record = { name, kind, text, saved: Date.now() };
     if (handle) record.handle = handle;
     if (encodingNote) record.encodingNote = true;
-    // Names are equal when they differ only in case: replace the old record.
-    const lower = name.toLowerCase();
-    for (const old of await listCitationFiles()) {
-      if (old.name !== name && old.name.toLowerCase() === lower) await idbDelete(CITATION_PREFIX + old.name);
-    }
     try {
       await idbSet(CITATION_PREFIX + name, record);
     } catch (err) {
@@ -479,6 +474,12 @@ export async function saveCitationFile({ name, kind, text, handle, encodingNote 
       if (!handle) throw err;
       delete record.handle;
       await idbSet(CITATION_PREFIX + name, record);
+    }
+    // Names are equal when they differ only in case: remove the old record
+    // only after the new one is written.
+    const lower = name.toLowerCase();
+    for (const old of await listCitationFiles()) {
+      if (old.name !== name && old.name.toLowerCase() === lower) await idbDelete(CITATION_PREFIX + old.name);
     }
     return true;
   } catch (_) {
@@ -632,8 +633,8 @@ export function initDragDrop(onFile, onFail, onCitationFile) {
           if (handle && handle.kind !== 'file') handle = null;
         }
         const { text, encodingNote } = await readCitationFile(handle ? await handle.getFile() : first);
-        await saveCitationFile({ name: first.name, kind, text, handle, encodingNote });
-        onCitationFile({ name: first.name, kind, text, encodingNote });
+        const stored = await saveCitationFile({ name: first.name, kind, text, handle, encodingNote });
+        onCitationFile({ name: first.name, kind, text, encodingNote, stored });
         return;
       }
       if (item?.kind === 'file' && item.getAsFileSystemHandle) {

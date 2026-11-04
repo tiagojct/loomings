@@ -205,6 +205,18 @@ describe('citation files', () => {
     expect(list.map((f) => f.name)).toEqual(['refs.bib']);
   });
 
+  it('keeps the old record when the replacing write fails', async () => {
+    await saveCitationFile({ name: 'Refs.bib', kind: 'bib', text: 'old' });
+    const realPut = IDBObjectStore.prototype.put;
+    IDBObjectStore.prototype.put = () => { throw new Error('quota'); };
+    try {
+      expect(await saveCitationFile({ name: 'refs.bib', kind: 'bib', text: 'new' })).toBe(false);
+    } finally {
+      IDBObjectStore.prototype.put = realPut;
+    }
+    expect((await listCitationFiles()).map((f) => [f.name, f.text])).toEqual([['Refs.bib', 'old']]);
+  });
+
   it('decodes a UTF-16 BOM as UTF-16', () => {
     const le = new Uint8Array([0xff, 0xfe, 0x61, 0x00, 0xe7, 0x00]);
     const be = new Uint8Array([0xfe, 0xff, 0x00, 0x61, 0x00, 0xe7]);
@@ -227,7 +239,7 @@ describe('citation files', () => {
     const mkFile = (name, text) => ({ name, text: async () => text, arrayBuffer: async () => new TextEncoder().encode(text).buffer });
     await drop(mkFile('drop.bib', '@a{}'));
     await drop(mkFile('note.md', '# hi'));
-    expect(cites).toEqual([{ name: 'drop.bib', kind: 'bib', text: '@a{}', encodingNote: false }]);
+    expect(cites).toEqual([{ name: 'drop.bib', kind: 'bib', text: '@a{}', encodingNote: false, stored: true }]);
     expect(docs).toEqual([{ path: 'note.md', content: '# hi' }]);
     expect((await listCitationFiles()).map((f) => f.name)).toContain('drop.bib');
   });
