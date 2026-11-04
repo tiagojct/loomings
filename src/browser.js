@@ -126,6 +126,22 @@ export async function idbDelete(key) {
   });
 }
 
+/**
+ * All values whose key starts with a prefix.
+ * @param {string} prefix
+ * @returns {Promise<any[]>}
+ */
+async function idbValuesWithPrefix(prefix) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readonly');
+    const req = tx.objectStore(STORE).getAll(IDBKeyRange.bound(prefix, prefix + '\uffff'));
+    req.onsuccess = () => resolve(req.result ?? []);
+    req.onerror = () => reject(req.error);
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 // ==========================
 //  Window-ish
 // ==========================
@@ -381,6 +397,156 @@ export async function deleteDocument(id) {
 }
 
 // ==========================
+//  Citation files (.bib and .csl) kept in this browser
+//  Key `citation-file:<name>`. A record is {name, kind, text, handle?,
+//  encodingNote?, saved}. Every call is contained: a failure gives an
+//  empty list or false, never a rejection.
+// ==========================
+
+const CITATION_PREFIX = 'citation-file:';
+const CITATION_FILE = /\.(bib|csl)$/i;
+const CITATION_TYPES = { description: 'Citation files', accept: { 'text/plain': ['.bib', '.csl', '.xml'] } };
+
+/**
+ * Decodes the bytes of a citation file. UTF-8 first, then windows-1252.
+ * A BOM is removed.
+ *
+ * @param {ArrayBuffer|Uint8Array} bytes
+ * @returns {{text: string, encodingNote: boolean}}
+ */
+export function decodeCitationBytes(bytes) {
+  let text;
+  let encodingNote = false;
+  try {
+    text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch (_) {
+    text = new TextDecoder('windows-1252').decode(bytes);
+    encodingNote = true;
+  }
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  return { text, encodingNote };
+}
+
+/** @param {string} name @returns {'bib'|'csl'|null} */
+function citationKind(name) {
+  const m = CITATION_FILE.exec(name);
+  return m ? /** @type {'bib'|'csl'} */ (m[1].toLowerCase()) : null;
+}
+
+/** @param {File} file */
+async function readCitationFile(file) {
+  return decodeCitationBytes(await file.arrayBuffer());
+}
+
+/**
+ * @returns {Promise<{name: string, kind: 'bib'|'csl', text: string, handle?: any, encodingNote?: boolean, saved: number}[]>}
+ */
+export async function listCitationFiles() {
+  try {
+    const all = await idbValuesWithPrefix(CITATION_PREFIX);
+    return all
+      .filter((r) => r && typeof r.name === 'string' && typeof r.text === 'string')
+      .sort((a, b) => a.name.localeCompare(b.name));
+  } catch (_) {
+    return [];
+  }
+}
+
+/**
+ * @param {{name: string, kind: 'bib'|'csl', text: string, handle?: any, encodingNote?: boolean}} file
+ * @returns {Promise<boolean>} false when the write failed
+ */
+export async function saveCitationFile({ name, kind, text, handle, encodingNote }) {
+  try {
+    /** @type {any} */
+    const record = { name, kind, text, saved: Date.now() };
+    if (handle) record.handle = handle;
+    if (encodingNote) record.encodingNote = true;
+    try {
+      await idbSet(CITATION_PREFIX + name, record);
+    } catch (err) {
+      // A handle the browser cannot clone: keep the text without it.
+      if (!handle) throw err;
+      delete record.handle;
+      await idbSet(CITATION_PREFIX + name, record);
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/** @param {string} name @returns {Promise<boolean>} */
+export async function deleteCitationFile(name) {
+  try {
+    await idbDelete(CITATION_PREFIX + name);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Reads the stored handles again. It never asks for permission: a handle
+// without granted read permission is skipped. Returns the changed names.
+export async function refreshCitationFiles() {
+  /** @type {string[]} */
+  const changed = [];
+  for (const rec of await listCitationFiles()) {
+    if (!rec.handle) continue;
+    try {
+      if ((await rec.handle.queryPermission({ mode: 'read' })) !== 'granted') continue;
+      const { text, encodingNote } = await readCitationFile(await rec.handle.getFile());
+      if (text === rec.text) continue;
+      const saved = await saveCitationFile({ name: rec.name, kind: rec.kind, text, handle: rec.handle, encodingNote });
+      if (saved) changed.push(rec.name);
+    } catch (_) {
+      // A moved or deleted file: keep the stored copy.
+    }
+  }
+  return changed;
+}
+
+/**
+ * Lets the user pick a .bib or .csl file and stores it.
+ * @returns {Promise<{name: string, kind: 'bib'|'csl', text: string, encodingNote: boolean}|null>}
+ *   null on cancel, on a wrong file type or when the read failed
+ */
+export async function pickCitationFile() {
+  try {
+    /** @type {any} */
+    let handle = null;
+    /** @type {File|null} */
+    let file = null;
+    if (hasFileSystemAccess) {
+      try {
+        [handle] = await window.showOpenFilePicker({ types: [CITATION_TYPES] });
+      } catch (err) {
+        if (err?.name === 'AbortError') return null;
+        throw err;
+      }
+      file = await handle.getFile();
+    } else {
+      file = await new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.bib,.csl,.xml';
+        input.addEventListener('change', () => resolve(input.files?.[0] ?? null));
+        input.addEventListener('cancel', () => resolve(null));
+        input.click();
+      });
+    }
+    if (!file) return null;
+    const kind = citationKind(file.name);
+    if (!kind) return null;
+    const { text, encodingNote } = await readCitationFile(file);
+    await saveCitationFile({ name: file.name, kind, text, handle, encodingNote });
+    return { name: file.name, kind, text, encodingNote };
+  } catch (_) {
+    return null;
+  }
+}
+
+// ==========================
 //  Scratch (crash recovery)
 // ==========================
 
@@ -436,18 +602,33 @@ export function registerServiceWorker(onUpdateReady) {
 //  Drag-and-drop to open
 // ==========================
 
-export function initDragDrop(onFile, onFail) {
+export function initDragDrop(onFile, onFail, onCitationFile) {
   document.addEventListener('dragover', (e) => e.preventDefault());
   document.addEventListener('drop', async (e) => {
     e.preventDefault(); // otherwise the browser navigates the tab to the file
     const item = e.dataTransfer?.items?.[0];
     try {
+      const first = e.dataTransfer?.files?.[0];
+      // A .bib or .csl file goes to the citation store. A document keeps its path.
+      if (first && citationKind(first.name) && onCitationFile) {
+        const kind = /** @type {'bib'|'csl'} */ (citationKind(first.name));
+        /** @type {any} */
+        let handle = null;
+        if (item?.kind === 'file' && item.getAsFileSystemHandle) {
+          try { handle = await item.getAsFileSystemHandle(); } catch (_) {}
+          if (handle && handle.kind !== 'file') handle = null;
+        }
+        const { text, encodingNote } = await readCitationFile(handle ? await handle.getFile() : first);
+        await saveCitationFile({ name: first.name, kind, text, handle, encodingNote });
+        onCitationFile({ name: first.name, kind, text, encodingNote });
+        return;
+      }
       if (item?.kind === 'file' && item.getAsFileSystemHandle) {
         const payload = await openHandle(await item.getAsFileSystemHandle());
         if (payload) onFile(payload);
         return;
       }
-      const file = e.dataTransfer?.files?.[0];
+      const file = first;
       if (!file || !OPENABLE.test(file.name)) return;
       currentFileHandle = null;
       onFile({ path: file.name, content: await file.text() });

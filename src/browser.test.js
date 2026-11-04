@@ -5,6 +5,7 @@ import {
   putDocument, getDocument, listDocuments, deleteDocument,
   saveScratch, readScratch, clearScratch,
   openHandle, saveFile, forgetFile,
+  listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
 } from './browser.js';
 
 describe('browser storage adapter (IndexedDB)', () => {
@@ -125,5 +126,70 @@ describe('browser storage adapter (IndexedDB)', () => {
     // through to a download, which this node environment cannot do.
     await expect(saveFile('notes.md', 'text')).rejects.toThrow();
     expect(writes).toBe(0);
+  });
+});
+
+describe('citation files', () => {
+  beforeEach(async () => {
+    _resetDbForTesting();
+    for (const f of await listCitationFiles()) await deleteCitationFile(f.name);
+  });
+
+  it('saves, lists and deletes', async () => {
+    await saveCitationFile({ name: 'refs.bib', kind: 'bib', text: '@a{}' });
+    await saveCitationFile({ name: 'x.csl', kind: 'csl', text: '<style/>' });
+    const list = await listCitationFiles();
+    expect(list.map((f) => f.name).sort()).toEqual(['refs.bib', 'x.csl']);
+    expect(list.find((f) => f.name === 'refs.bib').text).toBe('@a{}');
+    await deleteCitationFile('refs.bib');
+    expect((await listCitationFiles()).map((f) => f.name)).toEqual(['x.csl']);
+  });
+
+  it('replaces a file with the same name', async () => {
+    await saveCitationFile({ name: 'refs.bib', kind: 'bib', text: 'one' });
+    await saveCitationFile({ name: 'refs.bib', kind: 'bib', text: 'two' });
+    const list = await listCitationFiles();
+    expect(list).toHaveLength(1);
+    expect(list[0].text).toBe('two');
+  });
+
+  it('contains a failed write', async () => {
+    const orig = indexedDB.open;
+    indexedDB.open = () => { throw new Error('blocked'); };
+    _resetDbForTesting();
+    try {
+      expect(await saveCitationFile({ name: 'a.bib', kind: 'bib', text: 'x' })).toBe(false);
+      expect(await listCitationFiles()).toEqual([]);
+      await expect(deleteCitationFile('a.bib')).resolves.toBe(false);
+    } finally {
+      indexedDB.open = orig;
+      _resetDbForTesting();
+    }
+  });
+
+  it('decodes utf-8, strips a BOM and falls back to windows-1252', () => {
+    expect(decodeCitationBytes(new Uint8Array([0xef, 0xbb, 0xbf, 0x61]))).toEqual({ text: 'a', encodingNote: false });
+    expect(decodeCitationBytes(new TextEncoder().encode('ção'))).toEqual({ text: 'ção', encodingNote: false });
+    expect(decodeCitationBytes(new Uint8Array([0x61, 0xe7]))).toEqual({ text: 'aç', encodingNote: true });
+  });
+
+  it('refreshes a stored handle when permission is granted and the text changed', async () => {
+    const mk = (perm, text) => ({
+      kind: 'file', name: 'r.bib',
+      queryPermission: async () => perm,
+      getFile: async () => ({ arrayBuffer: async () => new TextEncoder().encode(text).buffer }),
+    });
+    // Real handles clone into IndexedDB. A fake with functions does not, so keep it by reference.
+    const realClone = globalThis.structuredClone;
+    globalThis.structuredClone = (v) => (v && typeof v === 'object' && 'handle' in v ? { ...realClone({ ...v, handle: undefined }), handle: v.handle } : realClone(v));
+    try {
+    await saveCitationFile({ name: 'r.bib', kind: 'bib', text: 'old', handle: mk('granted', 'new') });
+    await saveCitationFile({ name: 's.bib', kind: 'bib', text: 'same', handle: mk('granted', 'same') });
+    await saveCitationFile({ name: 'p.bib', kind: 'bib', text: 'old', handle: mk('prompt', 'new') });
+    const changed = await refreshCitationFiles();
+    expect(changed).toEqual(['r.bib']);
+    expect((await listCitationFiles()).find((f) => f.name === 'r.bib').text).toBe('new');
+    expect((await listCitationFiles()).find((f) => f.name === 'p.bib').text).toBe('old');
+    } finally { globalThis.structuredClone = realClone; }
   });
 });
