@@ -2,10 +2,12 @@
 // Loomings — citation scanner
 // Finds Pandoc citations in Markdown source: [@key], [@a; @b],
 // [see @key, p. 3], [-@key] and bare @key. Code, HTML, link destinations,
-// autolinks and the frontmatter are skipped. Offsets are UTF-16 code units.
+// autolinks, plain URLs and the frontmatter are skipped. Offsets are UTF-16
+// code units.
 // Pure: no DOM, no Node or browser APIs (JavaScriptCore runs it too).
 // ========================================
 
+import MarkdownIt from 'markdown-it';
 import { parseSource } from '../teaching/parse.js';
 
 /**
@@ -36,6 +38,33 @@ function escaped(text, index) {
 
 const DEFINITION = /^ {0,3}\[[^\]]*\]:/;
 
+// The preview links plain URLs and parseSource does not, so a key inside a URL
+// is found here. This is the same linkify-it setup as the preview.
+const LINKIFY = new MarkdownIt().linkify;
+
+/**
+ * Makes a test for "this offset is inside a plain URL". Each line is matched
+ * once, and only when a key is on it.
+ *
+ * @param {string} source
+ * @returns {(offset: number) => boolean}
+ */
+function urlTest(source) {
+  let from = 0;
+  let to = -1;
+  /** @type {{index: number, lastIndex: number}[]} */
+  let links = [];
+  return (offset) => {
+    if (offset < from || offset >= to) {
+      from = source.lastIndexOf('\n', offset) + 1;
+      const end = source.indexOf('\n', offset);
+      to = end < 0 ? source.length : end;
+      links = LINKIFY.match(source.slice(from, to)) ?? [];
+    }
+    return links.some((link) => offset >= from + link.index && offset < from + link.lastIndex);
+  };
+}
+
 const LABELS = /** @type {Record<string, string>} */ ({
   'p.': 'page', 'pp.': 'page', 'chap.': 'chapter', 'sec.': 'section', 'vol.': 'volume', 'fig.': 'figure',
 });
@@ -61,14 +90,20 @@ function readSuffix(rest) {
 
 /**
  * @param {string} inner  the text between the brackets
+ * @param {number} offset  the offset of `inner` in the source
+ * @param {(offset: number) => boolean} inUrl
  * @returns {CiteItem[]}
  */
-function readItems(inner) {
+function readItems(inner, offset, inUrl) {
   /** @type {CiteItem[]} */
   const items = [];
+  let at = offset;
   for (const part of inner.split(';')) {
+    const start = at;
+    at += part.length + 1;
     const m = ITEM_KEY.exec(part);
     if (!m || escaped(part, m.index + m[1].length)) continue;
+    if (inUrl(start + m.index + m[1].length)) continue;
     const prefix = part.slice(0, m.index);
     items.push({
       key: m[2],
@@ -133,6 +168,7 @@ function skipRanges(source) {
 export function scanCitations(source) {
   if (!source.includes('@')) return [];
   const skips = skipRanges(source);
+  const inUrl = urlTest(source);
   /** @type {Citation[]} */
   const found = [];
   let k = 0;
@@ -152,7 +188,7 @@ export function scanCitations(source) {
       continue;
     }
     if (m[2] !== undefined) {
-      if (escaped(source, start)) continue;
+      if (escaped(source, start) || inUrl(start)) continue;
       found.push({
         from: start, to: end, bare: true,
         items: [{ key: m[2], prefix: '', suffix: '', locator: null, label: null, suppressAuthor: false }],
@@ -160,7 +196,7 @@ export function scanCitations(source) {
       continue;
     }
     if (escaped(source, start)) { SCAN.lastIndex = end; continue; }
-    const items = readItems(m[1]);
+    const items = readItems(m[1], start + 1, inUrl);
     const next = source[end];
     if (!items.length) { SCAN.lastIndex = start + 1; continue; }
     if (next === '(' || next === '[' || next === '{') { SCAN.lastIndex = end; continue; }

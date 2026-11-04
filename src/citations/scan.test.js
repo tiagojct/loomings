@@ -147,3 +147,33 @@ describe('scanCitations', () => {
     expect(r.map((c) => src.slice(c.from, c.to))).toEqual(['[@a]', '[@b]']);
   });
 });
+
+describe('scanCitations: plain URLs', () => {
+  const keys = (src) => scanCitations(src).flatMap((c) => c.items.map((it) => it.key));
+  it('skips a bare key in a URL', () => {
+    expect(keys('See https://x.org/@good for this.')).toEqual([]);
+    expect(keys('Hello https://mastodon.social/@tiago')).toEqual([]);
+  });
+  it('skips a bare key in a URL with no scheme', () => {
+    expect(keys('www.x.org/@a')).toEqual([]);
+    expect(keys('x.org/@a')).toEqual([]);
+  });
+  it('skips mailto text', () => {
+    expect(keys('Write to mailto:team@x.org now')).toEqual([]);
+    expect(keys('mailto:a.b@x.org')).toEqual([]);
+  });
+  it('skips a key inside brackets that is part of a URL', () => {
+    expect(keys('[https://x.org/@a]')).toEqual([]);
+    expect(keys('[see https://x.org/@a; @good]')).toEqual(['good']);
+  });
+  it('keeps citations next to a URL', () => {
+    expect(keys('https://x.org/a @good and [@also] www.x.org')).toEqual(['good', 'also']);
+    expect(keys('https://x.org/@a\n@good')).toEqual(['good']);
+    expect(keys('@good https://x.org/@a')).toEqual(['good']);
+  });
+  it('gives offsets on the source for a later line', () => {
+    const src = 'www.x.org/@a\n\nText @good.';
+    const [c] = scanCitations(src);
+    expect(src.slice(c.from, c.to)).toBe('@good');
+  });
+});
