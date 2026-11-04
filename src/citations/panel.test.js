@@ -392,4 +392,14 @@ describe('createReferencesView', () => {
     expect(view.tab).toBe('references');
     expect(view.apply(split(true))).toEqual({ tabs: true, references: true, switched: true });
   });
+
+  it('forgets the request of the menu with a new document, and keeps the tab', () => {
+    const view = createReferencesView();
+    view.ask();
+    expect(view.apply(split(false)).tabs).toBe(true);
+    view.newDocument();
+    expect(view.apply(split(false))).toEqual({ tabs: false, references: false, switched: true });
+    expect(view.tab).toBe('references');
+    expect(view.apply(split(true))).toEqual({ tabs: true, references: true, switched: true });
+  });
 });

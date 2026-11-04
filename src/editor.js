@@ -1356,6 +1356,7 @@ async function fileNew() {
   await session.discardScratch();
   attachedChecks = null;
   citations.reset();
+  referencesView.newDocument();
   setText('');
   currentFile = null;
   currentDocId = null;
@@ -1488,7 +1489,11 @@ function setViewMode(mode) {
 function togglePreview() { setViewMode(effectiveViewMode() === 'preview' ? 'editor' : 'preview'); }
 function toggleSplit()   { setViewMode(viewMode === 'split' ? 'editor' : 'split'); }
 
-narrowMq.addEventListener('change', applyViewMode);
+narrowMq.addEventListener('change', () => {
+  // The dialog is for a narrow screen. Close it first: it holds the panel.
+  referencesModal?.close();
+  applyViewMode();
+});
 
 // ==========================
 //  Scroll sync (split mode)
@@ -2351,6 +2356,7 @@ async function loadFile(payload) {
   // Checks come only with a bundled lesson; any other document drops them.
   attachedChecks = payload.attached || null;
   citations.reset();
+  referencesView.newDocument();
   setText(payload.content);
   currentDocId = payload.docId || null;
   if (!payload.path) {

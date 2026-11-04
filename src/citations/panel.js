@@ -292,7 +292,7 @@ export function metaChange(text, key, value) {
  */
 export function createReferencesView() {
   let tab = 'preview';
-  // The References menu asked for the tabs, so they stay with any document.
+  // The References menu asked for the tabs, so they stay with this document.
   let asked = false;
   let shown = false;
   return {
@@ -305,6 +305,7 @@ export function createReferencesView() {
       asked = true;
       tab = 'references';
     },
+    newDocument() { asked = false; },
     /**
      * @param {{split: boolean, uses: () => boolean}} state
      *   split: the view is Split. uses: the document has citations.
