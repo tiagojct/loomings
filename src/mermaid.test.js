@@ -74,9 +74,10 @@ describe('mermaid renderer', () => {
 
   it('a hostile label produces no script element', async () => {
     const el = root(
-      fence('graph TD; A[&lt;script&gt;alert(1)&lt;/script&gt;] --&gt; B[&lt;img src=x onerror=alert(1)&gt;]'),
+      fence('graph TD\n A["&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;"] --&gt; B'),
     );
     await m.renderDiagrams(el);
+    expect(el.querySelector('svg')).not.toBeNull();
     expect(el.querySelector('script')).toBeNull();
     expect(el.querySelector('[onerror]')).toBeNull();
   });
