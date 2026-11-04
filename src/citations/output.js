@@ -86,7 +86,8 @@ export function cleanCitationHtml(html) {
   while ((m = TAG.exec(input)) !== null) {
     out += cleanText(input.slice(at, m.index));
     at = TAG.lastIndex;
-    const name = m[2].toLowerCase();
+    const lower = m[2].toLowerCase();
+    const name = lower === 'em' ? 'i' : lower;
     if (m[1]) {
       let i = open.length - 1;
       while (i >= 0 && open[i].name !== name) i--;

@@ -10,6 +10,11 @@ describe('cleanCitationHtml', () => {
     expect(cleanCitationHtml('<span style="color:red" onclick="x()">a</span>')).toBe('<span>a</span>');
     expect(cleanCitationHtml('<i class="x">a</i>')).toBe('<i>a</i>');
   });
+  it('maps em to i', () => {
+    expect(cleanCitationHtml('<em>a</em>')).toBe('<i>a</i>');
+    expect(cleanCitationHtml('<EM class="x">a</EM>')).toBe('<i>a</i>');
+    expect(toMarkdown('<em>a</em>')).toBe('*a*');
+  });
   it('keeps an anchor with a safe href only', () => {
     expect(cleanCitationHtml('<a href="https://x.org/a" onclick="y()">t</a>')).toBe('<a href="https://x.org/a">t</a>');
   });

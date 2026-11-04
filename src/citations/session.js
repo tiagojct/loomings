@@ -11,6 +11,7 @@ import { escapeHtml } from '../html.js';
 import { parseBibliography } from './bib.js';
 import { createEngine } from './engine.js';
 import { readCitationMeta } from './frontmatter.js';
+import { sanitiseItem } from './item.js';
 import { cleanCitationHtml, toMarkdown, withReferences } from './output.js';
 import { scanCitations } from './scan.js';
 import { checkStyle } from './style.js';
@@ -23,16 +24,20 @@ import { checkStyle } from './style.js';
  *   fallbackLocaleXml?: string, lang?: string, missing?: string[], styleError?: string|null}} CitationSources
  * @typedef {{key: string, authors: string, year: string, title: string, cited: boolean}} LibraryEntry
  * @typedef {{from: number, to: number, message: string, file?: string, line?: number}} CitationNote
- *   A note about a file has from 0, to 0, `file` and `line` (from 0).
+ *   A note about a file has from 0, to 0, `line` (from 0) and `file` when a file is named.
  * @typedef {{citations: CitationOutput[], bibliography: string[], bibliographyMarkdown: string,
  *   library: LibraryEntry[], notes: CitationNote[], markdownSource: string}} CitationReport
- * @typedef {{signature: string, error?: {file: boolean, message: string},
+ * @typedef {{signature: string, error?: {style: boolean, message: string}, styleErrors: boolean[],
  *   html: string[], markdown: string[], bibliography: string[], bibliographyMarkdown: string}} Rendered
  */
 
 const message = (/** @type {unknown} */ e) => (e instanceof Error ? e.message : String(e));
-const fileNote = (/** @type {string} */ file, /** @type {number} */ line, /** @type {string} */ text) =>
-  ({ from: 0, to: 0, file, line, message: text });
+const fileNote = (/** @type {string|null|undefined} */ file, /** @type {number} */ line, /** @type {string} */ text) =>
+  (file ? { from: 0, to: 0, file, line, message: text } : { from: 0, to: 0, line, message: text });
+
+// Citeproc writes these as text when a style prints nothing for an entry.
+const ERROR_TEXT = /\[CSL STYLE ERROR:[^\]]*\]|\[NO_PRINTED_FORM\]/g;
+const hasWords = (/** @type {string} */ html) => /[\p{L}\p{N}]/u.test(html.replace(/<[^>]*>/g, ''));
 
 /** @param {string} source @returns {CitationReport} */
 function emptyReport(source) {
@@ -47,8 +52,11 @@ function emptyReport(source) {
  * @returns {Omit<LibraryEntry, 'cited'>}
  */
 function libraryEntry(item) {
-  const people = Array.isArray(item.author) ? item.author : [];
-  const authors = people.map((p) => p?.family ?? p?.literal).filter((n) => typeof n === 'string').join(', ');
+  const names = (/** @type {unknown} */ list) => (Array.isArray(list) ? list : [])
+    .map((p) => p?.family ?? p?.literal)
+    .filter((n) => typeof n === 'string')
+    .join(', ');
+  const authors = names(item.author) || names(item.editor);
   const year = item.issued?.['date-parts']?.[0]?.[0];
   return {
     key: item.id,
@@ -56,6 +64,13 @@ function libraryEntry(item) {
     year: typeof year === 'number' || typeof year === 'string' ? String(year) : '',
     title: typeof item.title === 'string' ? item.title : '',
   };
+}
+
+/** @param {number} dropped  the count from readCitationMeta */
+function droppedMessage(dropped) {
+  if (dropped < 0) return 'The references line is not a JSON list. It is not used.';
+  if (dropped === 1) return 'One entry in references has no text id. It is not used.';
+  return `${dropped} entries in references have no text id. They are not used.`;
 }
 
 /** @param {Citation[]} citations */
@@ -110,10 +125,13 @@ export function createSession({ makeEngine = createEngine } = {}) {
   let engineStale = true;
   /** @type {Rendered|null} */
   let rendered = null;
+  /** @type {Set<string>} keys that citeproc rejects with this engine setup */
+  const rejected = new Set();
 
   const invalidate = () => {
     engineStale = true;
     rendered = null;
+    rejected.clear();
   };
 
   /** @param {{name: string, text: string}[]} bibs */
@@ -134,7 +152,7 @@ export function createSession({ makeEngine = createEngine } = {}) {
   /** @param {CslItem[]} references  a .bib entry wins over one of these */
   function mergeItems(references) {
     const byId = new Map();
-    for (const item of [...bibItems, ...references]) if (!byId.has(item.id)) byId.set(item.id, item);
+    for (const item of [...bibItems, ...references.map(sanitiseItem)]) if (!byId.has(item.id)) byId.set(item.id, item);
     items = [...byId.values()];
     known = new Set(byId.keys());
     library = items.map(libraryEntry).sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
@@ -144,6 +162,9 @@ export function createSession({ makeEngine = createEngine } = {}) {
       invalidate();
     }
   }
+
+  /** True for a key with an entry that citeproc accepts. */
+  const usable = (/** @type {string} */ key) => known.has(key) && !rejected.has(key);
 
   /** @returns {ReturnType<typeof createEngine>|null} */
   function currentEngine() {
@@ -157,7 +178,7 @@ export function createSession({ makeEngine = createEngine } = {}) {
           localeXml: /** @type {string} */ (sources.localeXml),
           fallbackLocaleXml: sources.fallbackLocaleXml,
           lang: sources.lang ?? 'en-US',
-          items,
+          items: rejected.size ? items.filter((item) => !rejected.has(item.id)) : items,
         });
       } catch (e) {
         engineError = message(e);
@@ -167,58 +188,85 @@ export function createSession({ makeEngine = createEngine } = {}) {
   }
 
   /**
-   * After a render throws: try each key alone to find the entry at fault.
+   * After a render throws: try each key alone to find the entries at fault.
    *
    * @param {NonNullable<typeof engine>} active
    * @param {Citation[]} citations
-   * @returns {string|null}
+   * @returns {string[]}
    */
-  function blame(active, citations) {
+  function failingKeys(active, citations) {
     const tried = new Set();
+    /** @type {string[]} */
+    const failing = [];
     for (const c of citations) {
       for (const item of c.items) {
-        if (tried.has(item.key) || !known.has(item.key)) continue;
+        if (tried.has(item.key) || !usable(item.key)) continue;
         tried.add(item.key);
         try {
-          active.render([{ from: 0, to: 0, bare: false, items: [item] }]);
+          active.render([{ ...c, items: [item] }]);
         } catch {
-          return `Entry ${item.key} cannot be formatted.`;
+          failing.push(item.key);
         }
       }
     }
-    return null;
+    return failing;
   }
 
   /**
+   * @param {string} signature
+   * @param {{texts: string[], bibliography: string[]}} output
+   * @returns {Rendered}
+   */
+  function finish(signature, { texts, bibliography }) {
+    const clear = texts.map((t) => t.replace(ERROR_TEXT, '').trim());
+    const html = clear.map((t) => (hasWords(t) ? cleanCitationHtml(t) : ''));
+    const entries = bibliography.map((b) => cleanCitationHtml(b.replace(ERROR_TEXT, '')).trim());
+    return {
+      signature,
+      styleErrors: texts.map((t) => t.search(ERROR_TEXT) >= 0),
+      html,
+      markdown: html.map(toMarkdown),
+      bibliography: entries,
+      bibliographyMarkdown: entries.map(toMarkdown).join('\n\n'),
+    };
+  }
+
+  /**
+   * Renders the citations. A key that makes citeproc throw is rejected, and the
+   * engine is built again without it, so the other citations stay formatted.
+   *
    * @param {Citation[]} citations
    * @returns {Rendered}
    */
   function render(citations) {
     const signature = signatureOf(citations);
     if (rendered && rendered.signature === signature) return rendered;
-    const none = { html: [], markdown: [], bibliography: [], bibliographyMarkdown: '' };
-    const active = currentEngine();
-    if (!active) {
-      rendered = { signature, ...none, error: { file: true, message: /** @type {string} */ (engineError) } };
-      return rendered;
+    const none = { styleErrors: [], html: [], markdown: [], bibliography: [], bibliographyMarkdown: '' };
+    let failure = '';
+    // Two passes: one to find the bad keys, one to render without them.
+    for (let pass = 0; pass < 2; pass++) {
+      if (!citations.some((c) => c.items.some((it) => usable(it.key)))) {
+        rendered = { signature, ...none };
+        return rendered;
+      }
+      const active = currentEngine();
+      if (!active) {
+        rendered = { signature, ...none, error: { style: true, message: /** @type {string} */ (engineError) } };
+        return rendered;
+      }
+      try {
+        rendered = finish(signature, active.render(citations));
+        return rendered;
+      } catch (e) {
+        failure = message(e);
+        // A failed render can leave the engine in a bad state.
+        engineStale = true;
+        const failing = failingKeys(active, citations);
+        if (!failing.length) break;
+        for (const key of failing) rejected.add(key);
+      }
     }
-    try {
-      const { texts, bibliography } = active.render(citations);
-      const html = texts.map(cleanCitationHtml);
-      const entries = bibliography.map((b) => cleanCitationHtml(b).trim());
-      rendered = {
-        signature,
-        html,
-        markdown: html.map(toMarkdown),
-        bibliography: entries,
-        bibliographyMarkdown: entries.map(toMarkdown).join('\n\n'),
-      };
-    } catch (e) {
-      const text = blame(active, citations) ?? message(e);
-      rendered = { signature, ...none, error: { file: false, message: text } };
-      // A failed render can leave the engine in a bad state.
-      engineStale = true;
-    }
+    rendered = { signature, ...none, error: { style: false, message: failure } };
     return rendered;
   }
 
@@ -228,7 +276,7 @@ export function createSession({ makeEngine = createEngine } = {}) {
    */
   function build(source) {
     const meta = readCitationMeta(source);
-    if (!meta.bibliography.length && !meta.references.length) return emptyReport(source);
+    if (!meta.bibliography.length && !meta.references.length && !meta.referencesDropped) return emptyReport(source);
 
     const refs = JSON.stringify(meta.references);
     if (refs !== referencesKey) {
@@ -241,9 +289,10 @@ export function createSession({ makeEngine = createEngine } = {}) {
     const missingFiles = sources.missing ?? [];
     /** @type {CitationNote[]} */
     const notes = [...bibNotes, ...missingFiles.map((name) => fileNote(name, 0, `The file ${name} is missing.`))];
-    const styleFile = meta.csl ?? '';
-    const unknownKeys = (/** @type {Citation} */ c) =>
-      [...new Set(c.items.map((it) => it.key).filter((key) => !known.has(key)))];
+    if (meta.referencesDropped) notes.push(fileNote(null, 0, droppedMessage(meta.referencesDropped)));
+    const styleFile = meta.csl;
+    const unusableKeys = (/** @type {Citation} */ c) =>
+      [...new Set(c.items.map((it) => it.key).filter((key) => !usable(key)))];
     const literal = (/** @type {Citation} */ c, /** @type {string[]} */ missing) => {
       const text = source.slice(c.from, c.to);
       return { from: c.from, to: c.to, html: escapeHtml(text), markdown: text, missing };
@@ -265,16 +314,19 @@ export function createSession({ makeEngine = createEngine } = {}) {
       return report(citations.map((c) => literal(c, [])));
     }
 
-    const needsEngine = citations.some((c) => c.items.some((it) => known.has(it.key)));
-    const result = needsEngine ? render(citations) : null;
+    const result = citations.length ? render(citations) : null;
     if (result?.error) {
-      notes.push(fileNote(result.error.file ? styleFile : '', 0, result.error.message));
+      notes.push(fileNote(result.error.style ? styleFile : null, 0, result.error.message));
       return report(citations.map((c) => literal(c, [])));
     }
 
     const output = citations.map((c, i) => {
-      const missing = unknownKeys(c);
-      for (const key of missing) notes.push({ from: c.from, to: c.to, message: `No entry called ${key}.` });
+      const missing = unusableKeys(c);
+      for (const key of missing) {
+        const text = known.has(key) ? `Entry ${key} cannot be formatted.` : `No entry called ${key}.`;
+        notes.push({ from: c.from, to: c.to, message: text });
+      }
+      if (result?.styleErrors[i]) notes.push({ from: c.from, to: c.to, message: 'The style cannot format this citation.' });
       if (!result?.html[i]) return literal(c, missing);
       return { from: c.from, to: c.to, html: result.html[i], markdown: result.markdown[i], missing };
     });

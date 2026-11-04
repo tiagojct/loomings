@@ -9,7 +9,9 @@ import { splitLines, frontmatterLines } from '../teaching/parse.js';
 
 /**
  * @typedef {{bibliography: string[], csl: string|null, lang: string|null,
- *   title: string|null, references: Record<string, unknown>[]}} CitationMeta
+ *   title: string|null, references: Record<string, unknown>[], referencesDropped: number}} CitationMeta
+ *   referencesDropped: the entries removed because they have no string id, or
+ *   -1 when the value of `references` is not a JSON list.
  * @typedef {import('../teaching/parse.js').SourceLine} SourceLine
  */
 
@@ -184,14 +186,18 @@ function scalarValue(lines, entry) {
   return list.length ? list[0] : null;
 }
 
-/** @param {string} text @returns {Record<string, unknown>[]} */
+/**
+ * @param {string} text
+ * @returns {{entries: Record<string, unknown>[], dropped: number}}
+ */
 function parseReferences(text) {
   try {
     const value = JSON.parse(text);
-    if (!Array.isArray(value)) return [];
-    return value.filter((e) => e !== null && typeof e === 'object' && !Array.isArray(e) && typeof e.id === 'string');
+    if (!Array.isArray(value)) return { entries: [], dropped: -1 };
+    const entries = value.filter((e) => e !== null && typeof e === 'object' && !Array.isArray(e) && typeof e.id === 'string');
+    return { entries, dropped: value.length - entries.length };
   } catch {
-    return [];
+    return { entries: [], dropped: -1 };
   }
 }
 
@@ -203,7 +209,7 @@ function parseReferences(text) {
  */
 export function readCitationMeta(source) {
   /** @type {CitationMeta} */
-  const meta = { bibliography: [], csl: null, lang: null, title: null, references: [] };
+  const meta = { bibliography: [], csl: null, lang: null, title: null, references: [], referencesDropped: 0 };
   const lines = splitLines(source);
   const fm = frontmatterLines(lines);
   if (!fm) return meta;
@@ -217,7 +223,15 @@ export function readCitationMeta(source) {
   const title = first('reference-section-title');
   if (title) meta.title = scalarValue(lines, title);
   const refs = first('references');
-  if (refs) meta.references = parseReferences(stripJsonComment(refs.rest).trim());
+  if (refs) {
+    const text = stripJsonComment(refs.rest).trim();
+    // An empty key with no lines under it holds nothing, so nothing is dropped.
+    if (text || refs.end > refs.start) {
+      const parsed = parseReferences(text);
+      meta.references = parsed.entries;
+      meta.referencesDropped = parsed.dropped;
+    }
+  }
   return meta;
 }
 

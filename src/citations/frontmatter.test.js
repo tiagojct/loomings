@@ -1,7 +1,25 @@
 import { describe, it, expect } from 'vitest';
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 
-const empty = { bibliography: [], csl: null, lang: null, title: null, references: [] };
+const empty = { bibliography: [], csl: null, lang: null, title: null, references: [], referencesDropped: 0 };
+
+describe('readCitationMeta: dropped references', () => {
+  const read = (line) => readCitationMeta(`---\n${line}\n---\n`);
+  it('counts entries with no string id', () => {
+    expect(read('references: [{"id":1}]')).toMatchObject({ references: [], referencesDropped: 1 });
+    expect(read('references: [5,{"id":"a"},null,[1]]')).toMatchObject({ references: [{ id: 'a' }], referencesDropped: 3 });
+  });
+  it('gives -1 when the value is not a JSON list', () => {
+    expect(read('references: [{"id":')).toMatchObject({ references: [], referencesDropped: -1 });
+    expect(read('references: {"id":"a"}')).toMatchObject({ references: [], referencesDropped: -1 });
+    expect(read('references:\n  - id: a')).toMatchObject({ references: [], referencesDropped: -1 });
+  });
+  it('gives 0 for good entries, an empty key and no key', () => {
+    expect(read('references: [{"id":"a"}]').referencesDropped).toBe(0);
+    expect(read('references:').referencesDropped).toBe(0);
+    expect(read('csl: a').referencesDropped).toBe(0);
+  });
+});
 
 describe('readCitationMeta', () => {
   it('returns defaults without frontmatter', () => {

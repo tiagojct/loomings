@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createSession } from './session.js';
 import { createEngine } from './engine.js';
+import { applyCitations } from './output.js';
+import { renderMarkdown } from '../markdown.js';
 
 const style = (n) => readFileSync(new URL(`./styles/${n}.csl`, import.meta.url), 'utf8');
 const locale = (l) => readFileSync(new URL(`./locales/locales-${l}.xml`, import.meta.url), 'utf8');
@@ -170,7 +172,13 @@ describe('analyse: library', () => {
   });
   it('does not fail on odd field shapes in a references entry', () => {
     const r = ready({ bibs: [] }).analyse(doc('text', 'references: [{"id":"x","title":5,"author":"Smith","issued":"2020"}]'));
-    expect(r.library).toEqual([{ key: 'x', authors: '', year: '', title: '', cited: false }]);
+    expect(r.library).toEqual([{ key: 'x', authors: '', year: '', title: '5', cited: false }]);
+  });
+  it('falls back to editors for authors', () => {
+    const r = ready({ bibs: [] }).analyse(doc('t', 'references: [{"id":"x","editor":[{"family":"Ed"},{"family":"Ita"}]}]'));
+    expect(r.library[0].authors).toBe('Ed, Ita');
+    const both = ready({ bibs: [] }).analyse(doc('t', 'references: [{"id":"x","author":[{"family":"Au"}],"editor":[{"family":"Ed"}]}]'));
+    expect(both.library[0].authors).toBe('Au');
   });
   it('reads authors that have a literal name', () => {
     const r = ready({ bibs: [] }).analyse(doc('t', 'references: [{"id":"x","author":[{"literal":"WHO"},{"family":"Smith"},5]}]'));
@@ -188,6 +196,7 @@ describe('analyse: sources not ready or a style error', () => {
     expect(r.markdownSource).toBe(src);
     expect(r.notes.length).toBe(1);
     expect(r.notes[0]).toMatchObject({ from: 0, to: 0, line: 0 });
+    expect('file' in r.notes[0]).toBe(false);
   };
   it('stays literal before any sources arrive', () => {
     const r = createSession().analyse(src);
@@ -224,20 +233,151 @@ describe('analyse: sources not ready or a style error', () => {
     expect(r.notes[0].message).toBe('The style file cannot be used: bad');
     expect(s.analyse(src).notes.length).toBe(1);
   });
-  it('turns a render error into a note', () => {
-    const s = createSession({ makeEngine: () => ({ render() { throw new Error('boom'); } }) });
+  it('gives one file note when no key fails alone', () => {
+    const s = createSession({
+      makeEngine: () => ({ render(c) { if (c.length > 1) throw new Error('boom'); return { texts: ['x'], bibliography: [] }; } }),
+    });
     s.setSources(sources());
-    literal(s.analyse(src));
+    const r = s.analyse(doc('[@smith2019] [@jacome2020]'));
+    expect(r.citations.map((c) => c.markdown)).toEqual(['[@smith2019]', '[@jacome2020]']);
+    expect(r.notes).toEqual([{ from: 0, to: 0, line: 0, message: 'boom' }]);
   });
-  it('names a references entry that citeproc rejects', () => {
-    const head = 'bibliography: refs.bib\nreferences: [{"id":"odd","type":"book","author":[1,2],"title":"T"}]';
-    const s = ready();
-    const r = s.analyse(doc('[@smith2019] [@odd]', head));
-    expect(r.citations.map((c) => c.markdown)).toEqual(['[@smith2019]', '[@odd]']);
-    expect(r.notes).toEqual([{ from: 0, to: 0, file: '', line: 0, message: 'Entry odd cannot be formatted.' }]);
-    expect(r.library.length).toBe(5);
-    // The next document text works again.
-    expect(s.analyse(doc('[@smith2019]', head)).citations[0].html).toContain('Smith');
+});
+
+describe('analyse: an entry that cannot be formatted', () => {
+  const refs = (json) => `bibliography: refs.bib\nreferences: ${JSON.stringify(json)}`;
+  // Real citeproc, with a throw for the keys named.
+  const failing = (bad) => {
+    const makeEngine = vi.fn((options) => {
+      const engine = createEngine(options);
+      const known = new Set(options.items.map((i) => i.id));
+      return {
+        render(list) {
+          if (list.some((c) => c.items.some((it) => bad.includes(it.key) && known.has(it.key)))) throw new Error('rejected');
+          return engine.render(list);
+        },
+      };
+    });
+    const session = createSession({ makeEngine });
+    session.setSources(sources());
+    return { session, makeEngine };
+  };
+
+  it.each([
+    ['title 5', { id: 'odd', type: 'book', title: 5 }],
+    ['author null', { id: 'odd', type: 'book', title: 'T', author: [null] }],
+    ['title object', { id: 'odd', type: 'book', title: { a: 1 } }],
+    ['DOI number', { id: 'odd', type: 'article-journal', title: 'T', DOI: 5 }],
+    ['volume list', { id: 'odd', type: 'book', title: 'T', volume: [] }],
+    ['language number', { id: 'odd', type: 'book', title: 'T', language: 5 }],
+    ['raw number', { id: 'odd', type: 'book', title: 'T', issued: { raw: 5 } }],
+    ['issued null', { id: 'odd', type: 'book', title: 'T', issued: null }],
+  ])('keeps the entry with a bad field: %s', (_, entry) => {
+    const r = ready().analyse(doc('[@smith2019] [@odd]', refs([entry])));
+    expect(r.notes).toEqual([]);
+    expect(r.citations.every((c) => c.missing.length === 0)).toBe(true);
+    expect(r.citations[0].html).toContain('Smith');
+    expect(r.bibliography.length).toBe(2);
+  });
+  it('keeps the good fields of a repaired entry', () => {
+    const r = ready().analyse(doc('[@odd]', refs([{ id: 'odd', type: 'book', title: 5, author: [null, { family: 'Ok' }] }])));
+    expect(r.library.find((e) => e.key === 'odd')).toMatchObject({ title: '5', authors: 'Ok' });
+    expect(r.citations[0].html).toContain('Ok');
+  });
+  it('stops only the citations of the failing keys', () => {
+    const { session } = failing(['smith2019', 'jacome2020']);
+    const src = doc('[@smith2019] then [@badurl] then [@jacome2020].');
+    const r = session.analyse(src);
+    expect(r.citations.map((c) => c.missing)).toEqual([['smith2019'], [], ['jacome2020']]);
+    expect(r.citations[0].markdown).toBe('[@smith2019]');
+    expect(r.citations[1].html).toContain('Bad');
+    expect(r.bibliography.length).toBe(1);
+    const at = (t) => ({ from: src.indexOf(t), to: src.indexOf(t) + t.length });
+    expect(r.notes).toEqual([
+      { ...at('[@smith2019]'), message: 'Entry smith2019 cannot be formatted.' },
+      { ...at('[@jacome2020]'), message: 'Entry jacome2020 cannot be formatted.' },
+    ]);
+    expect(r.library.find((e) => e.key === 'smith2019').cited).toBe(true);
+  });
+  it('formats the other keys of a mixed citation', () => {
+    const { session } = failing(['smith2019']);
+    const r = session.analyse(doc('[@smith2019; @jacome2020]'));
+    expect(r.citations[0].html).toContain('Jácome');
+    expect(r.citations[0].missing).toEqual(['smith2019']);
+    expect(r.notes.length).toBe(1);
+  });
+  it('gives the literal path to all citations when each key fails', () => {
+    const { session } = failing(['smith2019']);
+    const r = session.analyse(doc('[@smith2019]'));
+    expect(r.citations[0].html).toBe('[@smith2019]');
+    expect(r.bibliography).toEqual([]);
+  });
+  it('builds the engine again only once', () => {
+    const { session, makeEngine } = failing(['smith2019']);
+    session.analyse(doc('[@smith2019] [@jacome2020]'));
+    session.analyse(doc('more [@smith2019] [@jacome2020]'));
+    session.analyse(doc('[@jacome2020] [@smith2019] [@badurl]'));
+    expect(makeEngine).toHaveBeenCalledTimes(2);
+  });
+  it('tries the key again when the style changes', () => {
+    const makeEngine = (options) => {
+      const engine = createEngine(options);
+      return { render(list) { if (options.styleXml === style('apa')) throw new Error('x'); return engine.render(list); } };
+    };
+    const s = createSession({ makeEngine });
+    s.setSources(sources());
+    expect(s.analyse(doc('[@smith2019]')).citations[0].missing).toEqual(['smith2019']);
+    s.setSources(sources({ styleXml: style('vancouver') }));
+    expect(s.analyse(doc('[@smith2019]')).citations[0].html).toBe('(1)');
+  });
+  it('removes citeproc error text and gives a note', () => {
+    const texts = ['([CSL STYLE ERROR: reference with no printed form.])', '(A) [NO_PRINTED_FORM]', '(B)'];
+    const s = createSession({ makeEngine: () => ({ render: () => ({ texts, bibliography: ['<div class="csl-entry">1. [CSL STYLE ERROR: reference with no printed form.]</div>'] }) }) });
+    s.setSources(sources());
+    const src = doc('[@smith2019] [@jacome2020] [@badurl]');
+    const r = s.analyse(src);
+    expect(r.citations[0].html).toBe('[@smith2019]');
+    expect(r.citations[1].html).toBe('(A)');
+    expect(r.citations[2].html).toBe('(B)');
+    expect(r.bibliography[0]).not.toContain('CSL STYLE ERROR');
+    expect(r.notes.map((n) => n.message)).toEqual(['The style cannot format this citation.', 'The style cannot format this citation.']);
+    expect(r.notes[0].from).toBe(src.indexOf('[@smith2019]'));
+    expect(r.notes[1].from).toBe(src.indexOf('[@jacome2020]'));
+  });
+});
+
+describe('analyse: plain URLs', () => {
+  it('leaves a URL with @ whole in the preview', () => {
+    const src = doc('See https://x.org/@good and [@smith2019].\n');
+    const r = ready().analyse(src);
+    expect(r.citations.length).toBe(1);
+    expect(r.notes).toEqual([]);
+    const { text, fill } = applyCitations(src, r);
+    expect(fill(renderMarkdown(text))).toContain('<a href="https://x.org/@good">https://x.org/@good</a>');
+  });
+  it('gives no false note for a profile link', () => {
+    expect(ready().analyse(doc('Hello https://mastodon.social/@tiago')).notes).toEqual([]);
+  });
+});
+
+describe('analyse: dropped references', () => {
+  it('gives a note for dropped entries', () => {
+    const r = ready().analyse(doc('[@smith2019]', 'bibliography: refs.bib\nreferences: [{"id":1}]'));
+    expect(r.notes).toEqual([{ from: 0, to: 0, line: 0, message: 'One entry in references has no text id. It is not used.' }]);
+    expect(r.citations[0].html).toContain('Smith');
+  });
+  it('counts them', () => {
+    const r = ready().analyse(doc('t', 'bibliography: refs.bib\nreferences: [5,{"id":"a"},null]'));
+    expect(r.notes[0].message).toBe('2 entries in references have no text id. They are not used.');
+    expect(r.library.some((e) => e.key === 'a')).toBe(true);
+  });
+  it('gives a note for broken JSON', () => {
+    const r = ready().analyse(doc('t', 'bibliography: refs.bib\nreferences: [{"id":'));
+    expect(r.notes).toEqual([{ from: 0, to: 0, line: 0, message: 'The references line is not a JSON list. It is not used.' }]);
+  });
+  it('is not stopped by the early return', () => {
+    expect(ready().analyse('---\nreferences: [{"id":1}]\n---\nt').notes.length).toBe(1);
+    expect(ready().analyse('---\nreferences: [{"id":\n---\nt').notes.length).toBe(1);
   });
 });
 
