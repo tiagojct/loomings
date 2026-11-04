@@ -32,6 +32,10 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
 - `src/share.js` — document ⇄ URL fragment. Pure, tested.
+- `src/mermaid.js` — renders `mermaid` fences with Pele, loaded on demand.
+  `renderDiagrams` works on a root; `renderDiagramsInHtml` on a string (HTML
+  export). A failed diagram keeps its source. Colours come from `--pele-*`
+  variables (`style.css`, `handoutCss`, the export's style block).
 - `src/search.js` — accent-insensitive find. It wraps the `normalize` that
   each `SearchCursor` sets on itself, because the library has no option;
   `search.test.js` fails if that stops working. `src/typography.js` — smart

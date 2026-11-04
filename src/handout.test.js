@@ -28,4 +28,15 @@ describe('handout page', () => {
     expect(css).toContain(`--print-link: ${p.accent};`);
     expect(css).toMatch(/@media print \{ :root \{/);
   });
+
+  it('maps the diagram colours to the light palette for print', () => {
+    const p = roles('pequod', 'light');
+    const css = handoutCss({ title: 'T', palette: p, paper: 'A4' });
+    expect(css).toContain(`--pele-fg: ${p.fg};`);
+    expect(css).toContain(`--pele-line: ${p.fgDim};`);
+    expect(css).toContain(`--pele-surface: ${p.bgElev};`);
+    expect(css).toContain(`--pele-surface-alt: ${p.bgDeep};`);
+    expect(css).toContain(`--pele-border: ${p.border};`);
+    expect(css).toContain(`--pele-accent: ${p.accent};`);
+  });
 });

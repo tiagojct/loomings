@@ -37,7 +37,7 @@ import {
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
-import { hasDiagrams, renderDiagrams } from './mermaid.js';
+import { hasDiagrams, renderDiagrams, renderDiagramsInHtml } from './mermaid.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -1252,7 +1252,7 @@ async function handleSaveAs() {
 async function exportHtml() {
   const p = roles(themeFamily, activeTheme);
   const title = currentFile ? displayName(currentFile) : 'Untitled';
-  const rendered = renderMarkdown(getText());
+  const rendered = await renderDiagramsInHtml(renderMarkdown(getText()));
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1275,7 +1275,15 @@ async function exportHtml() {
                color: ${p.fgDim}; margin-left: 0; font-style: italic; }
   hr { border: none; border-top: 1px solid ${p.border}; margin: 2em 0; }
   img { max-width: 100%; }
-  @media print { body { background: #fff; color: #000; } }
+  pre.mermaid { background: none; border: 0; padding: 0; text-align: center; }
+  pre.mermaid svg { max-width: 100%; height: auto; }
+  pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
+  .pele { --pele-bg: transparent; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
+          --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
+          --pele-accent: ${p.accent}; }
+  @media print { body { background: #fff; color: #000; }
+    .pele { --pele-fg: #000; --pele-muted: #333; --pele-line: #333; --pele-surface: #fff;
+            --pele-surface-alt: #f2f2f2; --pele-border: #999; --pele-accent: #000; } }
 </style>
 </head>
 <body>
@@ -1623,9 +1631,20 @@ async function printPreview() {
     qr = `<section class="handout-qr">${svg || ''}<p>${svg ? QR_CAPTION : QR_TOO_LONG}</p></section>`;
   }
   const wasShown = previewShown();
-  preview.innerHTML = renderPreview(text) + qr;
-  pairedBlockEl = null;
-  invalidatePreviewBlocks();
+  // A preview update during the wait below would replace this page. Mark
+  // the page, then build it again if that happens.
+  const generation = ++previewGeneration;
+  const build = async () => {
+    preview.innerHTML = renderPreview(text) + qr;
+    pairedBlockEl = null;
+    invalidatePreviewBlocks();
+    await renderDiagrams(preview);
+  };
+  await build();
+  if (generation !== previewGeneration) {
+    previewGeneration = generation;
+    await build();
+  }
   // Some mobile browsers never fire afterprint; a new print replaces the
   // last one's page style rather than piling up.
   document.getElementById('handout-page')?.remove();

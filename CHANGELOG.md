@@ -8,6 +8,8 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Web app
 
+- Mermaid diagrams appear in print and in the HTML export. Print uses the
+  light palette. An exported diagram that fails to render keeps its source.
 - Find ignores accents: "ciencia" finds "ciência" and "saúde" finds "saude".
   Match case keeps the exact comparison.
 - A URL pasted over selected words makes a link. The `url` placeholder of

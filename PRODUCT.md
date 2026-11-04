@@ -54,10 +54,12 @@ without giving up the property that makes it work.
   palettes against WCAG floors.
 - Features: in-place Markdown rendering, split view with scroll sync, outline
   palette, focus mode, typewriter scrolling, full screen, word goal, stats,
-  find and replace, six bundled lessons, cheatsheet, print/PDF, standalone
+  find and replace, Mermaid diagrams (also in print and HTML export), six bundled lessons, cheatsheet, print/PDF, standalone
   HTML export, share links, offline install. Teaching: the learner's checker,
   marker glossary, exercise checks, section word limits, paired lines,
   projector mode, handouts with a QR code.
+  The native app does not draw diagrams yet: CoreSVG ignores `var()`, so the
+  Pele colours do not apply.
 - Deployed as a container behind Cloudflare and Caddy at
   `loomings.tiagojacinto.eu`; the app lives at `/app/`, the landing page owns
   the root. CSP is strict and self-only, so the landing page cannot fetch

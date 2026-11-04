@@ -81,3 +81,16 @@ export async function renderDiagrams(root, render = peleRender) {
     }
   }
 }
+
+/**
+ * Renders the diagrams in an HTML string. A failed diagram keeps its source.
+ * @param {string} html
+ * @param {(text: string) => Promise<{svg: string}>} [render]
+ * @returns {Promise<string>}
+ */
+export async function renderDiagramsInHtml(html, render) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  await renderDiagrams(template.content, render);
+  return template.innerHTML;
+}

@@ -36,5 +36,9 @@ export function handoutCss({ title, palette: p, paper }) {
 @media print { :root {
   --print-fg: ${p.fg}; --print-dim: ${p.fgDim}; --print-heading: ${p.heading}; --print-emphasis: ${p.emphasis};
   --print-code: ${p.code}; --print-link: ${p.accent}; --print-code-bg: ${p.bgDeep}; --print-border: ${p.border};
+}
+#preview .pele {
+  --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim}; --pele-surface: ${p.bgElev};
+  --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border}; --pele-accent: ${p.accent};
 } }`;
 }

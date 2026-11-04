@@ -99,4 +99,20 @@ describe('mermaid renderer', () => {
     expect(el.querySelector('script')).toBeNull();
     expect(el.querySelector('[onerror]')).toBeNull();
   });
+
+  it('renderDiagramsInHtml returns the html with svg in place', async () => {
+    const html = fence('graph TD; A--&gt;B') + '<p>after</p>';
+    const out = await m.renderDiagramsInHtml(html, async () => ({ svg: '<svg id="x"></svg>' }));
+    expect(out).toContain('<svg id="x"></svg>');
+    expect(out).toContain('<p>after</p>');
+    expect(out).not.toContain('language-mermaid');
+  });
+
+  it('renderDiagramsInHtml keeps the source when the render fails', async () => {
+    const out = await m.renderDiagramsInHtml(fence('graph TD; Q--&gt;R'), async () => {
+      throw new Error('bad');
+    });
+    expect(out).toContain('Q--&gt;R');
+    expect(out).toContain('mermaid-error');
+  });
 });
