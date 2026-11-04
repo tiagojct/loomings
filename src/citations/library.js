@@ -5,9 +5,8 @@
 // Pure: the bundled assets come in as an argument.
 // ========================================
 
-import { checkStyle, DEFAULT_LOCALE } from './style.js';
+import { checkStyle, DEFAULT_LOCALE, DEFAULT_STYLE, fileBaseName as baseName } from './style.js';
 
-const DEFAULT_STYLE = 'chicago-author-date';
 // Parent ids of dependent styles that a bundled style stands in for.
 const PARENT_ALIASES = { 'nlm-citation-sequence': 'vancouver', 'nlm-citation-sequence-brackets': 'vancouver' };
 
@@ -16,11 +15,6 @@ const PARENT_ALIASES = { 'nlm-citation-sequence': 'vancouver', 'nlm-citation-seq
  * @typedef {{loadBundledStyle(id: string): Promise<string|null>,
  *   loadLocale(lang: string|null|undefined): Promise<{lang: string, xml: string}>}} CitationAssets
  */
-
-/** The file name without folders and without a .bib or .csl ending, in lower case. */
-function baseName(value) {
-  return (String(value).split(/[\\/]/).pop() ?? '').replace(/\.(bib|csl)$/i, '').trim().toLowerCase();
-}
 
 /**
  * The XML of the parent of a dependent style: a stored file first, then a

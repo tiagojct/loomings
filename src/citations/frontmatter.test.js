@@ -118,6 +118,13 @@ describe('readCitationMeta', () => {
 });
 
 describe('setCitationMeta', () => {
+  it('writes and removes the language', () => {
+    expect(setCitationMeta('---\ntitle: T\n---\n', 'lang', 'pt-PT')).toBe('---\ntitle: T\nlang: pt-PT\n---\n');
+    expect(setCitationMeta('---\nlang: en-GB\n---\n', 'lang', 'es-ES')).toBe('---\nlang: es-ES\n---\n');
+    expect(setCitationMeta('---\nlang: en-GB\n---\n', 'lang', null)).toBe('---\n---\n');
+    expect(readCitationMeta(setCitationMeta('# T\n', 'lang', 'pt-PT')).lang).toBe('pt-PT');
+  });
+
   it('replaces a key', () => {
     expect(setCitationMeta('---\ncsl: a.csl\n---\nbody', 'csl', 'b.csl')).toBe('---\ncsl: b.csl\n---\nbody');
   });

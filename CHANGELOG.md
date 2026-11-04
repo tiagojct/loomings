@@ -8,6 +8,22 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Web app
 
+- Citations. A `bibliography:` or `references:` key in the frontmatter turns
+  Pandoc citations into formatted citations and a reference list in the
+  preview, in print and in the HTML export. `csl:` sets the style and `lang:`
+  the language. In the editor, citations have the marker colour, an unknown
+  key gets a note, and `@` completes keys.
+- A References tab in the right column of Split lists the library, with a
+  filter that ignores accents. Each entry says if the document cites it. A
+  cited key with no entry goes at the top. A click inserts `[@key]`. On a
+  narrow screen the list opens in a dialog.
+- A References menu adds and removes `.bib` and `.csl` files and sets the
+  bibliography, the style and the language in the frontmatter. Undo reverts a
+  choice. Files stay in this browser. Nothing is uploaded.
+- About credits citeproc-js, citation-js and the CSL styles and locales.
+  The citeproc-js and citation-js licences are in `public/licenses/`.
+- On a narrow screen, toolbar menus open under their button. The scrolling
+  toolbar clipped them.
 - Mermaid diagrams appear in the preview, in print and in the HTML export.
   Print uses the light palette. A diagram that fails to render keeps its
   source.

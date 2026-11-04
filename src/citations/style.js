@@ -12,8 +12,20 @@ export const BUNDLED_STYLES = [
   { id: 'ieee', title: 'IEEE' },
 ];
 
+export const DEFAULT_STYLE = 'chicago-author-date';
 export const BUNDLED_LOCALES = ['en-US', 'en-GB', 'pt-PT', 'es-ES'];
 export const DEFAULT_LOCALE = 'en-US';
+
+/**
+ * The name that matches a frontmatter value to a stored or bundled file: no
+ * folders, no .bib or .csl ending, lower case.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function fileBaseName(value) {
+  return (String(value).split(/[\\/]/).pop() ?? '').replace(/\.(bib|csl)$/i, '').trim().toLowerCase();
+}
 
 /**
  * Chooses the bundled locale for a language tag. An exact match wins. Then

@@ -9,6 +9,7 @@ import { RangeSetBuilder, StateEffect } from '@codemirror/state';
 import { Decoration, ViewPlugin } from '@codemirror/view';
 import { autocompletion } from '@codemirror/autocomplete';
 import { ensureSyntaxTree, syntaxTree } from '@codemirror/language';
+import { foldText } from '../accents.js';
 import { frontmatterRange } from '../teaching/glossary.js';
 
 /**
@@ -21,8 +22,6 @@ import { frontmatterRange } from '../teaching/glossary.js';
 
 /** The editor sends this when a new citation report is in place. It changes no text. */
 export const citationReportEffect = /** @type {import('@codemirror/state').StateEffectType<null>} */ (StateEffect.define());
-
-const withoutAccents = (/** @type {string} */ text) => text.normalize('NFD').replace(/\p{Mn}/gu, '').toLowerCase();
 
 const CODE_NODES = new Set(['InlineCode', 'FencedCode', 'CodeBlock', 'CodeText']);
 const KEY_BEFORE = /[\p{L}\p{N}_\\]/u;
@@ -52,10 +51,10 @@ export function citationCompletions(context, library) {
   }
 
   const entries = typeof library === 'function' ? library() : library;
-  const words = withoutAccents(typed.text.slice(1)).split(/\s+/).filter(Boolean);
+  const words = foldText(typed.text.slice(1)).split(/\s+/).filter(Boolean);
   const options = [];
   for (const entry of entries) {
-    const haystack = withoutAccents(`${entry.key} ${entry.authors} ${entry.title}`);
+    const haystack = foldText(`${entry.key} ${entry.authors} ${entry.title}`);
     if (!words.every((w) => haystack.includes(w))) continue;
     options.push({
       label: entry.key,
@@ -137,9 +136,10 @@ const missingMark = Decoration.mark({ class: 'cm-citation-missing' });
 
 /**
  * @param {(text: string) => CitationReport|null} getReport  the report for this text
+ * @param {() => LibraryEntry[]} getLibrary  a cheap read: completion calls it on each keystroke
  * @returns {import('@codemirror/state').Extension[]}
  */
-export function citationExtensions(getReport) {
+export function citationExtensions(getReport, getLibrary) {
   // The ranges move with the edits. A new report sets them again, so a range
   // is right again when the report for the new text is in place.
   const plugin = ViewPlugin.fromClass(class {
@@ -179,7 +179,7 @@ export function citationExtensions(getReport) {
   return [
     plugin,
     autocompletion({
-      override: [(context) => citationCompletions(context, () => getReport(context.state.doc.toString())?.library ?? [])],
+      override: [(context) => citationCompletions(context, getLibrary)],
       activateOnTyping: true,
       icons: false,
     }),

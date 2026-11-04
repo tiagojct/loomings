@@ -55,6 +55,8 @@ without giving up the property that makes it work.
 - Features: in-place Markdown rendering, split view with scroll sync, outline
   palette, focus mode, typewriter scrolling, full screen, word goal, stats,
   find and replace, Mermaid diagrams (in the preview, print and HTML export),
+  citations and references from BibTeX and CSL files kept in the browser (with
+  a References tab and a menu for the bibliography, style and language),
   six bundled lessons, cheatsheet, print/PDF, standalone HTML export, share
   links, offline install. Teaching: the learner's checker,
   marker glossary, exercise checks, section word limits, paired lines,

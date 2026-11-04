@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { createCitationDocument, citedHtml, referencesHtml, citationsLeftLiteral, metaPrefix } from './document.js';
+import {
+  createCitationDocument, citedHtml, referencesHtml, citationsLeftLiteral, metaPrefix, documentMeta, documentUsesCitations,
+} from './document.js';
 import { readCitationMeta } from './frontmatter.js';
 import * as library from './library.js';
 import { createSession } from './session.js';
@@ -730,5 +732,34 @@ describe('document, session and output together', () => {
     expect(html).toContain('csl-left-margin');
     expect(html).toContain('csl-right-inline');
     expect(html).toContain('Smith J');
+  });
+});
+
+describe('the library of the document', () => {
+  it('is empty before a report and after a reset', async () => {
+    const { client, doc } = setup();
+    expect(doc.library()).toEqual([]);
+    const flushed = doc.flush(WITH_BIB);
+    await vi.waitFor(() => expect(client.update).toHaveBeenCalled());
+    const entry = { key: 'a', authors: '', year: '', title: '', cited: true };
+    client.answer({ ...report(), library: [entry] });
+    await flushed;
+    expect(doc.library()).toEqual([entry]);
+    doc.reset();
+    expect(doc.library()).toEqual([]);
+  });
+});
+
+describe('documentMeta and documentUsesCitations', () => {
+  it('reads the keys of the frontmatter', () => {
+    expect(documentMeta(WITH_BIB).bibliography).toEqual(['refs.bib']);
+    expect(documentMeta('# Title\n').bibliography).toEqual([]);
+  });
+
+  it('is true for a bibliography and for references', () => {
+    expect(documentUsesCitations(WITH_BIB)).toBe(true);
+    expect(documentUsesCitations('---\nreferences: [{"id": "a"}]\n---\n')).toBe(true);
+    expect(documentUsesCitations('---\ncsl: apa\n---\n')).toBe(false);
+    expect(documentUsesCitations('# Title\n')).toBe(false);
   });
 });

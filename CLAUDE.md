@@ -32,6 +32,23 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
 - `src/share.js` — document ⇄ URL fragment. Pure, tested.
+- `src/citations/` — citations and references. This JS is the only
+  implementation of the citation rules: the native app runs the same code
+  in JavaScriptCore. `scan.js` finds the citations, `frontmatter.js` reads and
+  writes the keys, `bib.js` parses BibTeX, `item.js` cleans an entry,
+  `library.js` turns the frontmatter and the stored files into sources,
+  `engine.js` wraps citeproc, `session.js` makes the report, the one output
+  of this code, and `output.js` places it in the text. They are pure, except
+  `assets.js` (Vite globs for the bundled styles and locales). `worker.js` and
+  `client.js` run the session in a worker. `document.js` connects the worker
+  to the editor: it holds the last report and asks for one text at a time.
+  `reportFor(text)` is the quick read for the preview: the held report, moved
+  to the offsets of this text, or null after a change of style, language or
+  files. `flush(text)` waits for the report of exactly this text, so print and
+  export use it. `library()` is a cheap read for completion. `editor.js` has
+  the marks, the notes and completion. `panel.js` has the References tab and
+  the rules of the References menu; `editor.js` at the root of `src/` holds
+  the tab state. The stored files live in IndexedDB (`browser.js`).
 - `src/mermaid.js` — renders `mermaid` fences with Pele, loaded on demand.
   `renderDiagrams` works on a root; `renderDiagramsInHtml` on a string (HTML
   export). A failed diagram keeps its source. Colours come from `--pele-*`

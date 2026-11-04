@@ -42,11 +42,19 @@ export function metaPrefix(source) {
   return source.slice(0, lineEnd.lastIndex);
 }
 
-/** @param {string} source */
-const readMeta = (source) => readCitationMeta(metaPrefix(source));
+/**
+ * The citation keys of the frontmatter of a document of any size.
+ *
+ * @param {string} source
+ * @returns {import('./frontmatter.js').CitationMeta}
+ */
+export const documentMeta = (source) => readCitationMeta(metaPrefix(source));
 
 /** @param {import('./frontmatter.js').CitationMeta} meta */
 const usesCitations = (meta) => meta.bibliography.length > 0 || meta.references.length > 0 || meta.referencesDropped !== 0;
+
+/** @param {string} source  @returns {boolean} true when this text gets a citation report */
+export const documentUsesCitations = (source) => usesCitations(documentMeta(source));
 
 /** @param {import('./frontmatter.js').CitationMeta} meta */
 const metaKey = (meta) => JSON.stringify([meta.bibliography, meta.csl, meta.lang, meta.references]);
@@ -60,7 +68,7 @@ const metaKey = (meta) => JSON.stringify([meta.bibliography, meta.csl, meta.lang
  * @returns {boolean}
  */
 export function citationsLeftLiteral(source, report) {
-  if (!usesCitations(readMeta(source))) return false;
+  if (!usesCitations(documentMeta(source))) return false;
   return scanCitations(source).length > (report?.citations.length ?? 0);
 }
 
@@ -121,7 +129,7 @@ export function referencesHtml(title, entries) {
 export function citedHtml(source, report, render) {
   if (!report) return render(source);
   const { text, fill } = applyCitations(source, report);
-  return fill(render(text)) + referencesHtml(readMeta(source).title, report.bibliography);
+  return fill(render(text)) + referencesHtml(documentMeta(source).title, report.bibliography);
 }
 
 /**
@@ -133,7 +141,7 @@ export function citedHtml(source, report, render) {
  *   `library` is lazy too, and tests replace it: a real import takes real time.
  * @returns {{update(text: string|(() => string)): void, flush(text: string): Promise<CitationReport|null>,
  *   refresh(): Promise<CitationReport|null>, reset(): void, current(): HeldReport|null,
- *   reportFor(text: string): CitationReport|null}}
+ *   reportFor(text: string): CitationReport|null, library(): import('./session.js').LibraryEntry[]}}
  */
 export function createCitationDocument({ client, listFiles, assets, onChange, library = () => import('./library.js') }) {
   /** @type {ReturnType<typeof setTimeout>|null} */
@@ -211,7 +219,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
    * @returns {Promise<CitationReport|null>}  null: this text has no citations to show
    */
   async function analyse(text) {
-    const meta = readMeta(text);
+    const meta = documentMeta(text);
     if (!usesCitations(meta)) return null;
     const loaded = await loadClient();
     if (!loaded) return null;
@@ -275,8 +283,8 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
   function reportFor(text) {
     if (!held) return null;
     if (held.text === text) return held.report;
-    const meta = readMeta(text);
-    if (!usesCitations(meta) || metaKey(meta) !== metaKey(readMeta(held.text))) return null;
+    const meta = documentMeta(text);
+    if (!usesCitations(meta) || metaKey(meta) !== metaKey(documentMeta(held.text))) return null;
     return moveReport(held, text);
   }
 
@@ -329,5 +337,8 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     current: () => held,
 
     reportFor,
+
+    // The library of the last report. No scan of the text, so a keystroke can read it.
+    library: () => held?.report.library ?? [],
   };
 }

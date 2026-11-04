@@ -249,7 +249,7 @@ function formatScalar(value) {
  * Without a frontmatter, one is made when the value is not null.
  *
  * @param {string} source
- * @param {'bibliography'|'csl'|'references'} key
+ * @param {'bibliography'|'csl'|'lang'|'references'} key
  * @param {string|null} value
  * @returns {string}
  */

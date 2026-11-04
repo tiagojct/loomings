@@ -4,8 +4,8 @@
 // Match case search keeps its exact comparison, accents included.
 
 import { SearchCursor } from '@codemirror/search';
+import { withoutAccents } from './accents.js';
 
-const withoutAccents = (text) => text.normalize('NFD').replace(/\p{Mn}/gu, '');
 const normalizers = new WeakMap();
 
 Object.defineProperty(SearchCursor.prototype, 'normalize', {

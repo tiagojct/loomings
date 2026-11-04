@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { EditorState } from '@codemirror/state';
 import { markdown } from '@codemirror/lang-markdown';
 import { autocompletion, completionKeymap, CompletionContext } from '@codemirror/autocomplete';
@@ -6,6 +6,12 @@ import { ensureSyntaxTree } from '@codemirror/language';
 import { citationCompletions, citationRanges, citationNotes, citationExtensions } from './editor.js';
 import { lint } from '../teaching/lint.js';
 import { markerName } from '../projector.js';
+
+const completion = vi.hoisted(() => ({ config: /** @type {any} */ (null) }));
+vi.mock('@codemirror/autocomplete', async (original) => {
+  const real = /** @type {any} */ (await original());
+  return { ...real, autocompletion: (config) => { completion.config = config; return real.autocompletion(config); } };
+});
 
 const library = [
   { key: 'jacome2020', authors: 'Jácome, Silva', year: '2020', title: 'Asthma in schools', cited: false },
@@ -150,6 +156,19 @@ describe('the rest of the editor', () => {
   });
 
   it('builds the extensions', () => {
-    expect(citationExtensions(() => null).length).toBeGreaterThan(0);
+    expect(citationExtensions(() => null, () => []).length).toBeGreaterThan(0);
+  });
+
+  it('completes from the held library, with no scan of the document', () => {
+    const getReport = vi.fn(() => null);
+    const getLibrary = vi.fn(() => library);
+    citationExtensions(getReport, getLibrary);
+    const doc = 'See @jac';
+    const state = EditorState.create({ doc, extensions: [markdown()] });
+    ensureSyntaxTree(state, doc.length, 5000);
+    const result = completion.config.override[0](new CompletionContext(state, doc.length, false));
+    expect(result.options.map((o) => o.label)).toEqual(['jacome2020']);
+    expect(getLibrary).toHaveBeenCalledTimes(1);
+    expect(getReport).not.toHaveBeenCalled();
   });
 });

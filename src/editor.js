@@ -33,14 +33,17 @@ import {
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
-  listCitationFiles, refreshCitationFiles, pickCitationFile,
+  listCitationFiles, refreshCitationFiles, pickCitationFile, deleteCitationFile,
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
 import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
-import { createCitationDocument, citedHtml, citationsLeftLiteral } from './citations/document.js';
+import {
+  createCitationDocument, citedHtml, citationsLeftLiteral, documentMeta, documentUsesCitations,
+} from './citations/document.js';
 import { citationExtensions, citationReportEffect, citationNotes, citationThemeRules } from './citations/editor.js';
+import { insertCitation, metaChange, nextTab, referencesMenuHtml, renderLibrary, toggleBibliography } from './citations/panel.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -536,7 +539,7 @@ function buildState(doc = '') {
       frontmatterPlugin,
       pairedLinesPlugin,
       notesPlugin,
-      ...citationExtensions((text) => citations.reportFor(text)),
+      ...citationExtensions((text) => citations.reportFor(text), () => citations.library()),
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
@@ -913,7 +916,8 @@ function scheduleStats() {
 
 /** @type {ReturnType<typeof setTimeout>|null} */ let previewTimer = null;
 function schedulePreview() {
-  if (!previewShown()) return;
+  // With the References tab open this still runs: an edit can hide the tabs.
+  if (effectiveViewMode() === 'editor') return;
   if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, 150);
 }
@@ -1164,6 +1168,7 @@ const citations = createCitationDocument({
     updatePreview({ onlyIfChanged: true });
     view.dispatch({ effects: citationReportEffect.of(null) });
     refreshNotes();
+    renderReferencesPanel();
   },
 });
 
@@ -1437,16 +1442,32 @@ document.addEventListener('fullscreenchange', () => {
 //  View modes: editor / split / preview
 // ==========================
 
+const previewColumn   = el('preview-column');
+const tabList         = el('references-tabs');
+const previewTabEl    = el('tab-preview');
+const referencesTabEl = el('tab-references');
+const referencesPanel = el('references-panel');
+
+/** The open tab of Split. It stays for the session, not per document. */
+let openTab = 'preview';
+// The References menu asked for the tabs, so they stay with any document.
+let referencesAsked = false;
+let tabsShown = false;
+
 function effectiveViewMode() {
   return (viewMode === 'split' && narrowMq.matches) ? 'editor' : viewMode;
 }
-function previewShown() { return effectiveViewMode() !== 'editor'; }
+function referencesShown() { return tabsShown && openTab === 'references'; }
+function previewShown() { return effectiveViewMode() !== 'editor' && !referencesShown(); }
+// Scroll sync and paired lines need both panes of Split.
+function panesPaired() { return effectiveViewMode() === 'split' && !referencesShown(); }
 
 function applyViewMode() {
   const mode = effectiveViewMode();
   for (const m of VIEW_MODES) body.classList.toggle('view-' + m, m === mode);
   editorEl.classList.toggle('hidden', mode === 'preview');
-  preview.classList.toggle('hidden', mode === 'editor');
+  applyReferencesView();
+  preview.classList.toggle('hidden', mode === 'editor' || referencesShown());
   /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]')).forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.view === mode));
   });
@@ -1503,7 +1524,7 @@ function invalidatePreviewBlocks() {
 window.addEventListener('resize', invalidatePreviewBlocks, { passive: true });
 
 function syncPreviewToEditor() {
-  if (effectiveViewMode() !== 'split' || syncLockedBy('preview')) return;
+  if (!panesPaired() || syncLockedBy('preview')) return;
   const scroller = view.scrollDOM;
   const blocks = getPreviewBlocks();
   if (!blocks.length) return;
@@ -1536,7 +1557,7 @@ function syncPreviewToEditor() {
 }
 
 function syncEditorToPreview() {
-  if (effectiveViewMode() !== 'split' || syncLockedBy('editor')) return;
+  if (!panesPaired() || syncLockedBy('editor')) return;
   const blocks = getPreviewBlocks();
   if (!blocks.length) return;
   const top = preview.scrollTop;
@@ -1557,10 +1578,10 @@ function syncEditorToPreview() {
 }
 
 view.scrollDOM.addEventListener('scroll', () => {
-  if (effectiveViewMode() === 'split') requestAnimationFrame(syncPreviewToEditor);
+  if (panesPaired()) requestAnimationFrame(syncPreviewToEditor);
 }, { passive: true });
 preview.addEventListener('scroll', () => {
-  if (effectiveViewMode() === 'split') requestAnimationFrame(syncEditorToPreview);
+  if (panesPaired()) requestAnimationFrame(syncEditorToPreview);
 }, { passive: true });
 
 // ==========================
@@ -1595,7 +1616,7 @@ function clearPairing() {
 }
 
 view.contentDOM.addEventListener('mousemove', (e) => {
-  if (effectiveViewMode() !== 'split') return;
+  if (!panesPaired()) return;
   if (pairFrame !== null) cancelAnimationFrame(pairFrame);
   const { clientX: x, clientY: y } = e;
   pairFrame = requestAnimationFrame(() => {
@@ -1617,7 +1638,7 @@ view.contentDOM.addEventListener('mouseleave', () => {
 });
 
 preview.addEventListener('mouseover', (e) => {
-  if (effectiveViewMode() !== 'split') return;
+  if (!panesPaired()) return;
   const node = /** @type {HTMLElement} */ (e.target).closest('[data-line-end]');
   if (!(node instanceof HTMLElement) || !preview.contains(node)) { lightSourceLines(null); return; }
   const line = Number(node.dataset.line);
@@ -1633,10 +1654,11 @@ let previewGeneration = 0;
 // onlyIfChanged: a citation report that gives the same HTML starts no new
 // render, so the diagrams are not drawn again.
 function updatePreview({ onlyIfChanged = false } = {}) {
+  const switched = applyReferencesView();
   if (!previewShown()) return;
   const text = getText();
   const html = citedHtml(text, citations.reportFor(text), renderPreview);
-  if (onlyIfChanged && html === previewHtml) return;
+  if (onlyIfChanged && !switched && html === previewHtml) return;
   previewHtml = html;
   const generation = ++previewGeneration;
   preview.innerHTML = html;
@@ -1652,6 +1674,190 @@ function updatePreview({ onlyIfChanged = false } = {}) {
     if (effectiveViewMode() === 'split') syncPreviewToEditor();
   }, () => {});
 }
+
+// ==========================
+//  References: the tabs of Split, the panel and the menu
+// ==========================
+// The panel is a sibling of the preview, and one of the two is hidden. On a
+// narrow screen there is no Split, so the same panel moves into a dialog.
+
+/** @type {{close: () => void}|null} */ let referencesModal = null;
+/** @type {{name: string, kind: 'bib'|'csl'}[]} */ let storedCitationFiles = [];
+let libraryFilter = '';
+
+/** @param {HTMLElement} node @param {HTMLElement} tab @param {boolean} on */
+function markTabPanel(node, tab, on) {
+  if (on) {
+    node.setAttribute('role', 'tabpanel');
+    node.setAttribute('aria-labelledby', tab.id);
+  } else {
+    node.removeAttribute('role');
+    node.removeAttribute('aria-labelledby');
+  }
+}
+
+/**
+ * Sets the tabs and the panel for the view and the document.
+ *
+ * @returns {boolean} true when References and Preview changed places
+ */
+function applyReferencesView() {
+  const before = referencesShown();
+  tabsShown = effectiveViewMode() === 'split' && (referencesAsked || documentUsesCitations(getText()));
+  const shown = referencesShown();
+  tabList.classList.toggle('hidden', !tabsShown);
+  for (const [tab, name] of /** @type {[HTMLElement, string][]} */ ([[previewTabEl, 'preview'], [referencesTabEl, 'references']])) {
+    tab.setAttribute('aria-selected', String(openTab === name));
+    tab.tabIndex = openTab === name ? 0 : -1;
+  }
+  markTabPanel(preview, previewTabEl, tabsShown);
+  markTabPanel(referencesPanel, referencesTabEl, tabsShown && !referencesModal);
+  if (!referencesModal) referencesPanel.classList.toggle('hidden', !shown);
+  // Also with no switch: another document can have no report to announce it.
+  renderReferencesPanel();
+  if (shown === before) return false;
+  preview.classList.toggle('hidden', shown);
+  clearPairing();
+  invalidatePreviewBlocks();
+  return true;
+}
+
+function renderReferencesPanel() {
+  if (referencesPanel.classList.contains('hidden')) return;
+  const held = citations.current();
+  renderLibrary(referencesPanel, held?.report ?? null, libraryFilter, {
+    waiting: !held && documentUsesCitations(getText()),
+  });
+}
+
+/** @param {string} tab */
+function selectTab(tab) {
+  if (tab === openTab) return;
+  openTab = tab;
+  updatePreview();
+}
+
+tabList.addEventListener('click', (e) => {
+  const tab = /** @type {HTMLElement} */ (e.target).closest('[data-tab]');
+  if (tab instanceof HTMLElement) selectTab(tab.dataset.tab || 'preview');
+});
+
+tabList.addEventListener('keydown', (e) => {
+  const tabs = [previewTabEl, referencesTabEl];
+  const next = nextTab(tabs.indexOf(/** @type {HTMLElement} */ (e.target)), e.key, tabs.length);
+  if (next === null) return;
+  e.preventDefault();
+  selectTab(tabs[next].dataset.tab || 'preview');
+  tabs[next].focus();
+});
+
+referencesPanel.addEventListener('input', (e) => {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  libraryFilter = e.target.value;
+  renderReferencesPanel();
+});
+
+referencesPanel.addEventListener('click', (e) => {
+  const target = /** @type {HTMLElement} */ (e.target);
+  if (target.closest('[data-action="add-file"]')) { addCitationFile(); return; }
+  const row = target.closest('button[data-key]');
+  if (row instanceof HTMLElement) insertReference(row.dataset.key ?? '');
+});
+
+/** Inserts a key at the end of the selection. The panel stays in Split. */
+function insertReference(key) {
+  referencesModal?.close();
+  if (effectiveViewMode() === 'preview') setViewMode('editor');
+  const { insert, from } = insertCitation(getText(), view.state.selection.main.to, key);
+  view.dispatch({
+    changes: { from, insert },
+    selection: { anchor: from + insert.length },
+    scrollIntoView: true,
+    userEvent: 'input',
+  });
+  view.focus();
+}
+
+/** The filter field, or Add File when the library is empty. */
+function libraryFocus() {
+  return /** @type {HTMLElement|null} */ (
+    referencesPanel.querySelector('.references-field:not(.hidden) input') ?? referencesPanel.querySelector('.references-empty button')
+  );
+}
+
+function openReferencesDialog() {
+  el('references-dialog-body').append(referencesPanel);
+  referencesPanel.classList.remove('hidden');
+  renderReferencesPanel();
+  referencesModal = openModal(el('references-dialog'), {
+    opener: el('tb-references'),
+    initialFocus: libraryFocus(),
+    onClose: () => {
+      referencesModal = null;
+      previewColumn.append(referencesPanel);
+      applyReferencesView();
+    },
+  });
+  applyReferencesView();
+}
+
+el('references-dialog-close').addEventListener('click', () => referencesModal?.close());
+el('references-dialog').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) referencesModal?.close();
+});
+
+function showLibrary() {
+  if (narrowMq.matches) { openReferencesDialog(); return; }
+  referencesAsked = true;
+  openTab = 'references';
+  if (viewMode === 'split') updatePreview(); else setViewMode('split');
+  libraryFocus()?.focus();
+}
+
+async function loadStoredFiles() {
+  storedCitationFiles = (await listCitationFiles()).map(({ name, kind }) => ({ name, kind }));
+}
+
+/**
+ * Changes a citation key of the frontmatter with one transaction, so Undo
+ * reverts it.
+ *
+ * @param {Parameters<typeof metaChange>[1]} key
+ * @param {string|null} value
+ */
+function setDocumentMeta(key, value) {
+  try {
+    const change = metaChange(getText(), key, value);
+    if (change) view.dispatch({ changes: change, userEvent: 'input' });
+  } catch (err) {
+    flashStatus('Could not change the frontmatter: ' + String(err?.message || err).replace(/^setCitationMeta: /, ''));
+  }
+}
+
+/** @param {string} name */
+async function removeCitationFile(name) {
+  if (!(await ask(`Remove ${name} from this browser?`))) return;
+  if (!(await deleteCitationFile(name))) { flashStatus(`Could not remove ${name}`); return; }
+  flashStatus(`Removed ${name}`);
+  await loadStoredFiles();
+  await citations.refresh();
+}
+
+const referencesMenuEl = el('references-menu');
+attachMenu(el('tb-references'), referencesMenuEl, {
+  onOpen: () => { referencesMenuEl.innerHTML = referencesMenuHtml(documentMeta(getText()), storedCitationFiles); },
+  onPick: (item) => {
+    const { action, bib, style, lang, remove } = item.dataset;
+    // A radio that is on stays on. With no `csl:` the default style is on, and a click must write nothing.
+    const on = item.getAttribute('aria-checked') === 'true';
+    if (action === 'show') showLibrary();
+    if (action === 'add-file') addCitationFile();
+    if (bib) setDocumentMeta('bibliography', toggleBibliography(documentMeta(getText()).bibliography, bib));
+    if (style && !on) setDocumentMeta('csl', style);
+    if (lang && !on) setDocumentMeta('lang', lang);
+    if (remove) removeCitationFile(remove);
+  },
+});
 
 // Print / PDF: the handout. The print stylesheet shows only the rendered
 // preview, so make it current even in editor-only mode; add the share link
@@ -1919,7 +2125,8 @@ function renderNotesMenu() {
 async function addCitationFile() {
   const file = await pickCitationFile();
   if (!file) return;
-  if (!file.stored) flashStatus(`${file.name} is open in this tab only`);
+  flashStatus(file.stored ? `Added ${file.name}; it stays in this browser` : `Could not save ${file.name} in this browser`);
+  await loadStoredFiles();
   await citations.refresh();
 }
 
@@ -2170,12 +2377,16 @@ async function loadFile(payload) {
 
 initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)), ({ name, stored }) => {
   flashStatus(stored ? `Added ${name}; it stays in this browser` : `Could not save ${name} in this browser`);
-  if (stored) citations.refresh();
+  if (!stored) return;
+  loadStoredFiles();
+  citations.refresh();
 });
 
 // A citation file can change on disk while the user is in another app.
 window.addEventListener('focus', async () => {
-  if ((await refreshCitationFiles()).length) citations.refresh();
+  const changed = await refreshCitationFiles();
+  await loadStoredFiles();
+  if (changed.length) citations.refresh();
 });
 
 // ==========================
@@ -2428,6 +2639,7 @@ async function offerScratchRecovery() {
 (async () => {
   initAbout();
   applyViewMode();
+  loadStoredFiles();
   // Files handed over by the OS (installed app) arrive asynchronously and
   // go through loadFile's own dirty check.
   initLaunchQueue(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
