@@ -1342,6 +1342,9 @@ enum SelfTest {
         // No citation keys: no marks and no list.
         editor.replace(range: text.range(of: "bibliography: refs.bib"), with: "title: x")
         check(pump(timeout: 5) { editor.citationRanges.isEmpty && editor.citationKeys.isEmpty }, "a document with no bibliography has no marks")
+        check(controller.citations.latestResult == nil, "the report goes with the bibliography")
+        check(controller.noteMessagesForTesting.isEmpty, "a document with no bibliography has no citation notes")
+        check(textView.textStorage?.delegate === editor, "the editor stays the delegate of the text storage in a window")
     }
 
     /// True when the row under `range` differs with and without its squiggle.
@@ -1462,8 +1465,10 @@ enum SelfTest {
         _ = spin(timeout: 0.3) { false }
 
         func enter(_ text: String) {
-            for character in text {
-                textView.insertText(String(character), replacementRange: textView.selectedRange())
+            textView.asTyping {
+                for character in text {
+                    textView.insertText(String(character), replacementRange: textView.selectedRange())
+                }
             }
         }
         func listIsOpen() -> Bool {
@@ -1485,6 +1490,7 @@ enum SelfTest {
 
         let lineEnd = (text as NSString).range(of: "- A claim").upperBound
         textView.setSelectedRange(NSRange(location: lineEnd, length: 0))
+        let queries = editor.citationMatchRuns
         enter(" [@")
         let beforeKey = editor.source
         // This block is one run loop turn, so the undo group of the turn must
@@ -1495,6 +1501,7 @@ enum SelfTest {
         answer("\r", keyCode: 36)
         check(spin(timeout: 5) { answered == 1 && !listIsOpen() }, "a typed sign opens the list, and Return closes it")
         check(editor.source.contains("- A claim [@silva2020\n"), "Return inserts the key with its sign")
+        check(editor.citationMatchRuns == queries + 1, "one list makes one query")
         check(editor.editGeneration == generation + 1, "browsing makes no edit, and the key is one edit")
 
         textView.undoManager?.undo()
@@ -1538,6 +1545,27 @@ enum SelfTest {
 
         enter(" \"")
         check(editor.source.hasSuffix("ana@ \u{201C}"), "smart typography works beside the sign")
+
+        // A real key event, through `keyDown`, arms the list.
+        enter("\n")
+        if let key = NSEvent.keyEvent(
+            with: .keyDown,
+            location: .zero,
+            modifierFlags: [],
+            timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window.windowNumber,
+            context: nil,
+            characters: "@",
+            charactersIgnoringModifiers: "@",
+            isARepeat: false,
+            keyCode: 19
+        ) {
+            textView.keyDown(with: key)
+        }
+        check(editor.source.hasSuffix("\n@"), "a key event reaches the text")
+        check(editor.isCompletionArmed, "a key event arms the list")
+        answer("\u{1B}", keyCode: 53)
+        check(spin(timeout: 5) { answered == 5 && !listIsOpen() }, "the list from a key event opens and closes")
     }
 
     /// The list closes at once when `NSApp.run` is not running. `body` starts

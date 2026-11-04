@@ -359,6 +359,12 @@ struct CitationCompletionTests {
         return editor.textView.completions(forPartialWordRange: range, indexOfSelectedItem: &index) ?? []
     }
 
+    private func type(_ text: String, in editor: EditorController) {
+        editor.textView.asTyping {
+            editor.textView.insertText(text, replacementRange: editor.textView.selectedRange())
+        }
+    }
+
     private func offersKey(_ editor: EditorController, _ key: String) -> Bool {
         offers(editor).contains { $0.hasPrefix(key + " ") }
     }
@@ -459,6 +465,30 @@ struct CitationCompletionTests {
         #expect(!offersKey(fourth, "silva2020"))
     }
 
+    @Test("A manual list waits for the parse: code ranges do not move with an edit")
+    func staleCodeRangeBelow() {
+        let text = "```\n@ here\n```\n"
+        let editor = editor(text)
+        let above = String(repeating: "word ", count: 20) + "\n\n"
+        editor.replace(range: NSRange(location: 0, length: 0), with: above)
+        let sign = (above as NSString).length + 4
+        editor.textView.setSelectedRange(NSRange(location: sign + 1, length: 0))
+        #expect(!offersKey(editor, "silva2020"))
+        editor.reparseSynchronously()
+        #expect(!offersKey(editor, "silva2020"))
+    }
+
+    @Test("Text that moves out of an old code range gets its list after the parse")
+    func staleCodeRangeAbove() {
+        let block = "```\ncode line\n```\n\n"
+        let editor = editor(block + "@")
+        editor.replace(range: NSRange(location: 0, length: (block as NSString).length), with: "")
+        editor.textView.setSelectedRange(NSRange(location: 1, length: 0))
+        #expect(!offersKey(editor, "silva2020"))
+        editor.reparseSynchronously()
+        #expect(offersKey(editor, "silva2020"))
+    }
+
     @Test("No list while text is marked")
     func markedText() {
         let editor = editor("A claim @")
@@ -505,18 +535,29 @@ struct CitationCompletionTests {
     @Test("A typed sign arms the list for the next parse")
     func armed() {
         let editor = editor(Self.bibliography + "A claim ")
-        editor.textView.insertText("@", replacementRange: editor.textView.selectedRange())
+        type("@", in: editor)
         #expect(editor.isCompletionArmed)
+    }
+
+    @Test("A sign from code does not arm the list")
+    func programmaticSign() {
+        let replaced = editor("A claim ")
+        replaced.replace(range: NSRange(location: 8, length: 0), with: "@")
+        #expect(!replaced.isCompletionArmed)
+
+        let inserted = editor("A claim ")
+        inserted.textView.insertText("@", replacementRange: inserted.textView.selectedRange())
+        #expect(!inserted.isCompletionArmed)
     }
 
     @Test("A pasted sign, an email and a marked sign do not arm the list")
     func notArmed() {
         let pasted = editor("A claim ")
-        pasted.textView.insertText("@silva", replacementRange: pasted.textView.selectedRange())
+        type("@silva", in: pasted)
         #expect(!pasted.isCompletionArmed)
 
         let email = editor("ana")
-        email.textView.insertText("@", replacementRange: email.textView.selectedRange())
+        type("@", in: email)
         #expect(!email.isCompletionArmed)
 
         let marked = editor("A claim ")
@@ -527,18 +568,18 @@ struct CitationCompletionTests {
     @Test("A document with no library never arms the list")
     func noLibraryNoArm() {
         let editor = editor("A claim ", keys: [])
-        editor.textView.insertText("@", replacementRange: editor.textView.selectedRange())
+        type("@", in: editor)
         #expect(!editor.isCompletionArmed)
     }
 
     @Test("A letter after the sign arms the list again, but a space does not")
     func narrowing() {
         let editor = editor("A claim @")
-        editor.textView.insertText("s", replacementRange: editor.textView.selectedRange())
+        type("s", in: editor)
         #expect(editor.isCompletionArmed)
 
         let spaced = self.editor("A claim @")
-        spaced.textView.insertText(" ", replacementRange: spaced.textView.selectedRange())
+        type(" ", in: spaced)
         #expect(!spaced.isCompletionArmed)
     }
 
@@ -548,11 +589,11 @@ struct CitationCompletionTests {
         let range = editor.textView.rangeForUserCompletion
         _ = offers(editor)
         editor.textView.insertCompletion("@", forPartialWordRange: range, movement: NSTextMovement.cancel.rawValue, isFinal: true)
-        editor.textView.insertText("s", replacementRange: editor.textView.selectedRange())
+        type("s", in: editor)
         #expect(!editor.isCompletionArmed)
-        editor.textView.insertText(" ", replacementRange: editor.textView.selectedRange())
-        editor.textView.insertText("[", replacementRange: editor.textView.selectedRange())
-        editor.textView.insertText("@", replacementRange: editor.textView.selectedRange())
+        type(" ", in: editor)
+        type("[", in: editor)
+        type("@", in: editor)
         #expect(editor.isCompletionArmed)
     }
 
@@ -617,6 +658,12 @@ struct TextChangeTests {
         #expect(TextChange.between("same", "same") == nil)
     }
 
+    @Test("Texts that are equal only after normalisation are different texts")
+    func normalisation() throws {
+        let change = try #require(TextChange.between("caf\u{E9}", "cafe\u{301}"))
+        #expect(change == TextChange(range: NSRange(location: 3, length: 1), newLength: 2))
+    }
+
     @Test("A repeated letter does not count twice")
     func overlap() throws {
         let change = try #require(TextChange.between("aa", "aaa"))
@@ -665,6 +712,13 @@ struct CitationMarkTests {
             Issue.record("not a squiggle")
             return
         }
+    }
+
+    @Test("The text storage of a new text view has no delegate to chain to")
+    func storageDelegate() {
+        #expect(EditorTextView(usingTextLayoutManager: true).textStorage?.delegate == nil)
+        let editor = editor()
+        #expect(editor.textView.textStorage?.delegate === editor)
     }
 
     @Test("Marks never advance the revision")

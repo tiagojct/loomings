@@ -6,12 +6,16 @@ public struct CitationCompletion: Equatable, Sendable {
     public let authors: String
     public let year: String
     public let title: String
+    /// The key, the authors and the title with no accents or case. Each query
+    /// reads this, so it is made once, when the report arrives.
+    private let searchText: String
 
     public init(key: String, authors: String, year: String, title: String) {
         self.key = key
         self.authors = authors
         self.year = year
         self.title = title
+        searchText = Self.fold("\(key) \(authors) \(title)")
     }
 
     /// The row in the list. The list holds plain text, so the row is also
@@ -58,8 +62,7 @@ public struct CitationCompletion: Equatable, Sendable {
         let words = fold(query).split(whereSeparator: \.isWhitespace)
         var found: [CitationCompletion] = []
         for entry in entries {
-            let text = fold("\(entry.key) \(entry.authors) \(entry.title)")
-            guard words.allSatisfy({ text.contains($0) }) else { continue }
+            guard words.allSatisfy({ entry.searchText.contains($0) }) else { continue }
             found.append(entry)
             if found.count == mostRows { break }
         }
@@ -96,12 +99,14 @@ public struct TextChange: Equatable, Sendable {
     /// The one change that covers each difference, or nil for equal texts.
     /// The change does not start or end in a surrogate pair.
     public static func between(_ old: String, _ new: String) -> TextChange? {
+        // A report is usually for the current text, so this has no copies.
+        // Not `==`: that also matches a text in another normalisation form.
+        if (old as NSString).isEqual(to: new) { return nil }
         let before = Array(old.utf16)
         let after = Array(new.utf16)
         let limit = min(before.count, after.count)
         var head = 0
         while head < limit, before[head] == after[head] { head += 1 }
-        if head == before.count, head == after.count { return nil }
         if head > 0, UTF16.isLeadSurrogate(before[head - 1]) { head -= 1 }
         var tail = 0
         while tail < limit - head, before[before.count - 1 - tail] == after[after.count - 1 - tail] { tail += 1 }

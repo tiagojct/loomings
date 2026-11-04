@@ -187,6 +187,9 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     /// The next parse opens the citation list.
     public private(set) var isCompletionArmed = false
 
+    /// The count of queries, to prove that one list makes one query.
+    public private(set) var citationMatchRuns: UInt64 = 0
+    private var preparedRows: (range: NSRange, rows: [CitationCompletion])?
     private var typedOneCharacter = false
     /// The sign whose list the writer closed.
     private var dismissedSign: Int?
@@ -250,11 +253,11 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     }
 
     /// The sign and the query at the caret, when the document has keys and
-    /// the caret is in a place for a citation. The code and frontmatter test
-    /// reads the last parse. The parse before the sign is good for this text,
-    /// because an edit does not change what comes before it.
+    /// the caret is in a place for a citation. The code and frontmatter ranges
+    /// do not move with an edit, so there is no answer until the parse of
+    /// this text is in place.
     private func citationQueryRange() -> NSRange? {
-        guard !citationKeys.isEmpty, !textView.hasMarkedText() else { return nil }
+        guard lastAppliedRevision == revision, !citationKeys.isEmpty, !textView.hasMarkedText() else { return nil }
         let selection = textView.selectedRange()
         guard selection.length == 0,
               let text = textView.textStorage?.mutableString,
@@ -282,6 +285,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
 
     private func citationRows(for range: NSRange) -> [CitationCompletion] {
         guard let text = textView.textStorage?.mutableString else { return [] }
+        citationMatchRuns &+= 1
         let query = text.substring(with: NSRange(location: range.location + 1, length: range.length - 1))
         return CitationCompletion.matches(query, in: citationKeys)
     }
@@ -294,7 +298,9 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     ) -> [String] {
         self.textView.citationRows = nil
         guard let range = citationQueryRange(), range == charRange else { return words }
-        let rows = citationRows(for: range)
+        let prepared = preparedRows?.range == range ? preparedRows?.rows : nil
+        preparedRows = nil
+        let rows = prepared ?? citationRows(for: range)
         guard !rows.isEmpty else { return [] }
         self.textView.citationRows = Dictionary(rows.map { ($0.row, "@\($0.key)") }, uniquingKeysWith: { first, _ in first })
         index?.pointee = 0
@@ -327,11 +333,11 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     private func openArmedCompletion() {
         guard isCompletionArmed else { return }
         isCompletionArmed = false
-        guard textView.window?.firstResponder === textView,
-              let range = citationQueryRange(),
-              !citationRows(for: range).isEmpty else {
-            return
-        }
+        guard textView.window?.firstResponder === textView, let range = citationQueryRange() else { return }
+        // No matches, no `complete`. The delegate takes these rows.
+        let rows = citationRows(for: range)
+        guard !rows.isEmpty else { return }
+        preparedRows = (range, rows)
         let revision = self.revision
         RunLoop.main.perform { [weak self] in
             MainActor.assumeIsolated {
@@ -626,10 +632,7 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
         }
 
         pendingCharacterEdit = true
-        let undoManager = textView.undoManager
-        typedOneCharacter = replacementString.count == 1
-            && undoManager?.isUndoing != true
-            && undoManager?.isRedoing != true
+        typedOneCharacter = self.textView.isTyping && replacementString.count == 1
         return true
     }
 

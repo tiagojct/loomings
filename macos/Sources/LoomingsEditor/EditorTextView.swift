@@ -37,6 +37,22 @@ public final class EditorTextView: NSTextView {
     /// Takes the location of the sign when the writer closes the list.
     var onCitationListDismissed: ((Int) -> Void)?
 
+    /// True while a key press reaches the text. A key press can come through
+    /// an input method, and it arrives here too.
+    public private(set) var isTyping = false
+
+    public override func keyDown(with event: NSEvent) {
+        asTyping { super.keyDown(with: event) }
+    }
+
+    /// Runs `body` as a key press. The self-test and the tests type this way.
+    public func asTyping(_ body: () -> Void) {
+        let outer = isTyping
+        isTyping = true
+        body()
+        isTyping = outer
+    }
+
     public override var rangeForUserCompletion: NSRange {
         citationQueryRange?() ?? super.rangeForUserCompletion
     }
