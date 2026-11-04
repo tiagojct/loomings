@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Window } from 'happy-dom';
 import {
   filterLibrary, insertCitation, renderLibrary, bibliographyChoices, toggleBibliography, styleChoices,
-  languageChoices, referencesMenuHtml, metaChange, nextTab,
+  languageChoices, referencesMenuHtml, metaChange, nextTab, createReferencesView,
 } from './panel.js';
 import { readCitationMeta, setCitationMeta } from './frontmatter.js';
 import { BUNDLED_STYLES } from './style.js';
@@ -346,5 +346,50 @@ describe('nextTab', () => {
   it('gives null for other keys', () => {
     expect(nextTab(0, 'ArrowDown', 2)).toBeNull();
     expect(nextTab(0, 'a', 2)).toBeNull();
+  });
+});
+
+describe('createReferencesView', () => {
+  const split = (uses = true) => ({ split: true, uses: () => uses });
+
+  it('shows no tabs outside Split, and does not read the document there', () => {
+    const view = createReferencesView();
+    view.select('references');
+    const uses = () => { throw new Error('read the document'); };
+    expect(view.apply({ split: false, uses })).toEqual({ tabs: false, references: false, switched: false });
+  });
+
+  it('shows the tabs for a document with citations', () => {
+    const view = createReferencesView();
+    expect(view.apply(split(false))).toEqual({ tabs: false, references: false, switched: false });
+    expect(view.apply(split(true))).toEqual({ tabs: true, references: false, switched: false });
+  });
+
+  it('reports a switch when a tab is selected before the apply', () => {
+    const view = createReferencesView();
+    view.apply(split());
+    view.select('references');
+    expect(view.apply(split())).toEqual({ tabs: true, references: true, switched: true });
+    expect(view.shown).toBe(true);
+    expect(view.apply(split())).toEqual({ tabs: true, references: true, switched: false });
+    view.select('preview');
+    expect(view.apply(split())).toEqual({ tabs: true, references: false, switched: true });
+    expect(view.shown).toBe(false);
+  });
+
+  it('reports a switch when the menu asks for the library', () => {
+    const view = createReferencesView();
+    view.apply(split(false));
+    view.ask();
+    expect(view.apply(split(false))).toEqual({ tabs: true, references: true, switched: true });
+  });
+
+  it('keeps the tab for the session, and gives back the preview when the tabs go', () => {
+    const view = createReferencesView();
+    view.select('references');
+    view.apply(split(true));
+    expect(view.apply(split(false))).toEqual({ tabs: false, references: false, switched: true });
+    expect(view.tab).toBe('references');
+    expect(view.apply(split(true))).toEqual({ tabs: true, references: true, switched: true });
   });
 });

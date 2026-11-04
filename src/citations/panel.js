@@ -1,7 +1,8 @@
 // ========================================
 // Loomings — the References view and the choices of the References menu
-// The list of the library, the rules for a choice and the text changes. It
-// has no state: editor.js holds the tab and calls these functions.
+// The list of the library, the rules for a choice, the text changes and the
+// state of the tabs. It does not touch the page outside the root that it gets:
+// editor.js applies the results.
 // ========================================
 
 import { foldText } from '../accents.js';
@@ -281,6 +282,44 @@ export function metaChange(text, key, value) {
   let tail = 0;
   while (tail < limit - from && text.charCodeAt(text.length - 1 - tail) === next.charCodeAt(next.length - 1 - tail)) tail++;
   return { from, to: text.length - tail, insert: next.slice(from, next.length - tail) };
+}
+
+/**
+ * The state of the right column of Split. `apply` compares with the state of
+ * its last call, not with the current tab: `select` and `ask` change the tab
+ * before the page changes, and the page must follow.
+ * The tab stays for the session, not per document.
+ */
+export function createReferencesView() {
+  let tab = 'preview';
+  // The References menu asked for the tabs, so they stay with any document.
+  let asked = false;
+  let shown = false;
+  return {
+    get tab() { return tab; },
+    /** True when the last `apply` gave the panel. */
+    get shown() { return shown; },
+    /** @param {string} next */
+    select(next) { tab = next; },
+    ask() {
+      asked = true;
+      tab = 'references';
+    },
+    /**
+     * @param {{split: boolean, uses: () => boolean}} state
+     *   split: the view is Split. uses: the document has citations.
+     * @returns {{tabs: boolean, references: boolean, switched: boolean}}
+     *   references: the panel shows, and the preview does not.
+     *   switched: the panel and the preview changed places.
+     */
+    apply({ split, uses }) {
+      const tabs = split && (asked || uses());
+      const references = tabs && tab === 'references';
+      const switched = references !== shown;
+      shown = references;
+      return { tabs, references, switched };
+    },
+  };
 }
 
 /**

@@ -43,7 +43,9 @@ import {
   createCitationDocument, citedHtml, citationsLeftLiteral, documentMeta, documentUsesCitations,
 } from './citations/document.js';
 import { citationExtensions, citationReportEffect, citationNotes, citationThemeRules } from './citations/editor.js';
-import { insertCitation, metaChange, nextTab, referencesMenuHtml, renderLibrary, toggleBibliography } from './citations/panel.js';
+import {
+  createReferencesView, insertCitation, metaChange, nextTab, referencesMenuHtml, renderLibrary, toggleBibliography,
+} from './citations/panel.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -1448,16 +1450,12 @@ const previewTabEl    = el('tab-preview');
 const referencesTabEl = el('tab-references');
 const referencesPanel = el('references-panel');
 
-/** The open tab of Split. It stays for the session, not per document. */
-let openTab = 'preview';
-// The References menu asked for the tabs, so they stay with any document.
-let referencesAsked = false;
-let tabsShown = false;
+const referencesView  = createReferencesView();
 
 function effectiveViewMode() {
   return (viewMode === 'split' && narrowMq.matches) ? 'editor' : viewMode;
 }
-function referencesShown() { return tabsShown && openTab === 'references'; }
+function referencesShown() { return referencesView.shown; }
 function previewShown() { return effectiveViewMode() !== 'editor' && !referencesShown(); }
 // Scroll sync and paired lines need both panes of Split.
 function panesPaired() { return effectiveViewMode() === 'split' && !referencesShown(); }
@@ -1702,21 +1700,22 @@ function markTabPanel(node, tab, on) {
  * @returns {boolean} true when References and Preview changed places
  */
 function applyReferencesView() {
-  const before = referencesShown();
-  tabsShown = effectiveViewMode() === 'split' && (referencesAsked || documentUsesCitations(getText()));
-  const shown = referencesShown();
-  tabList.classList.toggle('hidden', !tabsShown);
+  const { tabs, references, switched } = referencesView.apply({
+    split: effectiveViewMode() === 'split',
+    uses: () => documentUsesCitations(getText()),
+  });
+  tabList.classList.toggle('hidden', !tabs);
   for (const [tab, name] of /** @type {[HTMLElement, string][]} */ ([[previewTabEl, 'preview'], [referencesTabEl, 'references']])) {
-    tab.setAttribute('aria-selected', String(openTab === name));
-    tab.tabIndex = openTab === name ? 0 : -1;
+    tab.setAttribute('aria-selected', String(referencesView.tab === name));
+    tab.tabIndex = referencesView.tab === name ? 0 : -1;
   }
-  markTabPanel(preview, previewTabEl, tabsShown);
-  markTabPanel(referencesPanel, referencesTabEl, tabsShown && !referencesModal);
-  if (!referencesModal) referencesPanel.classList.toggle('hidden', !shown);
+  markTabPanel(preview, previewTabEl, tabs);
+  markTabPanel(referencesPanel, referencesTabEl, tabs && !referencesModal);
+  if (!referencesModal) referencesPanel.classList.toggle('hidden', !references);
   // Also with no switch: another document can have no report to announce it.
   renderReferencesPanel();
-  if (shown === before) return false;
-  preview.classList.toggle('hidden', shown);
+  if (!switched) return false;
+  preview.classList.toggle('hidden', references);
   clearPairing();
   invalidatePreviewBlocks();
   return true;
@@ -1732,8 +1731,8 @@ function renderReferencesPanel() {
 
 /** @param {string} tab */
 function selectTab(tab) {
-  if (tab === openTab) return;
-  openTab = tab;
+  if (tab === referencesView.tab) return;
+  referencesView.select(tab);
   updatePreview();
 }
 
@@ -1808,8 +1807,7 @@ el('references-dialog').addEventListener('click', (e) => {
 
 function showLibrary() {
   if (narrowMq.matches) { openReferencesDialog(); return; }
-  referencesAsked = true;
-  openTab = 'references';
+  referencesView.ask();
   if (viewMode === 'split') updatePreview(); else setViewMode('split');
   libraryFocus()?.focus();
 }
