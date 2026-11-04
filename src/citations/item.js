@@ -38,7 +38,9 @@ const isObject = (/** @type {unknown} */ v) => typeof v === 'object' && v !== nu
  * @returns {string|undefined}
  */
 function toText(value) {
-  if (typeof value === 'string') return value;
+  // Citeproc needs time for the square of a run of white space, and a share
+  // link can hold a million spaces. The fields hold no meaning in a run.
+  if (typeof value === 'string') return value.replace(/\s{2,}/g, ' ');
   return typeof value === 'number' && Number.isFinite(value) ? String(value) : undefined;
 }
 

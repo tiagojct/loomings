@@ -22,6 +22,13 @@ describe('readCitationMeta: dropped references', () => {
 });
 
 describe('readCitationMeta', () => {
+  it('reads a line with a million spaces and a line separator in time', () => {
+    const spaces = ' '.repeat(1000000);
+    const before = performance.now();
+    const meta = readCitationMeta(`---\nbibliography:\n-${spaces}a\u2028b\ncsl${spaces}\u2028x: y\n---\nText.\n`);
+    expect(performance.now() - before).toBeLessThan(1000);
+    expect(meta.bibliography).toEqual(['a\u2028b']);
+  });
   it('returns defaults without frontmatter', () => {
     expect(readCitationMeta('# Title\n\ntext')).toEqual(empty);
     expect(readCitationMeta('')).toEqual(empty);

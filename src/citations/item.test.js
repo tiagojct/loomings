@@ -7,6 +7,15 @@ const style = (n) => readFileSync(new URL(`./styles/${n}.csl`, import.meta.url),
 const locale = readFileSync(new URL('./locales/locales-en-US.xml', import.meta.url), 'utf8');
 
 describe('sanitiseItem', () => {
+  it('keeps one space for a run of white space: citeproc needs time for the square of a run', () => {
+    const item = sanitiseItem({
+      id: 'a', title: `a${' '.repeat(1000)}b`, author: [{ family: `F  G`, given: 'A\t\tB' }],
+      issued: { raw: '2020   01' }, note: 'one\ntwo',
+    });
+    expect(item).toEqual({
+      id: 'a', title: 'a b', author: [{ family: 'F G', given: 'A B' }], issued: { raw: '2020 01' }, note: 'one\ntwo',
+    });
+  });
   it('keeps a good item as it is', () => {
     const item = {
       id: 'a', type: 'book', title: 'T', volume: '3', author: [{ family: 'S', given: 'J' }, { literal: 'WHO' }],

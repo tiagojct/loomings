@@ -15,8 +15,10 @@ import { splitLines, frontmatterLines } from '../teaching/parse.js';
  * @typedef {import('../teaching/parse.js').SourceLine} SourceLine
  */
 
-const KEY = /^([A-Za-z][\w-]*)[ \t]*:(.*)$/;
-const ITEM = /^[ \t]*-(?:[ \t]+(.*))?$/;
+// With the s flag, `.` also takes U+2028 and U+2029. These do not end a line
+// here, and without the flag each space before one costs a pass of the line.
+const KEY = /^([A-Za-z][\w-]*)[ \t]*:(.*)$/s;
+const ITEM = /^[ \t]*-(?:[ \t]+(.*))?$/s;
 
 /**
  * Find a key line inside the frontmatter. A key owns the list items and
