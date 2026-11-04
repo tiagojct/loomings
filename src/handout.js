@@ -9,6 +9,51 @@
 
 import { peleSeriesCss } from './mermaid.js';
 
+const WAIT_STATUS_DELAY = 150;
+
+/**
+ * Wraps a task so that a call during a run does nothing.
+ *
+ * @template T
+ * @param {() => Promise<T>} task
+ * @returns {() => Promise<T|undefined>}
+ */
+export function oneAtATime(task) {
+  let busy = false;
+  return async () => {
+    if (busy) return undefined;
+    busy = true;
+    try {
+      return await task();
+    } finally {
+      busy = false;
+    }
+  };
+}
+
+/**
+ * Waits for a promise, and shows a status only if the wait is not short.
+ *
+ * @template T
+ * @param {Promise<T>} wait
+ * @param {() => void} show
+ * @param {() => void} hide
+ * @returns {Promise<T>}
+ */
+export async function withWaitStatus(wait, show, hide) {
+  let shown = false;
+  const timer = setTimeout(() => {
+    shown = true;
+    show();
+  }, WAIT_STATUS_DELAY);
+  try {
+    return await wait;
+  } finally {
+    clearTimeout(timer);
+    if (shown) hide();
+  }
+}
+
 /**
  * @param {string} language a BCP 47 tag, e.g. navigator.language
  * @returns {'A4'|'letter'}

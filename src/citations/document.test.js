@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { createCitationDocument, citedHtml, referencesHtml, citationsLeftLiteral } from './document.js';
+import { createCitationDocument, citedHtml, referencesHtml, citationsLeftLiteral, metaPrefix } from './document.js';
+import { readCitationMeta } from './frontmatter.js';
 import * as library from './library.js';
 import { createSession } from './session.js';
 import { renderPreview, renderMarkdown } from '../markdown.js';
@@ -437,6 +438,184 @@ describe('the time limit of flush', () => {
     client.answer(report());
     await settle();
     expect(client.asked).toEqual([WITH_BIB, `${WITH_BIB}more`]);
+  });
+});
+
+describe('reset, when another document loads', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  const chapterA = '---\nbibliography: refs.bib\n---\n\nChapter A [@a].\n';
+  const chapterB = '---\nbibliography: refs.bib\n---\n\nChapter B [@a].\n';
+  const reportOfA = () => {
+    const from = chapterA.indexOf('[@a]');
+    return {
+      ...report('A'),
+      citations: [{ from, to: from + 4, html: '(A)', markdown: '(A)', missing: [] }],
+      bibliography: ['<div class="csl-entry">From A.</div>'],
+    };
+  };
+
+  it('ignores a report of A that arrives after the load', async () => {
+    const { doc, client, options } = setup();
+    await typed(doc, chapterA);
+    doc.reset();
+    await typed(doc, chapterB);
+    client.answer(reportOfA());
+    await settle();
+    expect(doc.current()).toBe(null);
+    expect(doc.reportFor(chapterB)).toBe(null);
+    expect(options.onChange).not.toHaveBeenCalled();
+    expect(client.asked).toEqual([chapterA, chapterB]);
+    const own = report('B');
+    client.answer(own);
+    await settle();
+    expect(doc.reportFor(chapterB)).toBe(own);
+    expect(options.onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps B literal after the load, with no report of A', async () => {
+    const { doc, client } = setup();
+    await typed(doc, chapterA);
+    client.answer(reportOfA());
+    await settle();
+    expect(doc.reportFor(chapterB)).not.toBe(null);
+    doc.reset();
+    expect(doc.reportFor(chapterB)).toBe(null);
+    expect(doc.current()).toBe(null);
+  });
+
+  it('gives no report of A on the path of the flush limit', async () => {
+    const { doc, client } = setup();
+    await typed(doc, chapterA);
+    client.answer(reportOfA());
+    await settle();
+    doc.reset();
+    let done;
+    doc.flush(chapterB).then((r) => { done = r; });
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(done).toBe(null);
+    expect(citationsLeftLiteral(chapterB, done)).toBe(true);
+  });
+
+  it('still answers a flush of A, and does not hold the report', async () => {
+    const { doc, client } = setup();
+    const flushed = doc.flush(chapterA);
+    await settle();
+    doc.reset();
+    const own = reportOfA();
+    client.answer(own);
+    await expect(flushed).resolves.toBe(own);
+    expect(doc.current()).toBe(null);
+  });
+
+  it('does not hold a report of a flush of A that waited behind another text', async () => {
+    const { doc, client } = setup();
+    await typed(doc, `${chapterA}typed`);
+    const flushed = doc.flush(chapterA);
+    doc.reset();
+    client.answer(report('typed'));
+    await settle();
+    client.answer(reportOfA());
+    await flushed;
+    await settle();
+    expect(doc.current()).toBe(null);
+  });
+
+  it('gives null to a flush of A past its limit after a load', async () => {
+    const { doc, client } = setup();
+    await typed(doc, `${chapterB}typed`);
+    let done;
+    doc.flush(chapterA).then((r) => { done = r; });
+    doc.reset();
+    await typed(doc, chapterB);
+    client.answer(report('typed'));
+    await settle();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(done).toBe(null);
+  });
+
+  it('drops a text that waits in the debounce', async () => {
+    const { doc, client } = setup();
+    doc.update(chapterA);
+    doc.reset();
+    await vi.advanceTimersByTimeAsync(300);
+    expect(client.asked).toEqual([]);
+  });
+});
+
+describe('refresh with a pending edit', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('does not lose a text in the debounce, and reads the files for it', async () => {
+    const { doc, client, options } = setup();
+    await typed(doc, `${WITH_BIB}1`);
+    client.answer(report());
+    await settle();
+    doc.update(`${WITH_BIB}2`);
+    await vi.advanceTimersByTimeAsync(100);
+    doc.refresh();
+    await settle();
+    expect(client.asked).toEqual([`${WITH_BIB}1`]);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(client.asked).toEqual([`${WITH_BIB}1`, `${WITH_BIB}2`]);
+    expect(options.listFiles).toHaveBeenCalledTimes(2);
+    expect(client.setSources).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('the held report', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('does not go back to an older text', async () => {
+    const older = `${WITH_BIB}older`;
+    const newer = `${WITH_BIB}newer`;
+    const { doc, client } = setup();
+    await typed(doc, newer);
+    const flushed = doc.flush(older);
+    const kept = report('newer');
+    client.answer(kept);
+    await settle();
+    await typed(doc, newer);
+    const old = report('older');
+    client.answer(old);
+    await expect(flushed).resolves.toBe(old);
+    await settle();
+    expect(doc.current()).toEqual({ text: newer, report: kept });
+  });
+});
+
+describe('metaPrefix', () => {
+  const body = (n) => Array.from({ length: n }, (_, i) => `# line ${i}`);
+  const document = (closingAt, eol = '\n') =>
+    ['---', 'bibliography: refs.bib', ...body(closingAt - 2), '---', 'Text [@a].'].join(eol);
+
+  it('is empty for a document with no frontmatter, at no cost for its size', () => {
+    expect(metaPrefix(`Text\n${'x'.repeat(10_000_000)}`)).toBe('');
+    expect(metaPrefix('')).toBe('');
+    expect(metaPrefix('---text\n---\n')).toBe('');
+  });
+
+  it('stops at 50 lines in a long document', () => {
+    const text = document(60);
+    expect(metaPrefix(text).split('\n')).toHaveLength(51);
+    expect(metaPrefix(text).length).toBeLessThan(text.length);
+  });
+
+  it.each(['\n', '\r\n', '\r'])('gives the same meta as the whole text at the limit, line end %j', (eol) => {
+    for (const closingAt of [1, 2, 48, 49, 50, 51]) {
+      const text = document(closingAt, eol);
+      expect(readCitationMeta(metaPrefix(text))).toEqual(readCitationMeta(text));
+    }
+    expect(readCitationMeta(metaPrefix(document(49, eol))).bibliography).toEqual(['refs.bib']);
+    expect(readCitationMeta(metaPrefix(document(50, eol))).bibliography).toEqual([]);
+  });
+
+  it('keeps a short document whole', () => {
+    expect(metaPrefix(WITH_BIB)).toBe(WITH_BIB);
+    expect(metaPrefix('---')).toBe('---');
   });
 });
 

@@ -23,6 +23,27 @@ import { scanCitations } from './scan.js';
 
 const WAIT = 300;
 const FLUSH_LIMIT = 10000;
+// frontmatterLines in teaching/parse.js looks for the closing line in this many lines.
+const FRONTMATTER_LINES = 50;
+
+/**
+ * The leading lines that can hold the frontmatter. A document that does not
+ * start with `---` gives an empty text at once, whatever its size.
+ *
+ * @param {string} source
+ * @returns {string}
+ */
+export function metaPrefix(source) {
+  if (!/^---(?:\r\n?|\n|$)/.test(source)) return '';
+  const lineEnd = /\r\n?|\n/g;
+  for (let n = 0; n < FRONTMATTER_LINES; n++) {
+    if (!lineEnd.exec(source)) return source;
+  }
+  return source.slice(0, lineEnd.lastIndex);
+}
+
+/** @param {string} source */
+const readMeta = (source) => readCitationMeta(metaPrefix(source));
 
 /** @param {import('./frontmatter.js').CitationMeta} meta */
 const usesCitations = (meta) => meta.bibliography.length > 0 || meta.references.length > 0 || meta.referencesDropped !== 0;
@@ -39,7 +60,7 @@ const metaKey = (meta) => JSON.stringify([meta.bibliography, meta.csl, meta.lang
  * @returns {boolean}
  */
 export function citationsLeftLiteral(source, report) {
-  if (!usesCitations(readCitationMeta(source))) return false;
+  if (!usesCitations(readMeta(source))) return false;
   return scanCitations(source).length > (report?.citations.length ?? 0);
 }
 
@@ -100,7 +121,7 @@ export function referencesHtml(title, entries) {
 export function citedHtml(source, report, render) {
   if (!report) return render(source);
   const { text, fill } = applyCitations(source, report);
-  return fill(render(text)) + referencesHtml(readCitationMeta(source).title, report.bibliography);
+  return fill(render(text)) + referencesHtml(readMeta(source).title, report.bibliography);
 }
 
 /**
@@ -111,7 +132,7 @@ export function citedHtml(source, report, render) {
  *   `onChange` runs when the report of the latest text arrives or goes.
  *   `library` is lazy too, and tests replace it: a real import takes real time.
  * @returns {{update(text: string|(() => string)): void, flush(text: string): Promise<CitationReport|null>,
- *   refresh(): Promise<CitationReport|null>, current(): HeldReport|null,
+ *   refresh(): Promise<CitationReport|null>, reset(): void, current(): HeldReport|null,
  *   reportFor(text: string): CitationReport|null}}
  */
 export function createCitationDocument({ client, listFiles, assets, onChange, library = () => import('./library.js') }) {
@@ -121,8 +142,10 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
   let latest = null;
   /** @type {string|null} the text that waits for its turn */
   let typed = null;
-  /** @type {{text: string, resolve: (report: CitationReport|null) => void, limit?: ReturnType<typeof setTimeout>}[]} */
+  /** @type {{text: string, doc: number, resolve: (report: CitationReport|null) => void, limit?: ReturnType<typeof setTimeout>}[]} */
   const flushes = [];
+  // Counts the loaded documents. A report of an earlier document is not held.
+  let doc = 0;
   /** @type {HeldReport|null} */
   let held = null;
   /** @type {Promise<CitationClient|null>|null} */
@@ -188,7 +211,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
    * @returns {Promise<CitationReport|null>}  null: this text has no citations to show
    */
   async function analyse(text) {
-    const meta = readCitationMeta(text);
+    const meta = readMeta(text);
     if (!usesCitations(meta)) return null;
     const loaded = await loadClient();
     if (!loaded) return null;
@@ -210,6 +233,7 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
       if (text === typed) typed = null;
       // A flush that starts after this point can need newer files: it waits for its own turn.
       const served = flushes.filter((f) => f.text === text);
+      const owner = flushes.length ? flushes[0].doc : doc;
       /** @type {CitationReport|null} */
       let report = null;
       try {
@@ -217,8 +241,10 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
       } catch {
         // Keep the citations literal, and do not stop a print that waits.
       }
-      const changed = report !== (held?.report ?? null);
-      held = report ? { text, report } : null;
+      // A flush of an older text can end after the latest text has its report.
+      const goesBack = text !== latest && held?.text === latest;
+      const changed = owner === doc && !goesBack && report !== (held?.report ?? null);
+      if (changed) held = report ? { text, report } : null;
       for (const flush of served) {
         const at = flushes.indexOf(flush);
         // A flush past its time limit has left the list and has its answer.
@@ -249,8 +275,8 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
   function reportFor(text) {
     if (!held) return null;
     if (held.text === text) return held.report;
-    const meta = readCitationMeta(text);
-    if (!usesCitations(meta) || metaKey(meta) !== metaKey(readCitationMeta(held.text))) return null;
+    const meta = readMeta(text);
+    if (!usesCitations(meta) || metaKey(meta) !== metaKey(readMeta(held.text))) return null;
     return moveReport(held, text);
   }
 
@@ -260,11 +286,11 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
     latest = text;
     return new Promise((resolve) => {
       /** @type {typeof flushes[number]} */
-      const entry = { text, resolve };
+      const entry = { text, doc, resolve };
       // A worker that hangs must not stop a print. A late answer still counts as a report.
       entry.limit = setTimeout(() => {
         flushes.splice(flushes.indexOf(entry), 1);
-        resolve(reportFor(text));
+        resolve(entry.doc === doc ? reportFor(text) : null);
       }, FLUSH_LIMIT);
       flushes.push(entry);
       run();
@@ -284,9 +310,20 @@ export function createCitationDocument({ client, listFiles, assets, onChange, li
 
     flush,
 
+    // A text in the debounce is newer than `latest`, and its run reads the files.
     refresh() {
       filesStale = true;
-      return latest === null ? Promise.resolve(null) : flush(latest);
+      return timer || latest === null ? Promise.resolve(null) : flush(latest);
+    },
+
+    // Call this before the editor gets another document. Flushes still get their answers.
+    reset() {
+      doc++;
+      if (timer) clearTimeout(timer);
+      timer = null;
+      held = null;
+      latest = null;
+      typed = null;
     },
 
     current: () => held,

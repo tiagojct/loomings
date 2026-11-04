@@ -21,7 +21,7 @@ import { outline, sections, limitsIn, sectionAt } from './teaching/sections.js';
 import lessonChecks from '../lessons/checks.json';
 import { PROJECTOR, markerName, createProjector } from './projector.js';
 import { qrSvg, qrPrintSide } from './qr.js';
-import { handoutCss, paperFor } from './handout.js';
+import { handoutCss, paperFor, oneAtATime, withWaitStatus } from './handout.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -1339,6 +1339,7 @@ async function fileNew() {
   }
   await session.discardScratch();
   attachedChecks = null;
+  citations.reset();
   setText('');
   currentFile = null;
   currentDocId = null;
@@ -1650,9 +1651,14 @@ function updatePreview({ onlyIfChanged = false } = {}) {
 const QR_CAPTION = 'Scan to open this document in Loomings.';
 const QR_TOO_LONG = 'This document is too long for a QR code; share it as a link.';
 
-async function printPreview() {
+async function printHandout() {
   const text = getText();
-  const report = await citations.flush(text);
+  // Take the title now: the user can open another document during the wait.
+  const title = currentFile ? displayName(currentFile) : firstHeading(text) || '';
+  const report = await withWaitStatus(citations.flush(text), () => {
+    if (statusTimer) clearTimeout(statusTimer);
+    statusApp.textContent = 'Preparing citations for print';
+  }, refreshStatusBar);
   if (citationsLeftLiteral(text, report)) flashStatus('Citations are not ready; printing without them');
   let qr = '';
   if (text.trim()) {
@@ -1683,7 +1689,7 @@ async function printPreview() {
   const page = document.createElement('style');
   page.id = 'handout-page';
   page.textContent = handoutCss({
-    title: currentFile ? displayName(currentFile) : firstHeading(text) || '',
+    title,
     palette: roles(themeFamily, 'light'),
     paper: paperFor(navigator.language || 'en-GB'),
   });
@@ -1697,6 +1703,8 @@ async function printPreview() {
   window.addEventListener('afterprint', cleanup);
   window.print();
 }
+
+const printPreview = oneAtATime(printHandout);
 
 // ==========================
 //  Share link as a QR code
@@ -2094,6 +2102,7 @@ async function loadFile(payload) {
   await session.discardScratch(); // the buffer we're replacing is no longer relevant to recover
   // Checks come only with a bundled lesson; any other document drops them.
   attachedChecks = payload.attached || null;
+  citations.reset();
   setText(payload.content);
   currentDocId = payload.docId || null;
   if (!payload.path) {
