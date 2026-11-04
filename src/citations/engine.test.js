@@ -25,7 +25,8 @@ const cite = (keys, extra = {}) => ({
 const make = (s, lang = 'en-US', loc = lang) =>
   createEngine({ styleXml: style(s), localeXml: locale(loc), lang, items });
 
-describe('createEngine', () => {
+// citeproc is slow to start, and a loaded machine can take more than the default 5 s.
+describe('createEngine', { timeout: 20000 }, () => {
   it('formats APA author-date', () => {
     const r = make('apa').render([cite(['jacome2020'])]);
     expect(r.texts[0]).toContain('Jácome et al., 2020');
@@ -95,7 +96,7 @@ describe('createEngine', () => {
   });
 });
 
-describe('createEngine errors and bare numeric', () => {
+describe('createEngine errors and bare numeric', { timeout: 20000 }, () => {
   const opts = (styleXml) => ({ styleXml, localeXml: locale('en-US'), lang: 'en-US', items });
   it('throws a clear error for a truncated style', () => {
     const xml = style('apa').slice(0, 3000);

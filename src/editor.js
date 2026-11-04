@@ -33,11 +33,13 @@ import {
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
+  listCitationFiles, refreshCitationFiles,
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
 import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
+import { createCitationDocument, citedHtml } from './citations/document.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -1148,11 +1150,27 @@ const session = createSession({
   onError: (message) => flashStatus(message),
 });
 
+// The worker and the citeproc code load only for a document that uses them.
+const citations = createCitationDocument({
+  client: async () => (await import('./citations/client.js')).createCitationClient(),
+  assets: () => import('./citations/assets.js'),
+  listFiles: listCitationFiles,
+  onChange: () => updatePreview({ onlyIfChanged: true }),
+});
+
+// The report of this text, or null. A report of an older text is not used:
+// its offsets are wrong for this text, so the citations stay literal.
+function citationReport(text) {
+  const held = citations.current();
+  return held && held.text === text ? held.report : null;
+}
+
 function markDirty() {
   session.markEdited();
   scheduleStats();
   schedulePreview();
   scheduleTeaching();
+  citations.update(getText);
 }
 
 function markClean() { session.markClean(); }
@@ -1253,7 +1271,9 @@ async function exportHtml() {
   const p = roles(themeFamily, activeTheme);
   const lp = roles(themeFamily, 'light');
   const title = currentFile ? displayName(currentFile) : 'Untitled';
-  const rendered = await renderDiagramsInHtml(renderMarkdown(getText()));
+  const text = getText();
+  const report = await citations.flush(text);
+  const rendered = await renderDiagramsInHtml(citedHtml(text, report, renderMarkdown));
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1279,10 +1299,17 @@ async function exportHtml() {
   pre.mermaid { background: none; border: 0; padding: 0; text-align: center; }
   pre.mermaid svg { max-width: 100%; height: auto; }
   pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
+  .cite-missing { color: ${p.fgDim}; }
+  .references { margin-top: 2.5em; }
+  .csl-entry { margin-bottom: 0.6em; overflow-wrap: anywhere; }
+  .csl-left-margin { float: left; width: 2.75em; }
+  .csl-right-inline { margin-left: 2.75em; }
   .pele { --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
           --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
           --pele-accent: ${p.accent}; ${peleSeriesCss(p, p.bg)} }
   @media print { body { background: #fff; color: #000; }
+    .cite-missing { color: ${lp.fgDim}; }
+    .csl-entry { break-inside: avoid; }
     /* --pele-bg is the paper colour (#fff) of the body rule above. */
     .pele { --pele-bg: #fff; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
             --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; ${peleSeriesCss(lp, '#fff')} } }
@@ -1597,11 +1624,18 @@ preview.addEventListener('mouseover', (e) => {
 preview.addEventListener('mouseleave', () => lightSourceLines(null));
 
 let previewGeneration = 0;
+/** @type {string|null} */ let previewHtml = null;
 
-function updatePreview() {
+// onlyIfChanged: a citation report that gives the same HTML starts no new
+// render, so the diagrams are not drawn again.
+function updatePreview({ onlyIfChanged = false } = {}) {
   if (!previewShown()) return;
+  const text = getText();
+  const html = citedHtml(text, citationReport(text), renderPreview);
+  if (onlyIfChanged && html === previewHtml) return;
+  previewHtml = html;
   const generation = ++previewGeneration;
-  preview.innerHTML = renderPreview(getText());
+  preview.innerHTML = html;
   pairedBlockEl = null;
   invalidatePreviewBlocks();
   if (effectiveViewMode() === 'split') syncPreviewToEditor();
@@ -1624,6 +1658,7 @@ const QR_TOO_LONG = 'This document is too long for a QR code; share it as a link
 
 async function printPreview() {
   const text = getText();
+  const report = await citations.flush(text);
   let qr = '';
   if (text.trim()) {
     /** @type {string|null} */ let url = null;
@@ -1637,7 +1672,7 @@ async function printPreview() {
   // the page, then build it again if that happens.
   let seen = ++previewGeneration;
   const build = async () => {
-    preview.innerHTML = renderPreview(text) + qr;
+    preview.innerHTML = citedHtml(text, report, renderPreview) + qr;
     pairedBlockEl = null;
     invalidatePreviewBlocks();
     await renderDiagrams(preview);
@@ -2086,7 +2121,15 @@ async function loadFile(payload) {
 //  Drag-and-drop to open
 // ==========================
 
-initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
+initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)), ({ name, stored }) => {
+  flashStatus(stored ? `Added ${name}; it stays in this browser` : `Could not save ${name} in this browser`);
+  if (stored) citations.refresh();
+});
+
+// A citation file can change on disk while the user is in another app.
+window.addEventListener('focus', async () => {
+  if ((await refreshCitationFiles()).length) citations.refresh();
+});
 
 // ==========================
 //  Share links (document in the URL fragment)

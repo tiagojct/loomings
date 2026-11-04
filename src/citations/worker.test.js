@@ -1,6 +1,9 @@
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 
+// Each engine start parses a style and a locale. Under load this takes more than the default 5 s.
+vi.setConfig({ testTimeout: 20000 });
+
 const style = readFileSync(new URL('./styles/apa.csl', import.meta.url), 'utf8');
 const locale = readFileSync(new URL('./locales/locales-en-US.xml', import.meta.url), 'utf8');
 

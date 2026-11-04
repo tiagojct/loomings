@@ -46,7 +46,7 @@ async function findParent(parent, files, assets) {
  * @param {StoredFile[]} files
  * @param {CitationAssets} assets
  * @returns {Promise<{bibs: {name: string, text: string}[], styleXml: string|null, localeXml: string|null,
- *   fallbackLocaleXml: string|null, lang: string, missing: string[], styleError?: string}>}
+ *   fallbackLocaleXml: string, lang: string, missing: string[], styleError?: string}>}
  */
 export async function resolveSources(meta, files, assets) {
   /** @type {string[]} */

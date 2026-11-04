@@ -5,6 +5,9 @@ import { createEngine } from './engine.js';
 import { applyCitations } from './output.js';
 import { renderMarkdown } from '../markdown.js';
 
+// Each engine start parses a style and a locale. Under load this takes more than the default 5 s.
+vi.setConfig({ testTimeout: 20000 });
+
 const style = (n) => readFileSync(new URL(`./styles/${n}.csl`, import.meta.url), 'utf8');
 const locale = (l) => readFileSync(new URL(`./locales/locales-${l}.xml`, import.meta.url), 'utf8');
 

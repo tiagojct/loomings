@@ -401,6 +401,12 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   color: var(--fg-dim);
   font-size: 0.9em;
 }
+#preview .cite-missing { color: var(--fg-dim); }
+#preview .references { margin-top: 2.5em; }
+#preview .csl-entry { margin-bottom: 0.6em; overflow-wrap: anywhere; }
+/* Numbered styles. Citeproc puts the number and the text in two blocks. */
+#preview .csl-left-margin { float: left; width: 2.75em; }
+#preview .csl-right-inline { margin-left: 2.75em; }
 #preview blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 16px;
@@ -939,6 +945,10 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
   #preview pre.mermaid-error p { color: var(--print-dim, #333); }
   #preview blockquote { border-left-color: var(--print-border, #999); color: var(--print-dim, #333); }
   #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: var(--print-dim, #555); }
+  /* A reference prints its links as text, so the rule above would print each one twice. */
+  #preview :is(.cite, .references) a[href^="http"]::after { content: none; }
+  #preview .cite-missing { color: var(--print-dim, #555); }
+  #preview .csl-entry { break-inside: avoid; }
   #preview .paired { background: none; box-shadow: none; }
   #preview .handout-qr { display: block; break-inside: avoid; margin-top: 2.5em; text-align: center; color: var(--print-fg); }
   #preview .handout-qr svg { display: block; margin: 0 auto; }
