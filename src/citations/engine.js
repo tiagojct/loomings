@@ -8,6 +8,7 @@
 // ========================================
 
 import CSL from 'citeproc';
+import { checkStyle } from './style.js';
 
 /**
  * @typedef {import('./scan.js').Citation} Citation
@@ -15,19 +16,40 @@ import CSL from 'citeproc';
  */
 
 /**
- * @param {{styleXml: string, localeXml: string, lang: string, items: CslItem[]}} options
+ * Throws an Error with a short message when the style is not usable.
+ *
+ * @param {{styleXml: string, localeXml: string, lang: string, items: CslItem[], fallbackLocaleXml?: string}} options
  * @returns {{render(citations: Citation[]): {texts: string[], bibliography: string[]}}}
  */
-export function createEngine({ styleXml, localeXml, lang, items }) {
+export function createEngine({ styleXml, localeXml, lang, items, fallbackLocaleXml }) {
+  const checked = checkStyle(styleXml);
+  if (!checked.ok) {
+    throw new Error(
+      checked.reason === 'dependent'
+        ? `This style depends on another style${checked.parent ? ` (${checked.parent})` : ''}. Use the parent style file.`
+        : 'The style file is not valid CSL.',
+    );
+  }
   /** @type {Map<string, CslItem>} */
   const byId = new Map();
   for (const item of items) if (!byId.has(item.id)) byId.set(item.id, item);
 
-  const engine = new CSL.Engine(
-    { retrieveLocale: () => localeXml, retrieveItem: (/** @type {string} */ id) => byId.get(id) },
-    styleXml,
-    lang,
-  );
+  /** @type {any} */
+  let engine;
+  try {
+    engine = new CSL.Engine(
+      {
+        // The fallback is for terms that the main locale lacks.
+        retrieveLocale: (/** @type {string} */ l) =>
+          fallbackLocaleXml && l === 'en-US' && lang !== 'en-US' ? fallbackLocaleXml : localeXml,
+        retrieveItem: (/** @type {string} */ id) => byId.get(id),
+      },
+      styleXml,
+      lang,
+    );
+  } catch (e) {
+    throw new Error(`The style file cannot be used: ${e instanceof Error ? e.message : String(e)}`);
+  }
   engine.opt.development_extensions.wrap_url_and_doi = true;
 
   /**
@@ -89,7 +111,9 @@ export function createEngine({ styleXml, localeXml, lang, items }) {
         if (!list.length) return;
         const sub = { ...c, items: list };
         if (c.bare) {
+          // The scanner makes bare citations with one item only.
           // The author as author-only, then the rest with the author hidden.
+          // A numeric style has no author text: its first part is dropped.
           parts[ci] = ['', ''];
           send(list.map((it) => ({ id: it.key, 'author-only': true })), ci, 0);
           send(toItems(sub.items, true, true), ci, 1);
@@ -99,7 +123,10 @@ export function createEngine({ styleXml, localeXml, lang, items }) {
         }
       });
 
-      const texts = parts.map((p) => p.filter((t) => t !== '').join(' '));
+      const texts = parts.map((p) => {
+        const shown = p.length === 2 && (!p[0] || p[0].includes('NO_PRINTED_FORM')) ? [p[1]] : p;
+        return shown.filter((t) => t !== '').join(' ');
+      });
       const made = used.length ? engine.makeBibliography() : false;
       const bibliography = made ? made[1].slice() : [];
       return { texts, bibliography };

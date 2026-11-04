@@ -33,7 +33,7 @@ describe('createEngine', () => {
   });
   it('gives a number in Vancouver', () => {
     const r = make('vancouver').render([cite(['jacome2020'])]);
-    expect(r.texts[0]).toMatch(/1/);
+    expect(r.texts[0]).toBe('(1)');
   });
   it('keeps prefix and locator', () => {
     const c = cite(['smith2019']);
@@ -95,7 +95,40 @@ describe('createEngine', () => {
   });
 });
 
+describe('createEngine errors and bare numeric', () => {
+  const opts = (styleXml) => ({ styleXml, localeXml: locale('en-US'), lang: 'en-US', items });
+  it('throws a clear error for a truncated style', () => {
+    const xml = style('apa').slice(0, 3000);
+    expect(() => createEngine(opts(xml))).toThrow(/not valid/i);
+  });
+  it('throws a clear error for text that is not a style', () => {
+    expect(() => createEngine(opts('hello'))).toThrow(/not valid/i);
+  });
+  it('throws and names the parent for a dependent style', () => {
+    const xml = `<?xml version="1.0"?><style xmlns="http://purl.org/net/xbiblio/csl" version="1.0"><info><title>Dep</title><id>http://x/dep</id>
+<link href="http://www.zotero.org/styles/ieee" rel="independent-parent"/></info></style>`;
+    expect(() => createEngine(opts(xml))).toThrow(/ieee/);
+  });
+  it('gives no NO_PRINTED_FORM for bare citations in numeric styles', () => {
+    for (const n of ['ieee', 'vancouver']) {
+      const t = make(n).render([cite(['jacome2020'], { bare: true })]).texts[0];
+      expect(t).not.toContain('NO_PRINTED_FORM');
+      expect(t).toMatch(/1/);
+    }
+  });
+  it('uses the fallback locale for a term missing in the main one', () => {
+    const e = createEngine({ ...opts(style('apa')), lang: 'pt-PT', localeXml: locale('pt-PT'), fallbackLocaleXml: locale('en-US') });
+    expect(e.render([cite(['smith2019'])]).texts[0]).toContain('Smith');
+  });
+});
+
 describe('checkStyle', () => {
+  it('reports invalid for a truncated style', () => {
+    expect(checkStyle(style('apa').slice(0, 3000))).toEqual({ ok: false, reason: 'invalid' });
+  });
+  it('reports invalid for a style without citation', () => {
+    expect(checkStyle('<style xmlns="x"><info><title>T</title></info></style>')).toEqual({ ok: false, reason: 'invalid' });
+  });
   it('accepts a bundled style', () => {
     const r = checkStyle(style('apa'));
     expect(r.ok).toBe(true);

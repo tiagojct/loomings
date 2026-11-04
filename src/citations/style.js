@@ -34,11 +34,48 @@ export function localeFor(lang) {
 }
 
 /**
+ * Checks that the tags are balanced and that the root is a closed style.
+ * A small tokenizer: no DOM, so a worker and JavaScriptCore can run it.
+ *
+ * @param {string} xml
+ * @returns {boolean}
+ */
+function wellFormed(xml) {
+  const text = xml
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<!\[CDATA\[[\s\S]*?\]\]>/g, '')
+    .replace(/<\?[\s\S]*?\?>/g, '')
+    .replace(/<!DOCTYPE[^>]*>/gi, '');
+  const TAG = /<(\/?)([A-Za-z_][^\s/>]*)((?:"[^"]*"|'[^']*'|[^>"'])*?)(\/?)>/g;
+  /** @type {string[]} */
+  const stack = [];
+  let last = 0;
+  let closedRoot = false;
+  let m;
+  while ((m = TAG.exec(text)) !== null) {
+    // Text between tags must not contain a stray "<".
+    if (text.slice(last, m.index).includes('<')) return false;
+    last = TAG.lastIndex;
+    if (closedRoot) return false;
+    if (m[1]) {
+      if (stack.pop() !== m[2]) return false;
+      if (!stack.length) closedRoot = true;
+    } else if (!m[4]) {
+      stack.push(m[2]);
+    } else if (!stack.length) {
+      closedRoot = true;
+    }
+  }
+  if (text.slice(last).includes('<')) return false;
+  return closedRoot && /^style$/.test(text.match(/<([A-Za-z_][^\s/>]*)/)?.[1] ?? '');
+}
+
+/**
  * @param {string} xml
  * @returns {{ok: true, title: string} | {ok: false, reason: 'invalid'|'dependent', parent?: string}}
  */
 export function checkStyle(xml) {
-  if (typeof xml !== 'string' || !/<style[\s>]/.test(xml)) return { ok: false, reason: 'invalid' };
+  if (typeof xml !== 'string' || !/<style[\s>]/.test(xml) || !wellFormed(xml)) return { ok: false, reason: 'invalid' };
   const parent = /<link\b[^>]*\brel\s*=\s*["']independent-parent["'][^>]*>/.exec(xml);
   if (parent) {
     const href = /\bhref\s*=\s*["']([^"']*)["']/.exec(parent[0]);
@@ -46,7 +83,8 @@ export function checkStyle(xml) {
     return id ? { ok: false, reason: 'dependent', parent: id } : { ok: false, reason: 'dependent' };
   }
   const info = /<info[\s>][\s\S]*?<\/info>/.exec(xml);
-  const title = info && /<title[^>]*>([\s\S]*?)<\/title>/.exec(info[0]);
+  if (!info || !/<citation[\s>]/.test(xml)) return { ok: false, reason: 'invalid' };
+  const title = /<title[^>]*>([\s\S]*?)<\/title>/.exec(info[0]);
   const text = title ? title[1].replace(/<[^>]*>/g, '').trim() : '';
   return { ok: true, title: text };
 }
