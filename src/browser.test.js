@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import 'fake-indexeddb/auto';
+import { Window } from 'happy-dom';
 import {
   idbSet, idbGet, idbDelete, _resetDbForTesting,
   putDocument, getDocument, listDocuments, deleteDocument,
   saveScratch, readScratch, clearScratch,
   openHandle, saveFile, forgetFile,
-  listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
+  initDragDrop, listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
 } from './browser.js';
 
 describe('browser storage adapter (IndexedDB)', () => {
@@ -190,6 +191,44 @@ describe('citation files', () => {
     expect(changed).toEqual(['r.bib']);
     expect((await listCitationFiles()).find((f) => f.name === 'r.bib').text).toBe('new');
     expect((await listCitationFiles()).find((f) => f.name === 'p.bib').text).toBe('old');
-    } finally { globalThis.structuredClone = realClone; }
+    } finally {
+      globalThis.structuredClone = realClone;
+      // The fake handles do not clone, so remove them before another list.
+      for (const n of ['r.bib', 's.bib', 'p.bib']) await deleteCitationFile(n);
+    }
+  });
+
+  it('replaces a record whose name differs only in case', async () => {
+    await saveCitationFile({ name: 'Refs.bib', kind: 'bib', text: 'one' });
+    await saveCitationFile({ name: 'refs.bib', kind: 'bib', text: 'two' });
+    const list = await listCitationFiles();
+    expect(list.map((f) => f.name)).toEqual(['refs.bib']);
+  });
+
+  it('decodes a UTF-16 BOM as UTF-16', () => {
+    const le = new Uint8Array([0xff, 0xfe, 0x61, 0x00, 0xe7, 0x00]);
+    const be = new Uint8Array([0xfe, 0xff, 0x00, 0x61, 0x00, 0xe7]);
+    expect(decodeCitationBytes(le)).toEqual({ text: 'a\u00e7', encodingNote: false });
+    expect(decodeCitationBytes(be)).toEqual({ text: 'a\u00e7', encodingNote: false });
+  });
+
+  it('drop: a .bib goes to the citation callback, a document keeps its path', async () => {
+    const win = new Window();
+    const docs = [];
+    const cites = [];
+    globalThis.document = win.document;
+    initDragDrop((d) => docs.push(d), (e) => { throw e; }, (c) => cites.push(c));
+    const drop = (file) => {
+      const ev = new win.Event('drop', { cancelable: true });
+      ev.dataTransfer = { items: [{ kind: 'file' }], files: [file] };
+      document.dispatchEvent(ev);
+      return new Promise((r) => setTimeout(r, 30));
+    };
+    const mkFile = (name, text) => ({ name, text: async () => text, arrayBuffer: async () => new TextEncoder().encode(text).buffer });
+    await drop(mkFile('drop.bib', '@a{}'));
+    await drop(mkFile('note.md', '# hi'));
+    expect(cites).toEqual([{ name: 'drop.bib', kind: 'bib', text: '@a{}', encodingNote: false }]);
+    expect(docs).toEqual([{ path: 'note.md', content: '# hi' }]);
+    expect((await listCitationFiles()).map((f) => f.name)).toContain('drop.bib');
   });
 });

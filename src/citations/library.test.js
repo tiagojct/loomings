@@ -21,7 +21,7 @@ describe('resolveSources', () => {
   it('matches bib files by base name, ignoring case', async () => {
     const files = [{ name: 'Refs.BIB', kind: 'bib', text: '@a{}' }];
     const r = await resolveSources(meta({ bibliography: ['refs.bib', 'x/refs', 'gone.bib'] }), files, assets);
-    expect(r.bibs).toEqual([{ name: 'Refs.BIB', text: '@a{}' }, { name: 'Refs.BIB', text: '@a{}' }]);
+    expect(r.bibs).toEqual([{ name: 'Refs.BIB', text: '@a{}' }]);
     expect(r.missing).toEqual(['gone.bib']);
   });
   it('finds the bundled style by id, with or without extension', async () => {
@@ -39,14 +39,28 @@ describe('resolveSources', () => {
     expect(r.styleError).toMatch(/chicago-author-date/);
   });
   it('names the parent of a dependent style', async () => {
-    const files = [{ name: 'dep.csl', kind: 'csl', text: DEP }];
+    const files = [{ name: 'dep.csl', kind: 'csl', text: DEP.replace('/apa"', '/zzz"') }];
     const r = await resolveSources(meta({ csl: 'dep' }), files, assets);
-    expect(r.styleError).toBe('This style depends on apa. Add that file.');
+    expect(r.styleError).toBe('This style depends on zzz. Add that file.');
     expect(r.styleXml).toBe('<bundled chicago-author-date/>');
   });
   it('uses the locale for lang', async () => {
     const r = await resolveSources(meta({ lang: 'pt' }), [], assets);
     expect(r.localeXml).toBe('<locale pt/>');
     expect(r.lang).toBe('pt-PT');
+  });
+  it('uses a stored parent of a dependent style', async () => {
+    const files = [{ name: 'dep.csl', kind: 'csl', text: DEP }, { name: 'apa.csl', kind: 'csl', text: OWN }];
+    const r = await resolveSources(meta({ csl: 'dep' }), files, assets);
+    expect(r.styleXml).toBe(OWN);
+    expect(r.styleError).toBeUndefined();
+  });
+  it('uses a bundled parent, with an alias', async () => {
+    const dep = (id) => DEP.replace('styles/apa', 'styles/' + id).replace('http://www.zotero.org/styles/apa', 'http://www.zotero.org/styles/' + id);
+    const a = { ...assets, loadBundledStyle: async (id) => (id === 'vancouver' || id === 'apa' ? `<b ${id}/>` : null) };
+    expect((await resolveSources(meta({ csl: 'd' }), [{ name: 'd.csl', kind: 'csl', text: dep('apa') }], a)).styleXml).toBe('<b apa/>');
+    const r = await resolveSources(meta({ csl: 'd' }), [{ name: 'd.csl', kind: 'csl', text: dep('nlm-citation-sequence') }], a);
+    expect(r.styleXml).toBe('<b vancouver/>');
+    expect(r.styleError).toBeUndefined();
   });
 });

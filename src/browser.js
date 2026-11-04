@@ -405,7 +405,7 @@ export async function deleteDocument(id) {
 
 const CITATION_PREFIX = 'citation-file:';
 const CITATION_FILE = /\.(bib|csl)$/i;
-const CITATION_TYPES = { description: 'Citation files', accept: { 'text/plain': ['.bib', '.csl', '.xml'] } };
+const CITATION_TYPES = { description: 'Citation files', accept: { 'text/plain': ['.bib', '.csl'] } };
 
 /**
  * Decodes the bytes of a citation file. UTF-8 first, then windows-1252.
@@ -417,6 +417,11 @@ const CITATION_TYPES = { description: 'Citation files', accept: { 'text/plain': 
 export function decodeCitationBytes(bytes) {
   let text;
   let encodingNote = false;
+  const b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  if (b.length >= 2 && ((b[0] === 0xff && b[1] === 0xfe) || (b[0] === 0xfe && b[1] === 0xff))) {
+    const text16 = new TextDecoder(b[0] === 0xff ? 'utf-16le' : 'utf-16be').decode(b);
+    return { text: text16.charCodeAt(0) === 0xfeff ? text16.slice(1) : text16, encodingNote: false };
+  }
   try {
     text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   } catch (_) {
@@ -462,6 +467,11 @@ export async function saveCitationFile({ name, kind, text, handle, encodingNote 
     const record = { name, kind, text, saved: Date.now() };
     if (handle) record.handle = handle;
     if (encodingNote) record.encodingNote = true;
+    // Names are equal when they differ only in case: replace the old record.
+    const lower = name.toLowerCase();
+    for (const old of await listCitationFiles()) {
+      if (old.name !== name && old.name.toLowerCase() === lower) await idbDelete(CITATION_PREFIX + old.name);
+    }
     try {
       await idbSet(CITATION_PREFIX + name, record);
     } catch (err) {
@@ -508,8 +518,8 @@ export async function refreshCitationFiles() {
 
 /**
  * Lets the user pick a .bib or .csl file and stores it.
- * @returns {Promise<{name: string, kind: 'bib'|'csl', text: string, encodingNote: boolean}|null>}
- *   null on cancel, on a wrong file type or when the read failed
+ * @returns {Promise<{name: string, kind: 'bib'|'csl', text: string, encodingNote: boolean, stored: boolean}|null>}
+ *   null on cancel, on a wrong file type or when the read failed. stored is false when the write failed.
  */
 export async function pickCitationFile() {
   try {
@@ -529,9 +539,12 @@ export async function pickCitationFile() {
       file = await new Promise((resolve) => {
         const input = document.createElement('input');
         input.type = 'file';
-        input.accept = '.bib,.csl,.xml';
-        input.addEventListener('change', () => resolve(input.files?.[0] ?? null));
-        input.addEventListener('cancel', () => resolve(null));
+        input.accept = '.bib,.csl';
+        input.style.display = 'none';
+        const done = (/** @type {File|null} */ f) => { input.remove(); resolve(f); };
+        input.addEventListener('change', () => done(input.files?.[0] ?? null));
+        input.addEventListener('cancel', () => done(null));
+        document.body.appendChild(input);
         input.click();
       });
     }
@@ -539,8 +552,8 @@ export async function pickCitationFile() {
     const kind = citationKind(file.name);
     if (!kind) return null;
     const { text, encodingNote } = await readCitationFile(file);
-    await saveCitationFile({ name: file.name, kind, text, handle, encodingNote });
-    return { name: file.name, kind, text, encodingNote };
+    const stored = await saveCitationFile({ name: file.name, kind, text, handle, encodingNote });
+    return { name: file.name, kind, text, encodingNote, stored };
   } catch (_) {
     return null;
   }
