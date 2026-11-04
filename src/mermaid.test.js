@@ -66,6 +66,18 @@ describe('mermaid renderer', () => {
     expect(render).toHaveBeenCalledTimes(1);
   });
 
+  it('does not cache a failed module load', async () => {
+    const src = 'graph TD; A--&gt;B';
+    const el = root(fence(src));
+    await m.renderDiagrams(el, async () => {
+      throw new m.LoadError('chunk failed');
+    });
+    expect(el.querySelector('pre')?.classList.contains('mermaid-error')).toBe(true);
+    const again = root(fence(src));
+    await m.renderDiagrams(again, async () => ({ svg: '<svg id="ok"></svg>' }));
+    expect(again.querySelector('svg#ok')).not.toBeNull();
+  });
+
   it('passes links false and images false', async () => {
     const renderAsync = vi.fn(async () => ({ svg: '<svg></svg>' }));
     vi.doMock('pele/lazy', () => ({ renderAsync }));

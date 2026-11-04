@@ -6,13 +6,22 @@ const SELECTOR = 'pre > code.language-mermaid';
 /** @type {Map<string, {svg: string} | {error: string}>} */
 const cache = new Map();
 
+/** Thrown when the Pele module cannot load. The result is not cached. */
+export class LoadError extends Error {}
+
 /**
  * @param {string} text
  * @returns {Promise<{svg: string}>}
  */
 async function peleRender(text) {
-  const { renderAsync } = await import('pele/lazy');
-  return renderAsync(text, { links: false, images: false });
+  /** @type {typeof import('pele/lazy')} */
+  let pele;
+  try {
+    pele = await import('pele/lazy');
+  } catch (err) {
+    throw new LoadError(err instanceof Error ? err.message : String(err));
+  }
+  return pele.renderAsync(text, { links: false, images: false });
 }
 
 /** @param {string} key @param {{svg: string} | {error: string}} value */
@@ -44,14 +53,16 @@ export async function renderDiagrams(root, render = peleRender) {
     if (!pre) continue;
     const source = code.textContent ?? '';
     let result = cache.get(source);
+    let loadFailed = false;
     if (!result) {
       try {
         const { svg } = await render(source);
         result = { svg };
       } catch (err) {
         result = { error: err instanceof Error ? err.message : String(err) };
+        if (err instanceof LoadError) loadFailed = true;
       }
-      remember(source, result);
+      if (!loadFailed) remember(source, result);
     }
     for (const name of ['data-line', 'data-line-end']) {
       const value = code.getAttribute(name);
