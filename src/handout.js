@@ -37,8 +37,9 @@ export function handoutCss({ title, palette: p, paper }) {
   --print-fg: ${p.fg}; --print-dim: ${p.fgDim}; --print-heading: ${p.heading}; --print-emphasis: ${p.emphasis};
   --print-code: ${p.code}; --print-link: ${p.accent}; --print-code-bg: ${p.bgDeep}; --print-border: ${p.border};
 }
+/* --pele-bg is the paper colour of the print rule in style.css, not a palette role. */
 #preview .pele {
-  --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim}; --pele-surface: ${p.bgElev};
+  --pele-bg: #fff; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim}; --pele-surface: ${p.bgElev};
   --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border}; --pele-accent: ${p.accent};
 } }`;
 }

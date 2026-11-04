@@ -32,7 +32,7 @@ describe('handout page', () => {
   it('maps the diagram colours to the light palette for print', () => {
     const p = roles('pequod', 'light');
     const css = handoutCss({ title: 'T', palette: p, paper: 'A4' });
-    expect(css).toContain(`--pele-bg: ${p.bg};`);
+    expect(css).toContain('--pele-bg: #fff;');
     expect(css).toContain(`--pele-fg: ${p.fg};`);
     expect(css).toContain(`--pele-line: ${p.fgDim};`);
     expect(css).toContain(`--pele-surface: ${p.bgElev};`);

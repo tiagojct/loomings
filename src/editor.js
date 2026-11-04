@@ -1283,7 +1283,8 @@ async function exportHtml() {
           --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
           --pele-accent: ${p.accent}; }
   @media print { body { background: #fff; color: #000; }
-    .pele { --pele-bg: ${lp.bg}; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
+    /* --pele-bg is the paper colour (#fff) of the body rule above. */
+    .pele { --pele-bg: #fff; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
             --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; } }
 </style>
 </head>
