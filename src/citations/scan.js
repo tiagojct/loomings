@@ -19,8 +19,22 @@ import { parseSource } from '../teaching/parse.js';
 const KEY = '[\\p{L}\\p{N}_](?:[\\p{L}\\p{N}_]|[:.#$%&\\-+?<>~/](?=[\\p{L}\\p{N}_]))*';
 // One pass: a bracket group, or a bare key that has no letter, digit or
 // backslash before it.
-const SCAN = new RegExp(`\\[([^\\[\\]]*)\\]|(?<![\\p{L}\\p{N}_\\\\])@(${KEY})`, 'gu');
-const ITEM_KEY = new RegExp(`(?<![\\p{L}\\p{N}_\\\\])(-?)@(${KEY})`, 'u');
+const SCAN = new RegExp(`\\[([^\\[\\]]*)\\]|(?<![\\p{L}\\p{N}_])@(${KEY})`, 'gu');
+const ITEM_KEY = new RegExp(`(?<![\\p{L}\\p{N}_])(-?)@(${KEY})`, 'u');
+
+/**
+ * True when an odd number of backslashes come right before `index`.
+ *
+ * @param {string} text
+ * @param {number} index
+ */
+function escaped(text, index) {
+  let n = 0;
+  while (index - n > 0 && text[index - n - 1] === '\\') n++;
+  return n % 2 === 1;
+}
+
+const DEFINITION = /^ {0,3}\[[^\]]*\]:/;
 
 const LABELS = /** @type {Record<string, string>} */ ({
   'p.': 'page', 'pp.': 'page', 'chap.': 'chapter', 'sec.': 'section', 'vol.': 'volume', 'fig.': 'figure',
@@ -54,7 +68,7 @@ function readItems(inner) {
   const items = [];
   for (const part of inner.split(';')) {
     const m = ITEM_KEY.exec(part);
-    if (!m) continue;
+    if (!m || escaped(part, m.index + m[1].length)) continue;
     const prefix = part.slice(0, m.index);
     items.push({
       key: m[2],
@@ -78,6 +92,10 @@ function skipRanges(source) {
   /** @type {{from: number, to: number}[]} */
   const ranges = [];
   if (doc.frontmatter) ranges.push({ from: 0, to: doc.frontmatter.to });
+  // Link reference definitions give no token, so find them by line.
+  for (const line of doc.lines) {
+    if (DEFINITION.test(line.text)) ranges.push({ from: line.from, to: line.end });
+  }
   const lineEnd = (/** @type {number} */ i) => (doc.lines[i] ? doc.lines[i].end : source.length);
   const lineFrom = (/** @type {number} */ i) => (doc.lines[i] ? doc.lines[i].from : source.length);
   for (const tok of doc.tokens) {
@@ -134,13 +152,14 @@ export function scanCitations(source) {
       continue;
     }
     if (m[2] !== undefined) {
+      if (escaped(source, start)) continue;
       found.push({
         from: start, to: end, bare: true,
         items: [{ key: m[2], prefix: '', suffix: '', locator: null, label: null, suppressAuthor: false }],
       });
       continue;
     }
-    if (start > 0 && source[start - 1] === '\\') { SCAN.lastIndex = start + 1; continue; }
+    if (escaped(source, start)) { SCAN.lastIndex = end; continue; }
     const items = readItems(m[1]);
     const next = source[end];
     if (!items.length) { SCAN.lastIndex = start + 1; continue; }

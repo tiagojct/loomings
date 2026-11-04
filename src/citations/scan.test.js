@@ -112,4 +112,38 @@ describe('scanCitations', () => {
     const [c] = scanCitations(src);
     expect(src.slice(c.from, c.to)).toBe('@key');
   });
+
+  it('skips link reference definitions', () => {
+    expect(scanCitations('[x]: http://a.org/@u "t"\n')).toEqual([]);
+    expect(scanCitations('[@k]: http://a.org\n')).toEqual([]);
+    expect(scanCitations('   [x]: http://a.org/@u\n\n@k')).toHaveLength(1);
+  });
+
+  it('counts backslashes', () => {
+    expect(scanCitations('\\\\@k')).toHaveLength(1);
+    expect(scanCitations('\\@k')).toEqual([]);
+    expect(scanCitations('\\\\[@k]')).toHaveLength(1);
+    expect(scanCitations('\\[@k]')).toEqual([]);
+    expect(scanCitations('[\\\\@k]')).toHaveLength(1);
+    expect(scanCitations('[\\@k]')).toEqual([]);
+  });
+
+  it('finds citations in a table cell, heading and blockquote', () => {
+    const cases = ['| a | b |\n|---|---|\n| x | [@k] |\n', '## Title [@k]\n', '> quote [@k]\n'];
+    for (const src of cases) {
+      const r = scanCitations(src);
+      expect(r).toHaveLength(1);
+      expect(src.slice(r[0].from, r[0].to)).toBe('[@k]');
+    }
+  });
+
+  it('skips a tilde fence', () => {
+    expect(scanCitations('~~~\n[@k] @k\n~~~\n')).toEqual([]);
+  });
+
+  it('works with CRLF around fences, headings and quotes', () => {
+    const src = '# H [@a]\r\n\r\n```\r\n@x\r\n```\r\n\r\n> q [@b]\r\n';
+    const r = scanCitations(src);
+    expect(r.map((c) => src.slice(c.from, c.to))).toEqual(['[@a]', '[@b]']);
+  });
 });
