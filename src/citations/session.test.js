@@ -353,7 +353,10 @@ describe('analyse: plain URLs', () => {
     expect(r.citations.length).toBe(1);
     expect(r.notes).toEqual([]);
     const { text, fill } = applyCitations(src, r);
-    expect(fill(renderMarkdown(text))).toContain('<a href="https://x.org/@good">https://x.org/@good</a>');
+    const html = fill(renderMarkdown(text));
+    expect(html).toContain('<a href="https://x.org/@good"');
+    expect(html).toContain('>https://x.org/@good</a>');
+    expect(html).toContain('<span class="cite">(Smith, 2019)</span>');
   });
   it('gives no false note for a profile link', () => {
     expect(ready().analyse(doc('Hello https://mastodon.social/@tiago')).notes).toEqual([]);
