@@ -117,6 +117,18 @@ describe('createEngine errors and bare numeric', { timeout: 20000 }, () => {
       expect(t).toMatch(/1/);
     }
   });
+  it('writes the language of the document in a style with a default locale', () => {
+    const entry = {
+      id: 'web', type: 'webpage', title: 'A page', URL: 'https://x.pt/a', accessed: { 'date-parts': [[2020, 3, 4]] },
+    };
+    const render = (lang) => createEngine({
+      styleXml: style('american-medical-association'), localeXml: locale(lang), fallbackLocaleXml: locale('en-US'), lang, items: [entry],
+    }).render([cite(['web'])]).bibliography[0];
+    expect(style('american-medical-association')).toContain('default-locale="en-US"');
+    expect(render('en-US')).toContain('Accessed March 4, 2020');
+    expect(render('pt-PT')).toContain('Acedido 4 de março de 2020');
+    expect(render('es-ES')).toContain('Accedido 4 de marzo de 2020');
+  });
   it('uses the fallback locale for a term missing in the main one', () => {
     const e = createEngine({ ...opts(style('apa')), lang: 'pt-PT', localeXml: locale('pt-PT'), fallbackLocaleXml: locale('en-US') });
     expect(e.render([cite(['smith2019'])]).texts[0]).toContain('Smith');

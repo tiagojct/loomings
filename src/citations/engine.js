@@ -46,6 +46,8 @@ export function createEngine({ styleXml, localeXml, lang, items, fallbackLocaleX
       },
       styleXml,
       lang,
+      // The language of the document wins over the default-locale of the style.
+      true,
     );
   } catch (e) {
     throw new Error(`The style file cannot be used: ${e instanceof Error ? e.message : String(e)}`);
