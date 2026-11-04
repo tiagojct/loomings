@@ -24,6 +24,12 @@ describe('resolveSources', () => {
     expect(r.bibs).toEqual([{ name: 'Refs.BIB', text: '@a{}' }]);
     expect(r.missing).toEqual(['gone.bib']);
   });
+  it('keeps the first file for two entries with one base name', async () => {
+    const files = [{ name: 'a/refs.bib', kind: 'bib', text: '@a{}' }, { name: 'b/refs.bib', kind: 'bib', text: '@b{}' }];
+    const r = await resolveSources(meta({ bibliography: ['a/refs.bib', 'b/refs.bib'] }), files, assets);
+    expect(r.bibs).toEqual([{ name: 'a/refs.bib', text: '@a{}' }]);
+    expect(r.missing).toEqual([]);
+  });
   it('finds the bundled style by id, with or without extension', async () => {
     expect((await resolveSources(meta({ csl: 'apa' }), [], assets)).styleXml).toBe('<bundled apa/>');
     expect((await resolveSources(meta({ csl: 'apa.csl' }), [], assets)).styleXml).toBe('<bundled apa/>');
@@ -79,6 +85,28 @@ describe('planNativeSources', () => {
   });
   it('adds the .bib ending to a name with none', () => {
     expect(planNativeSources(meta({ bibliography: ['x/refs'] }), {}).bibFiles).toEqual(['x/refs.bib']);
+  });
+  it('keeps two files with one base name, because it reads by path', () => {
+    const files = [{ name: 'a/refs.bib', kind: 'bib' }, { name: 'b/refs.bib', kind: 'bib' }];
+    const plan = planNativeSources(meta({ bibliography: ['a/refs.bib', 'b/refs.bib'] }), { files, tried: ['a/refs.bib', 'b/refs.bib'] });
+    expect(plan).toMatchObject({ bibFiles: ['a/refs.bib', 'b/refs.bib'], missing: [], done: true });
+  });
+  it('asks for each path when the names share a base name', () => {
+    expect(planNativeSources(meta({ bibliography: ['a/refs.bib', 'b/refs.bib'] }), {}).bibFiles).toEqual(['a/refs.bib', 'b/refs.bib']);
+  });
+  it('gives a note for a path that is absent, also when another file has its base name', () => {
+    const files = [{ name: 'a/refs.bib', kind: 'bib' }];
+    const plan = planNativeSources(meta({ bibliography: ['a/refs.bib', 'b/refs.bib'] }), { files, tried: ['a/refs.bib', 'b/refs.bib'] });
+    expect(plan).toMatchObject({ bibFiles: ['a/refs.bib'], missing: ['b/refs.bib'], done: true });
+  });
+  it('lists one file once when a path is written twice', () => {
+    const files = [{ name: 'refs.bib', kind: 'bib' }];
+    expect(planNativeSources(meta({ bibliography: ['refs.bib', 'refs.bib'] }), { files, tried: ['refs.bib'] }).bibFiles).toEqual(['refs.bib']);
+  });
+  it('finds a style by its path, not by a file with the same base name', () => {
+    const other = { name: 'old/own.csl', kind: 'csl', text: OWN };
+    const plan = planNativeSources(meta({ csl: 'new/own.csl' }), { files: [other], tried: ['old/own.csl'] });
+    expect(plan).toMatchObject({ stylePath: 'new/own.csl', done: false });
   });
   it('moves a file that could not be read to missing', () => {
     const plan = planNativeSources(meta({ bibliography: ['gone.bib'] }), { tried: ['gone.bib'] });

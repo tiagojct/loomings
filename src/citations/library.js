@@ -25,6 +25,10 @@ const PARENT_ALIASES = /** @type {Record<string, string>} */ ({
 
 const isBundled = (/** @type {string} */ id) => BUNDLED_STYLES.some((s) => s.id === id);
 
+/** The web keeps files with no folder, so a frontmatter value matches by base name. */
+const sameBaseName = (/** @type {{name: string}} */ file, /** @type {string} */ entry) =>
+  baseName(file.name) === baseName(entry);
+
 /**
  * The style for the parent of a dependent style: a stored file first, then a
  * bundled style. Only one level is resolved.
@@ -47,16 +51,17 @@ function findParent(parent, files) {
  *
  * @param {{bibliography?: string[], csl?: string|null}} meta
  * @param {StoredFile[]} files
+ * @param {(file: StoredFile, entry: string) => boolean} [sameFile]  true when a frontmatter value names this file
  * @returns {SourcePlan}
  */
-export function planSources(meta, files) {
+export function planSources(meta, files, sameFile = sameBaseName) {
   /** @type {string[]} */
   const unfound = [];
   const bibFiles = files.filter((f) => f.kind === 'bib');
   /** @type {StoredFile[]} */
   const bibs = [];
   for (const entry of meta.bibliography ?? []) {
-    const found = bibFiles.find((f) => baseName(f.name) === baseName(entry));
+    const found = bibFiles.find((f) => sameFile(f, entry));
     if (!found) unfound.push(entry);
     else if (!bibs.includes(found)) bibs.push(found);
   }
@@ -69,7 +74,7 @@ export function planSources(meta, files) {
   /** @type {string|undefined} */
   let styleError;
   const wanted = meta.csl ? baseName(meta.csl) : DEFAULT_STYLE;
-  const stored = files.find((f) => f.kind === 'csl' && baseName(f.name) === wanted);
+  const stored = files.find((f) => f.kind === 'csl' && sameFile(f, meta.csl ?? DEFAULT_STYLE));
   if (stored) {
     const checked = checkStyle(stored.text);
     if (checked.ok) {
@@ -147,8 +152,10 @@ const sibling = (/** @type {string} */ path, /** @type {string} */ name) =>
   `${path.slice(0, Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1)}${name}`;
 
 /**
- * The next step for the native app, which reads files by path. A file wins
- * over a bundled style of the same name, as a stored file does on the web.
+ * The next step for the native app. It reads by path, so a value names one
+ * path: `a/refs.bib` and `b/refs.bib` are two files, and an absent path is
+ * missing also when another file has its base name. A style file wins over a
+ * bundled style of the same name, as a stored file does on the web.
  *
  * @param {{bibliography?: string[], csl?: string|null, lang?: string|null}} meta
  * @param {NativeFiles} known
@@ -157,17 +164,21 @@ const sibling = (/** @type {string} */ path, /** @type {string} */ name) =>
 export function planNativeSources(meta, known) {
   const { tried = [], unreadable = [], noFolder = false } = known;
   const files = /** @type {StoredFile[]} */ ((known.files ?? []).map((f) => ({ ...f, text: f.text ?? '' })));
-  const plan = planSources(meta, files);
-
   const bibName = (/** @type {string} */ entry) => withEnding(entry, '.bib');
+  const styleName = (/** @type {string} */ entry) => withEnding(entry, '.csl');
+  /** @type {(file: StoredFile, entry: string) => boolean} */
+  const samePath = (file, entry) => file.name === (file.kind === 'bib' ? bibName(entry) : styleName(entry));
+  const plan = planSources(meta, files, samePath);
+
   const unread = plan.unfound.filter((entry) => !tried.includes(bibName(entry)));
   const unfound = plan.unfound.filter((entry) => !unread.includes(entry));
   const usedFile = 'file' in plan.style ? plan.style.file.name : null;
-  const storedStyle = meta.csl ? files.find((f) => f.kind === 'csl' && baseName(f.name) === baseName(/** @type {string} */ (meta.csl))) : null;
+  const { csl } = meta;
+  const storedStyle = csl ? files.find((f) => f.kind === 'csl' && samePath(f, csl)) : null;
 
   /** @type {string|null} */
   let nextStyle = null;
-  if (meta.csl && !storedStyle) nextStyle = withEnding(meta.csl, '.csl');
+  if (csl && !storedStyle) nextStyle = styleName(csl);
   else if (plan.parent && storedStyle && !usedFile) nextStyle = sibling(storedStyle.name, `${baseName(plan.parent)}.csl`);
   if (nextStyle && tried.includes(nextStyle)) nextStyle = null;
 
@@ -175,7 +186,7 @@ export function planNativeSources(meta, known) {
   /** @type {Record<string, string>} */
   const missingNotes = {};
   for (const name of missing) {
-    if (unreadable.includes(bibName(name)) || unreadable.includes(withEnding(name, '.csl'))) {
+    if (unreadable.includes(bibName(name)) || unreadable.includes(styleName(name))) {
       missingNotes[name] = `The file ${name} could not be read as text.`;
     } else if (noFolder && isRelative(name)) {
       missingNotes[name] = `The file ${name} is missing. This document has no folder. Save the document, or use an absolute path.`;

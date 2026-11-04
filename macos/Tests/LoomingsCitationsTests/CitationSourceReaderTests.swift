@@ -52,6 +52,16 @@ struct CitationGateTests {
         #expect(!CitationGate.applies(to: "---\n\(filler)a: b\nbibliography: x\n---\n"))
     }
 
+    @Test("Accepts spaces and tabs before the colon, as the frontmatter rule does")
+    func spaceBeforeColon() {
+        #expect(CitationGate.applies(to: "---\nbibliography : refs.bib\n---\n"))
+        #expect(CitationGate.applies(to: "---\nbibliography\t:refs.bib\n---\n"))
+        #expect(CitationGate.applies(to: "---\nreferences \t : []\n---\n"))
+        #expect(!CitationGate.applies(to: "---\nbibliography\n---\n"))
+        #expect(!CitationGate.applies(to: "---\nbibliography-file: a\n---\n"))
+        #expect(!CitationGate.applies(to: "---\nbibliography x: a\n---\n"))
+    }
+
     @Test("Handles a line ending in CRLF and text with no line ending")
     func lineEndings() {
         #expect(CitationGate.applies(to: "---\r\nbibliography: x\r\n---\r\n"))
@@ -73,6 +83,21 @@ struct CitationSourceReaderTests {
         #expect(result.sources.lang == "en-US")
         #expect(result.sources.localeXml != nil && result.sources.fallbackLocaleXml != nil)
         #expect(result.sources.missing == [])
+    }
+
+    @Test("Reads two files with one base name from their own folders")
+    func sameBaseName() throws {
+        let folder = try temporaryFolder()
+        let other = "@book{b2021, author = {Bia, Rui}, title = {U}, publisher = {P}, year = {2021}}\n"
+        for (name, text) in [("a", bib), ("b", other)] {
+            let sub = folder.appendingPathComponent(name, isDirectory: true)
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            try text.write(to: sub.appendingPathComponent("refs.bib"), atomically: true, encoding: .utf8)
+        }
+        let result = try load(request(bibliography: ["a/refs.bib", "b/refs.bib", "c/refs.bib"]), folder: folder)
+        #expect(result.sources.bibs.map(\.name) == ["a/refs.bib", "b/refs.bib"])
+        #expect(result.sources.bibs.map(\.text) == [bib, other])
+        #expect(result.sources.missing == ["c/refs.bib"])
     }
 
     @Test("Reads an absolute path with no folder")

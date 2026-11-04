@@ -4,10 +4,14 @@ import LoomingsDocuments
 /// The cheap test that keeps JavaScript away from a document with no citation
 /// keys. It is a gate, not a rule: when it says yes, the citation code decides.
 public enum CitationGate {
-    private static let keys = [Array("bibliography:".utf8), Array("references:".utf8)]
+    private static let keys = [Array("bibliography".utf8), Array("references".utf8)]
+    private static let space = UInt8(ascii: " ")
+    private static let tab = UInt8(ascii: "\t")
+    private static let colon = UInt8(ascii: ":")
 
     /// True when the text starts with `---`, and a line in the first 50 lines
-    /// starts with `bibliography:` or `references:`.
+    /// starts with `bibliography` or `references`, then spaces or tabs, then
+    /// a colon (`KEY` in `src/citations/frontmatter.js`).
     public static func applies(to source: String) -> Bool {
         guard source.hasPrefix("---") else { return false }
         let bytes = source.utf8
@@ -16,10 +20,15 @@ public enum CitationGate {
             guard start < bytes.endIndex else { return false }
             let end = bytes[start...].firstIndex(of: 10) ?? bytes.endIndex
             let line = bytes[start..<end]
-            if keys.contains(where: { line.starts(with: $0) }) { return true }
+            if keys.contains(where: { starts(line, withKey: $0) }) { return true }
             start = end < bytes.endIndex ? bytes.index(after: end) : end
         }
         return false
+    }
+
+    private static func starts(_ line: Substring.UTF8View, withKey key: [UInt8]) -> Bool {
+        guard line.starts(with: key) else { return false }
+        return line.dropFirst(key.count).first { $0 != space && $0 != tab } == colon
     }
 }
 

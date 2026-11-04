@@ -177,6 +177,49 @@
     {
       "request": {
         "bibliography": [
+          "a/refs.bib",
+          "b/refs.bib",
+          "c/refs.bib"
+        ],
+        "csl": null,
+        "lang": null
+      },
+      "known": {
+        "files": [
+          {
+            "name": "a/refs.bib",
+            "kind": "bib"
+          },
+          {
+            "name": "b/refs.bib",
+            "kind": "bib"
+          }
+        ],
+        "tried": [
+          "a/refs.bib",
+          "b/refs.bib",
+          "c/refs.bib"
+        ]
+      },
+      "plan": {
+        "bibFiles": [
+          "a/refs.bib",
+          "b/refs.bib"
+        ],
+        "stylePath": null,
+        "styleId": "chicago-author-date",
+        "lang": "en-US",
+        "fallbackLang": "en-US",
+        "missing": [
+          "c/refs.bib"
+        ],
+        "missingNotes": {},
+        "done": true
+      }
+    },
+    {
+      "request": {
+        "bibliography": [
           "latin.bib"
         ],
         "csl": "own.csl",

@@ -211,6 +211,10 @@ const plans = [
     known: { files: [{ name: 'dep.csl', kind: 'csl', text: DEPENDENT_STYLE }], tried: ['dep.csl', 'apa.csl'] },
   },
   { request: { bibliography: [], csl: 'nope.csl', lang: null }, known: { tried: ['nope.csl'] } },
+  {
+    request: { bibliography: ['a/refs.bib', 'b/refs.bib', 'c/refs.bib'], csl: null, lang: null },
+    known: { files: [{ name: 'a/refs.bib', kind: 'bib' }, { name: 'b/refs.bib', kind: 'bib' }], tried: ['a/refs.bib', 'b/refs.bib', 'c/refs.bib'] },
+  },
   { request: { bibliography: ['latin.bib'], csl: 'own.csl', lang: null }, known: { files: [{ name: 'own.csl', kind: 'csl', text: OWN_STYLE }], tried: ['latin.bib', 'own.csl'], unreadable: ['latin.bib'] } },
 ];
 
