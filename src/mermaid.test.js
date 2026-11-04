@@ -115,4 +115,19 @@ describe('mermaid renderer', () => {
     expect(out).toContain('Q--&gt;R');
     expect(out).toContain('mermaid-error');
   });
+
+  it('applies cache hits before it awaits a miss', async () => {
+    await m.renderDiagrams(root(fence('graph TD; B--&gt;C')), async () => ({ svg: '<svg id="b"></svg>' }));
+    const el = root(fence('graph TD; A--&gt;B') + fence('graph TD; B--&gt;C'));
+    /** @type {(v: {svg: string}) => void} */
+    let release = () => {};
+    const pending = new Promise((resolve) => { release = resolve; });
+    const done = m.renderDiagrams(el, () => pending);
+    const pres = el.querySelectorAll('pre');
+    expect(pres[1].querySelector('svg#b')).not.toBeNull();
+    expect(pres[0].querySelector('svg')).toBeNull();
+    release({ svg: '<svg id="a"></svg>' });
+    await done;
+    expect(pres[0].querySelector('svg#a')).not.toBeNull();
+  });
 });

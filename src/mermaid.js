@@ -47,14 +47,19 @@ export function hasDiagrams(root) {
  * @returns {Promise<void>}
  */
 export async function renderDiagrams(root, render = peleRender) {
-  const blocks = Array.from(root.querySelectorAll(SELECTOR));
-  for (const code of blocks) {
-    const pre = code.parentElement;
-    if (!pre) continue;
+  const misses = [];
+  // Apply every cache hit before the first await, so an unchanged diagram
+  // never shows its source while another diagram renders.
+  for (const code of Array.from(root.querySelectorAll(SELECTOR))) {
+    const result = cache.get(code.textContent ?? '');
+    if (result) apply(code, result);
+    else misses.push(code);
+  }
+  for (const code of misses) {
     const source = code.textContent ?? '';
     let result = cache.get(source);
-    let loadFailed = false;
     if (!result) {
+      let loadFailed = false;
       try {
         const { svg } = await render(source);
         result = { svg };
@@ -64,21 +69,32 @@ export async function renderDiagrams(root, render = peleRender) {
       }
       if (!loadFailed) remember(source, result);
     }
-    for (const name of ['data-line', 'data-line-end']) {
-      const value = code.getAttribute(name);
-      if (value !== null) pre.setAttribute(name, value);
-    }
-    if ('svg' in result) {
-      pre.classList.add('mermaid');
-      pre.innerHTML = result.svg;
-    } else {
-      pre.classList.add('mermaid-error');
-      const src = document.createElement('code');
-      src.textContent = source;
-      const msg = document.createElement('p');
-      msg.textContent = result.error;
-      pre.replaceChildren(src, msg);
-    }
+    apply(code, result);
+  }
+}
+
+/**
+ * @param {Element} code
+ * @param {{svg: string} | {error: string}} result
+ */
+function apply(code, result) {
+  const pre = code.parentElement;
+  if (!pre) return;
+  const source = code.textContent ?? '';
+  for (const name of ['data-line', 'data-line-end']) {
+    const value = code.getAttribute(name);
+    if (value !== null) pre.setAttribute(name, value);
+  }
+  if ('svg' in result) {
+    pre.classList.add('mermaid');
+    pre.innerHTML = result.svg;
+  } else {
+    pre.classList.add('mermaid-error');
+    const src = document.createElement('code');
+    src.textContent = source;
+    const msg = document.createElement('p');
+    msg.textContent = result.error;
+    pre.replaceChildren(src, msg);
   }
 }
 
