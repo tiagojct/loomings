@@ -38,7 +38,7 @@ export function handoutCss({ title, palette: p, paper }) {
   --print-code: ${p.code}; --print-link: ${p.accent}; --print-code-bg: ${p.bgDeep}; --print-border: ${p.border};
 }
 #preview .pele {
-  --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim}; --pele-surface: ${p.bgElev};
+  --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim}; --pele-surface: ${p.bgElev};
   --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border}; --pele-accent: ${p.accent};
 } }`;
 }

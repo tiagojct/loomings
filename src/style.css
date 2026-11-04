@@ -370,7 +370,7 @@ body.view-split #preview { border-left: 1px solid var(--border); }
 }
 #preview pre code { background: none; padding: 0; color: var(--fg-dim); }
 #preview .pele {
-  --pele-bg: transparent;
+  --pele-bg: var(--bg);
   --pele-fg: var(--fg);
   --pele-muted: var(--fg-dim);
   --pele-line: var(--fg-dim);

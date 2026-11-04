@@ -1279,11 +1279,11 @@ async function exportHtml() {
   pre.mermaid { background: none; border: 0; padding: 0; text-align: center; }
   pre.mermaid svg { max-width: 100%; height: auto; }
   pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
-  .pele { --pele-bg: transparent; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
+  .pele { --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
           --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
           --pele-accent: ${p.accent}; }
   @media print { body { background: #fff; color: #000; }
-    .pele { --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
+    .pele { --pele-bg: ${lp.bg}; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
             --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; } }
 </style>
 </head>
