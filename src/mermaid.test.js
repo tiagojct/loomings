@@ -130,4 +130,9 @@ describe('mermaid renderer', () => {
     await done;
     expect(pres[0].querySelector('svg#a')).not.toBeNull();
   });
+
+  it('renderDiagramsInHtml returns html without diagrams unchanged', async () => {
+    const html = '<p>a &amp; b<br></p><pre><code class="language-js">x</code></pre>';
+    expect(await m.renderDiagramsInHtml(html)).toBe(html);
+  });
 });

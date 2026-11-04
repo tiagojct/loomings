@@ -1251,6 +1251,7 @@ async function handleSaveAs() {
 
 async function exportHtml() {
   const p = roles(themeFamily, activeTheme);
+  const lp = roles(themeFamily, 'light');
   const title = currentFile ? displayName(currentFile) : 'Untitled';
   const rendered = await renderDiagramsInHtml(renderMarkdown(getText()));
   const html = `<!DOCTYPE html>
@@ -1282,8 +1283,8 @@ async function exportHtml() {
           --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
           --pele-accent: ${p.accent}; }
   @media print { body { background: #fff; color: #000; }
-    .pele { --pele-fg: #000; --pele-muted: #333; --pele-line: #333; --pele-surface: #fff;
-            --pele-surface-alt: #f2f2f2; --pele-border: #999; --pele-accent: #000; } }
+    .pele { --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
+            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; } }
 </style>
 </head>
 <body>
@@ -1633,17 +1634,17 @@ async function printPreview() {
   const wasShown = previewShown();
   // A preview update during the wait below would replace this page. Mark
   // the page, then build it again if that happens.
-  const generation = ++previewGeneration;
+  let seen = ++previewGeneration;
   const build = async () => {
     preview.innerHTML = renderPreview(text) + qr;
     pairedBlockEl = null;
     invalidatePreviewBlocks();
     await renderDiagrams(preview);
   };
-  await build();
-  if (generation !== previewGeneration) {
-    previewGeneration = generation;
+  for (let attempt = 0; attempt < 3; attempt++) {
     await build();
+    if (seen === previewGeneration) break;
+    seen = previewGeneration;
   }
   // Some mobile browsers never fire afterprint; a new print replaces the
   // last one's page style rather than piling up.

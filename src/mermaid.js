@@ -105,6 +105,7 @@ function apply(code, result) {
  * @returns {Promise<string>}
  */
 export async function renderDiagramsInHtml(html, render) {
+  if (!html.includes('language-mermaid')) return html;
   const template = document.createElement('template');
   template.innerHTML = html;
   await renderDiagrams(template.content, render);
