@@ -37,12 +37,15 @@ import { checkStyle } from './style.js';
  */
 
 const message = (/** @type {unknown} */ e) => (e instanceof Error ? e.message : String(e));
+// A file name comes from the document, so it can be `constructor`.
+const ownText = (/** @type {Record<string, string>|undefined} */ map, /** @type {string} */ key) =>
+  (map && Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined);
 const fileNote = (/** @type {string|null|undefined} */ file, /** @type {number} */ line, /** @type {string} */ text) =>
   (file ? { from: 0, to: 0, file, line, message: text } : { from: 0, to: 0, line, message: text });
 
 // Citeproc writes these as text when a style prints nothing for an entry.
-const ERROR_TEXT = /\[CSL STYLE ERROR:[^\]]*\]|\[NO_PRINTED_FORM\]/g;
-const hasWords = (/** @type {string} */ html) => /[\p{L}\p{N}]/u.test(html.replace(/<[^>]*>/g, ''));
+const ERROR_TEXT = /\[CSL STYLE ERROR:[^\][]*\]|\[NO_PRINTED_FORM\]/g;
+const hasWords = (/** @type {string} */ html) => /[\p{L}\p{N}]/u.test(html.replace(/<[^<>]*>/g, ''));
 
 /** @param {string} source @returns {CitationReport} */
 function emptyReport(source) {
@@ -307,12 +310,13 @@ export function createSession({ makeEngine = createEngine } = {}) {
     // An absent .bib loses nothing when the document holds each cited entry.
     const carried = new Set(meta.references.map((entry) => entry.id));
     const covered = carried.size > 0 && [...citedKeys].every((key) => carried.has(key));
-    const noted = missingFiles.filter((name) => !(covered && meta.bibliography.includes(name)));
+    const held = (/** @type {string} */ name) => covered && meta.bibliography.includes(name);
+    const noted = missingFiles.filter((name) => !held(name));
     /** @type {CitationNote[]} */
     const notes = [
       ...bibNotes,
-      ...noted.map((name) => fileNote(name, 0, sources.missingNotes?.[name] ?? `The file ${name} is missing.`)),
-      ...(sources.ignoredPaths ?? []).map((name) => fileNote(name, 0, IGNORED_PATH)),
+      ...noted.map((name) => fileNote(name, 0, ownText(sources.missingNotes, name) ?? `The file ${name} is missing.`)),
+      ...(sources.ignoredPaths ?? []).filter((name) => !held(name)).map((name) => fileNote(name, 0, IGNORED_PATH)),
     ];
     if (meta.referencesDropped) notes.push(fileNote(null, 0, droppedMessage(meta.referencesDropped)));
     const styleFile = meta.csl;
@@ -388,8 +392,8 @@ export function createSession({ makeEngine = createEngine } = {}) {
 
     /**
      * The source with one `references:` line that holds the cited entries,
-     * for a share link. It does not format. It throws when the frontmatter
-     * cannot take the line.
+     * for a share link, and with no such line when no cited key has an entry.
+     * It does not format. It throws when the frontmatter cannot take the line.
      */
     shareSource(source) {
       const meta = readCitationMeta(source);
@@ -397,7 +401,7 @@ export function createSession({ makeEngine = createEngine } = {}) {
       readReferences(meta);
       const cited = new Set(scanCitations(source).flatMap((c) => c.items.map((it) => it.key)));
       const entries = items.filter((item) => cited.has(item.id)).map(shareItem);
-      return entries.length ? setCitationMeta(source, 'references', oneLine(entries)) : source;
+      return setCitationMeta(source, 'references', entries.length ? oneLine(entries) : null);
     },
   };
 }

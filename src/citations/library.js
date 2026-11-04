@@ -8,10 +8,10 @@
 import { BUNDLED_STYLES, checkStyle, DEFAULT_LOCALE, DEFAULT_STYLE, fileBaseName as baseName, localeFor } from './style.js';
 
 // Parent ids of dependent styles that a bundled style stands in for.
-const PARENT_ALIASES = /** @type {Record<string, string>} */ ({
-  'nlm-citation-sequence': 'vancouver',
-  'nlm-citation-sequence-brackets': 'vancouver',
-});
+const PARENT_ALIASES = new Map([
+  ['nlm-citation-sequence', 'vancouver'],
+  ['nlm-citation-sequence-brackets', 'vancouver'],
+]);
 
 /**
  * @typedef {{name: string, kind: 'bib'|'csl', text: string}} StoredFile
@@ -43,7 +43,7 @@ function findParent(parent, files) {
   const id = baseName(parent);
   const stored = files.find((f) => f.kind === 'csl' && baseName(f.name) === id);
   if (stored) return checkStyle(stored.text).ok ? { file: stored } : null;
-  const bundled = [id, PARENT_ALIASES[id]].find((candidate) => candidate && isBundled(candidate));
+  const bundled = [id, PARENT_ALIASES.get(id)].find((candidate) => candidate && isBundled(candidate));
   return bundled ? { id: bundled } : null;
 }
 

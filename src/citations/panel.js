@@ -23,16 +23,19 @@ const MAX_ROWS = 200;
 
 /**
  * What the writer must know about the style of a share link. A bundled style
- * travels by name. Another style file stays with the writer.
+ * travels by name. Another style file stays with the writer. A value with a
+ * folder names a file, also when the file has the name of a bundled style.
  *
  * @param {string} shared  the text of the link
  * @returns {string|null}
  */
 export function shareStyleNote(shared) {
   const { csl, references } = readCitationMeta(shared);
-  if (!csl || !references.length || BUNDLED_STYLES.some((style) => style.id === fileBaseName(csl))) return null;
-  if (!scanCitations(shared).length) return null;
+  if (!csl || !references.length || !scanCitations(shared).length) return null;
+  const bundled = BUNDLED_STYLES.some((style) => style.id === fileBaseName(csl));
   const name = csl.split(/[\\/]/).pop();
+  if (bundled && name === csl) return null;
+  if (bundled) return `The link carries the citations; the style file ${name} stays here, so the reader can see a different style.`;
   return `The link carries the citations; the style ${name} stays here, so the reader sees the default style.`;
 }
 

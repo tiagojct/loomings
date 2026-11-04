@@ -72,6 +72,14 @@ describe('resolveSources', () => {
   });
 });
 
+describe('a parent with the name of an Object method', () => {
+  it('finds no alias on the prototype', async () => {
+    const xml = DEP.replace('styles/apa', 'styles/constructor').replace('http://www.zotero.org/styles/apa', 'http://www.zotero.org/styles/constructor');
+    const r = await resolveSources(meta({ csl: 'd' }), [{ name: 'd.csl', kind: 'csl', text: xml }], assets);
+    expect(r.styleError).toBe('This style depends on constructor. Add that file.');
+  });
+});
+
 describe('planNativeSources', () => {
   const nlm = DEP.replace('styles/apa', 'styles/nlm-citation-sequence');
 

@@ -43,6 +43,31 @@ const doc = (body, head = 'bibliography: refs.bib') => `---\n${head}\n---\n${bod
 const ready = (extra) => { const s = createSession(); s.setSources(sources(extra)); return s; };
 const fileNotes = (r) => r.notes.filter((n) => 'file' in n);
 
+describe('analyse: long text from a share link', () => {
+  const entry = (extra) => `references: ${JSON.stringify([{ id: 'a', type: 'book', title: 'T', ...extra }])}`;
+  const timed = (source) => {
+    const s = createSession();
+    s.setSources({ bibs: [], styleXml: style('apa'), localeXml: locale('en-US'), lang: 'en-US' });
+    const before = performance.now();
+    const r = s.analyse(source);
+    expect(performance.now() - before).toBeLessThan(8000);
+    return r;
+  };
+
+  it('formats a locator with a million spaces in time', () => {
+    const r = timed(doc(`[@a, p. 1${' '.repeat(1000000)}x]\n`, entry({})));
+    expect(r.citations[0].html).toContain('p. 1 x');
+  });
+  it('formats a title and a name with a million spaces in time', () => {
+    const r = timed(doc('[@a]\n', entry({ title: `T${' '.repeat(1000000)}U`, author: [{ family: 'F', given: `G${' '.repeat(1000000)}H` }] })));
+    expect(r.bibliography[0]).toContain('T U');
+  });
+  it('cleans text with many open error marks in time', () => {
+    const r = timed(doc('[@a]\n', entry({ title: '[CSL STYLE ERROR:'.repeat(60000) })));
+    expect(r.bibliography[0]).toContain('[CSL STYLE ERROR:');
+  });
+});
+
 describe('analyse: scope', () => {
   it('gives an empty report with no bibliography and no references', () => {
     const s = ready();
@@ -122,6 +147,22 @@ describe('analyse: citations', () => {
     expect(first).toMatch(/^1\\\. Jácome C/);
     expect(second).toMatch(/^2\\\. Smith J/);
     expect(r.bibliography[0]).toContain('csl-left-margin');
+  });
+  it('keeps a locator in a superscript citation as plain text', () => {
+    const s = ready({ styleXml: style('american-medical-association') });
+    expect(s.analyse(doc('[@smith2019, p. 3]')).citations[0].markdown).toBe('1(p3)');
+  });
+  it('writes the list after a final fence that is open', () => {
+    const r = ready().analyse(doc('[@smith2019]\n\n```\ncode\n'));
+    expect(r.markdownSource.split('```')).toHaveLength(3);
+    expect(r.markdownSource).toContain('code\n```\n\nSmith, J.');
+  });
+  it('gives the language of the document to a style with a default locale', () => {
+    const ama = (lang) => {
+      const s = ready({ styleXml: style('american-medical-association'), localeXml: locale(lang), fallbackLocaleXml: locale('en-US'), lang });
+      return s.analyse(doc('[@smith2019]\n')).bibliography[0];
+    };
+    expect(ama('en-US')).not.toBe(ama('pt-PT'));
   });
   it('writes a superscript citation style', () => {
     const r = ready({ styleXml: style('american-medical-association') }).analyse(doc('Text[@jacome2020].'));
@@ -404,6 +445,14 @@ describe('analyse: file notes', () => {
     const r = s.analyse('---\nbibliography: [a.bib, b.bib]\n---\nText.\n');
     expect(r.notes.map((n) => n.message)).toEqual(['No folder.', 'The file b.bib is missing.']);
   });
+  it('does not read a note from the prototype of the notes', () => {
+    for (const name of ['constructor', 'toString', '__proto__']) {
+      const s = createSession();
+      s.setSources({ bibs: [], styleXml: style('apa'), localeXml: locale('en-US'), lang: 'en-US', missing: [name], missingNotes: {} });
+      const r = s.analyse(`---\nbibliography: ${name}\n---\nText.\n`);
+      expect(r.notes).toEqual([{ from: 0, to: 0, file: name, line: 0, message: `The file ${name} is missing.` }]);
+    }
+  });
   it('reports a missing file', () => {
     const r = ready({ bibs: [], missing: ['refs.bib'] }).analyse(doc('text'));
     expect(r.notes).toEqual([{ from: 0, to: 0, file: 'refs.bib', line: 0, message: 'The file refs.bib is missing.' }]);
@@ -603,13 +652,36 @@ describe('shareSource', () => {
     const shared = ready().shareSource(doc('[@smith2019]\n'));
     expect(receiver({ missingNotes: { 'refs.bib': 'No folder.' } }).analyse(shared).notes).toEqual([]);
   });
-  it('keeps the note for a path that the app did not read', () => {
+  it('is silent for a path that the app did not read, when references holds the keys', () => {
     const shared = ready().shareSource(doc('[@smith2019]\n', 'bibliography: /Users/me/refs.bib'));
     const r = ready({ bibs: [], ignoredPaths: ['/Users/me/refs.bib'] }).analyse(shared);
-    expect(r.notes).toEqual([{
+    expect(r.notes).toEqual([]);
+  });
+  it('keeps the note for a path that the app did not read, when a cited key has no entry', () => {
+    const head = 'bibliography: /Users/me/refs.bib\nreferences: [{"id":"a","type":"book","title":"T"}]';
+    const r = ready({ bibs: [], ignoredPaths: ['/Users/me/refs.bib'] }).analyse(doc('[@a] [@b]\n', head));
+    expect(r.notes.filter((n) => n.file)).toEqual([{
       from: 0, to: 0, line: 0, file: '/Users/me/refs.bib',
       message: 'This shared document names a file on this computer. It stays unread until you save the document.',
     }]);
+  });
+  it('keeps the note for a style path that the app did not read: references holds no style', () => {
+    const head = 'csl: /Users/me/own.csl\nreferences: [{"id":"a","type":"book","title":"T"}]';
+    const r = ready({ bibs: [], ignoredPaths: ['/Users/me/own.csl'] }).analyse(doc('[@a]\n', head));
+    expect(r.notes.map((n) => n.file)).toEqual(['/Users/me/own.csl']);
+  });
+  it('removes a references line when no cited key has an entry', () => {
+    const head = 'references: [{"id":"own","type":"book","title":"Own"},{"id":"other","type":"book","title":"Other"}]';
+    expect(ready().shareSource(doc('[@nokey]\n', head))).toBe(doc('[@nokey]\n', '').replace('---\n\n', '---\n'));
+    expect(ready().shareSource(doc('No citations.\n', `title: T\n${head}`))).toBe(doc('No citations.\n', 'title: T'));
+  });
+  it('replaces a references line, with no entry that the text does not cite', () => {
+    const head = 'references: [{"id":"own","type":"book","title":"Own"},{"id":"other","type":"book","title":"Other"}]';
+    const shared = ready().shareSource(doc('[@own]\n', head));
+    expect(JSON.parse(referencesOf(shared)).map((e) => e.id)).toEqual(['own']);
+  });
+  it('removes a references line that is not a list', () => {
+    expect(ready().shareSource(doc('[@nokey]\n', 'title: T\nreferences: not a list'))).toBe(doc('[@nokey]\n', 'title: T'));
   });
   it('formats with the default style, and keeps the notes, when a style is not found', () => {
     const head = 'bibliography: refs.bib\ncsl: mine.csl';

@@ -479,6 +479,12 @@ describe('shareStyleNote', () => {
     );
     expect(shareStyleNote(shared('csl: /Users/me/journal.csl'))).toContain('the style journal.csl stays here');
   });
+  it('names a style file in a folder that has the name of a bundled style', () => {
+    const note = 'The link carries the citations; the style file apa.csl stays here, so the reader can see a different style.';
+    expect(shareStyleNote(shared('csl: styles/apa.csl'))).toBe(note);
+    expect(shareStyleNote(shared('csl: /Users/me/apa.csl'))).toBe(note);
+    expect(shareStyleNote(shared('csl: ..\\apa.csl'))).toBe(note);
+  });
   it('says nothing for a bundled style or for no style', () => {
     expect(shareStyleNote(shared('csl: apa'))).toBe(null);
     expect(shareStyleNote(shared('csl: vancouver.csl'))).toBe(null);
