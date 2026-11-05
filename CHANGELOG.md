@@ -59,6 +59,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Native macOS app (`macos/`)
 
+- Word export. File > Export > Word (.docx) writes the document with its
+  citations and reference list, with the Word styles of the web export. The
+  File menu now also has Export > Markdown, HTML and PDF, and Print (Cmd+P):
+  these actions existed but no menu item called them. Diagrams are not drawn
+  in the Word file (the native app has no diagram renderer) and show as code.
 - A References menu between Format and Theme. Choose Bibliography… adds a
   `.bib` file, and a second file gives a flow list. Citation Style has the
   five bundled styles and Choose File…. Language has the four bundled

@@ -20,6 +20,8 @@ final class CitationController {
     struct ExportText {
         let markdown: String
         let status: String?
+        /// The reference list that ends `markdown`, for the Word export.
+        var bibliography = ""
     }
 
     /// The text for a share link. `failure` says why it has no cited entries.
@@ -228,7 +230,8 @@ final class CitationController {
         let notes = report.notes.filter { $0.to == 0 }.prefix(3).map(\.message)
         return ExportText(
             markdown: report.markdownSource,
-            status: notes.isEmpty ? nil : notes.joined(separator: " ")
+            status: notes.isEmpty ? nil : notes.joined(separator: " "),
+            bibliography: report.bibliographyMarkdown
         )
     }
 

@@ -1168,6 +1168,14 @@ enum SelfTest {
         let pdf = PDFDocument(data: controller.renderedPDFForTesting())?.string ?? ""
         check(pdf.contains("(Silva 2020)"), "the handout has the formatted citation")
 
+        var docxWritten = false
+        let docxURL = folder.appendingPathComponent("out.docx")
+        controller.exportDocx(to: docxURL) { docxWritten = true }
+        check(pump(timeout: 5) { docxWritten }, "the Word export ends")
+        let docxText = unzippedPart("word/document.xml", of: docxURL)
+        check(docxText.contains("(Silva 2020)") && !docxText.contains("[@silva2020]"), "the Word export has the formatted citation")
+        check(docxText.contains("w:pStyle w:val=\"Bibliography\""), "the Word export has the reference list")
+
         // A change on disk is read on activation.
         let renamed = citationBib.replacingOccurrences(of: "Silva, Ana", with: "Silva, Beatriz Longname")
         try Data(renamed.utf8).write(to: folder.appendingPathComponent("refs.bib"))
@@ -1269,6 +1277,20 @@ enum SelfTest {
         check(controller.previewText.contains("(Silva 2020)"), "literal keys do not flash after an edit")
         check(pump(timeout: 15) { controller.previewText.contains("New words.") }, "the report brings the new text")
         check(controller.previewText.contains("(Silva 2020)"), "the new preview has the formatted citation")
+    }
+
+    /// One part of a DOCX (a ZIP file), through /usr/bin/unzip.
+    private static func unzippedPart(_ name: String, of url: URL) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        process.arguments = ["-p", url.path, name]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        guard (try? process.run()) != nil else { return "" }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
     }
 
     private static func checkExportLimit(_ check: (Bool, String) -> Void, folder: URL) throws {

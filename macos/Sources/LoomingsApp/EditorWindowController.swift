@@ -1,6 +1,7 @@
 import AppKit
 import LoomingsCitations
 import LoomingsDocuments
+import LoomingsDocx
 import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsPreview
@@ -718,6 +719,8 @@ final class EditorWindowController: NSWindowController,
         /// The text of the share link: the source with the cited entries.
         let shareSource: String
         let markdown: String
+        /// The reference list that ends `markdown`.
+        var bibliography = ""
         let documentURL: URL?
         let title: String
     }
@@ -728,6 +731,7 @@ final class EditorWindowController: NSWindowController,
             source: source,
             shareSource: source,
             markdown: citations.report(for: source)?.markdownSource ?? source,
+            bibliography: citations.report(for: source)?.bibliographyMarkdown ?? "",
             documentURL: loomingsDocument?.linkBaseURL,
             title: exportTitle
         )
@@ -753,6 +757,7 @@ final class EditorWindowController: NSWindowController,
                 source: start.source,
                 shareSource: shared?.source ?? start.source,
                 markdown: text.markdown,
+                bibliography: text.bibliography,
                 documentURL: start.documentURL,
                 title: start.title
             )
@@ -1637,6 +1642,29 @@ final class EditorWindowController: NSWindowController,
             defer { completion?() }
             do {
                 try self.documentHTML(page).data(using: .utf8)?.write(to: url, options: .atomic)
+            } catch {
+                self.present(NSAlert(error: error))
+            }
+        }
+    }
+
+    @objc func exportDocx(_ sender: Any?) {
+        guard let url = saveURL(name: exportTitle, fileExtension: "docx") else {
+            return
+        }
+        exportDocx(to: url)
+    }
+
+    func exportDocx(to url: URL, completion: (() -> Void)? = nil) {
+        withExportPage { page in
+            defer { completion?() }
+            let data = DocxExport.data(
+                markdown: page.markdown,
+                bibliographyMarkdown: page.bibliography,
+                documentURL: page.documentURL
+            )
+            do {
+                try data.write(to: url, options: .atomic)
             } catch {
                 self.present(NSAlert(error: error))
             }

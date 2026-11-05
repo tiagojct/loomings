@@ -238,6 +238,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         menu.addItem(saveToShelf)
         menu.addItem(.separator())
 
+        let export = NSMenu(title: "Export")
+        export.addItem(withTitle: "Markdown\u{2026}", action: #selector(EditorWindowController.exportMarkdown(_:)), keyEquivalent: "")
+        export.addItem(withTitle: "HTML\u{2026}", action: #selector(EditorWindowController.exportHTML(_:)), keyEquivalent: "")
+        export.addItem(withTitle: "Word (.docx)\u{2026}", action: #selector(EditorWindowController.exportDocx(_:)), keyEquivalent: "")
+        export.addItem(withTitle: "PDF\u{2026}", action: #selector(EditorWindowController.exportPDF(_:)), keyEquivalent: "")
+        let exportItem = NSMenuItem(title: "Export", action: nil, keyEquivalent: "")
+        exportItem.submenu = export
+        menu.addItem(exportItem)
+        menu.addItem(
+            withTitle: "Print\u{2026}",
+            action: #selector(EditorWindowController.printPreview(_:)),
+            keyEquivalent: "p"
+        )
+        menu.addItem(.separator())
+
         menu.addItem(
             withTitle: "Duplicate",
             action: #selector(NSDocument.duplicate(_:)),

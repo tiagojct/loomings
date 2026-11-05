@@ -172,6 +172,13 @@ release numbers.
   the `filters` fixture keeps it the same as `filterLibrary`, with non-Latin
   text. Its fold must stay `foldText`: `lowercased(with:)`, not `lowercased()`,
   for the Greek final sigma, and the spaces of `\s`, not `isWhitespace`.
+- `Sources/LoomingsDocx` — Word export (`DocxExport`, `ZipWriter`). It walks the
+  cmark tree of the export text (the report's `markdownSource`) and writes the
+  DOCX package by hand: no library. The reference list (`bibliographyMarkdown`)
+  is the end of that text and gets the Bibliography style. Word style ids match
+  `src/docx.js`; a rule change goes in both. Images go through
+  `PreviewImageLoader` (local files and data URIs only). Tests unzip the file
+  with `/usr/bin/unzip`.
 - `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
   app-owned handler, snapshot, visible-region styling, footprint) over
   10 KB–10 MB corpora.
