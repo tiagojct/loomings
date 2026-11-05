@@ -3,6 +3,7 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY vite.config.js ./
+COPY scripts/citeproc-notice.js ./scripts/citeproc-notice.js
 COPY vendor ./vendor
 COPY src ./src
 COPY public ./public

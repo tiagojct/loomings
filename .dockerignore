@@ -6,7 +6,8 @@ dist
 src-tauri
 icons
 social
-scripts
+scripts/*
+!scripts/citeproc-notice.js
 *.md
 LICENSE
 .DS_Store
