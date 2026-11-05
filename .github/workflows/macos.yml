@@ -5,9 +5,9 @@ name: macOS
 on:
   push:
     branches: [main, macos]
-    paths: ["macos/**", "src/share.js", ".github/workflows/macos.yml"]
+    paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "package-lock.json", "scripts/export-native-resources.mjs", "vite.citations.config.js", ".github/workflows/macos.yml"]
   pull_request:
-    paths: ["macos/**", "src/share.js", ".github/workflows/macos.yml"]
+    paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "package-lock.json", "scripts/export-native-resources.mjs", "vite.citations.config.js", ".github/workflows/macos.yml"]
   workflow_dispatch:
 
 jobs:
@@ -19,6 +19,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: npm
+      # The bundle is committed, so a change in src/citations must also change it.
+      - run: npm ci
+      - run: npm run export:native
+      - run: git diff --exit-code -- macos/Resources/Citations
       - run: swift --version
       # Includes the Swift/Node share-link interop tests, which need node.
       - run: swift test --package-path macos

@@ -51,6 +51,10 @@
         <button type="button" class="tb-menu-item" role="menuitem" data-action="qr"><span class="tb-menu-label">Show QR code</span><span class="tb-menu-hint">the share link, for phones</span></button>
       </div>
     </div>
+    <div class="tb-menu-wrap">
+      <button type="button" id="tb-references" title="References" aria-haspopup="menu" aria-expanded="false">References</button>
+      <div id="references-menu" class="tb-menu hidden" role="menu" aria-label="References"></div>
+    </div>
     <span class="tb-spacer"></span>
     <div class="tb-seg" role="group" aria-label="View">
       <button type="button" data-view="editor" aria-pressed="true" title="Editor only (Esc)">Write</button>
@@ -93,7 +97,14 @@
   <div id="editor-container">
     <div id="content-area" class="width-normal">
       <div id="editor" tabindex="-1"></div>
-      <section id="preview" class="hidden" tabindex="0" aria-label="Rendered preview"></section>
+      <div id="preview-column">
+        <div id="references-tabs" class="hidden" role="tablist" aria-label="Right column">
+          <button type="button" id="tab-preview" role="tab" data-tab="preview" aria-controls="preview" aria-selected="true">Preview</button>
+          <button type="button" id="tab-references" role="tab" data-tab="references" aria-controls="references-panel" aria-selected="false" tabindex="-1">References</button>
+        </div>
+        <section id="preview" class="hidden" tabindex="0" aria-label="Rendered preview"></section>
+        <section id="references-panel" class="hidden" aria-label="References"></section>
+      </div>
     </div>
   </div>
 
@@ -190,13 +201,23 @@
     </div>
   </div>
 
+  <div id="references-dialog" class="hidden" role="dialog" aria-modal="true" aria-labelledby="references-dialog-title">
+    <div id="references-dialog-inner">
+      <div id="references-dialog-head">
+        <h2 id="references-dialog-title">References</h2>
+        <button type="button" id="references-dialog-close">Close</button>
+      </div>
+      <div id="references-dialog-body"></div>
+    </div>
+  </div>
+
   <div id="about" class="hidden" role="dialog" aria-modal="true" aria-labelledby="about-title">
     <div id="about-inner" tabindex="-1">
       <img id="about-icon" src="icons/icon-192.png" alt="Loomings" width="96" height="96">
       <h2 id="about-title">Loomings</h2>
       <p id="about-version">Version</p>
       <p class="about-tagline">A markdown writing app. The shapes loom before they take form.</p>
-      <p class="about-tech" id="about-tech">MIT licensed. Built with CodeMirror 6. Colours from <a href="#" data-url="https://ensigns.tiagojacinto.eu">Ensigns</a> (CC BY 4.0).</p>
+      <p class="about-tech" id="about-tech">MIT licensed. Built with CodeMirror 6. Diagrams by <a href="#" data-url="https://pele.run">Pele</a>. Citations by <a href="#" data-url="https://github.com/Juris-M/citeproc-js">citeproc-js</a> (<a href="#" data-url="licenses/citeproc-LICENSE.txt">CPAL</a>) and <a href="#" data-url="https://citation.js.org">citation-js</a> (<a href="#" data-url="licenses/citation-js-LICENSE.txt">MIT</a>). Citation styles and locales from the <a href="#" data-url="https://citationstyles.org">CSL project</a> (<a href="#" data-url="licenses/CSL-LICENSE.txt">CC BY-SA 3.0</a>). Colours from <a href="#" data-url="https://ensigns.tiagojacinto.eu">Ensigns</a> (CC BY 4.0).</p>
       <div class="about-links">
         <a href="#" data-url="https://loomings.tiagojacinto.eu">loomings.tiagojacinto.eu</a>
         <a href="#" data-url="https://github.com/tiagojct/loomings">github.com/tiagojct/loomings</a>

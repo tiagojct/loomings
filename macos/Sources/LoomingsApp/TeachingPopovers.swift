@@ -1,4 +1,5 @@
 import AppKit
+import LoomingsCitations
 import LoomingsTeaching
 import LoomingsTheme
 
@@ -65,23 +66,33 @@ enum TeachingPopovers {
         return button
     }
 
-    /// One row per checker note: message, its line, and Fix / Go to line.
+    /// One row per note: the message, then what the writer can do. A note
+    /// about a file has no line to go to.
     static func notes(
-        _ issues: [LintIssue],
-        line: (LintIssue) -> Int,
+        _ notes: [DocumentNote],
+        line: (NSRange) -> Int,
         onFix: @escaping (LintIssue) -> Void,
-        onGo: @escaping (LintIssue) -> Void
+        onGo: @escaping (NSRange) -> Void,
+        onChooseFile: @escaping (String) -> Void
     ) -> NSView {
-        let rows: [NSView] = issues.map { issue in
-            let message = label(issue.message)
+        let rows: [NSView] = notes.map { note in
             var buttons: [NSView] = []
-            if let fix = issue.fix {
+            if let issue = note.issue, let fix = issue.fix {
                 buttons.append(button(fix.title) { onFix(issue) })
             }
-            buttons.append(button("Go to line \(line(issue))") { onGo(issue) })
-            let actions = NSStackView(views: buttons)
-            actions.spacing = 8
-            let row = NSStackView(views: [message, actions])
+            if let file = note.missingFile {
+                buttons.append(button("Choose \(file)\u{2026}") { onChooseFile(file) })
+            }
+            if let range = note.range {
+                buttons.append(button("Go to line \(line(range))") { onGo(range) })
+            }
+            var parts: [NSView] = [label(note.message)]
+            if !buttons.isEmpty {
+                let actions = NSStackView(views: buttons)
+                actions.spacing = 8
+                parts.append(actions)
+            }
+            let row = NSStackView(views: parts)
             row.orientation = .vertical
             row.alignment = .leading
             row.spacing = 6

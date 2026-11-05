@@ -9,9 +9,9 @@ const BACKGROUND = ['#web-toolbar', '#editor-container', '#statusbar'];
 
 /** @param {HTMLElement} root @returns {HTMLElement[]} */
 function focusables(root) {
-  return Array.from(
+  return /** @type {HTMLElement[]} */ (Array.from(
     root.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')
-  );
+  )).filter((node) => !node.closest('.hidden'));
 }
 
 /** @type {WeakMap<HTMLElement, {close: () => void}>} */
@@ -21,10 +21,11 @@ const openModals = new WeakMap();
  * Opens a dialog element (its visibility is the app's `.hidden` class).
  *
  * @param {HTMLElement} dialog
- * @param {{opener?: HTMLElement|null, initialFocus?: HTMLElement|null}} [options]
+ * @param {{opener?: HTMLElement|null, initialFocus?: HTMLElement|null, onClose?: () => void}} [options]
+ *   onClose runs after each close, also a close with Escape.
  * @returns {{close: () => void}}
  */
-export function openModal(dialog, { opener = null, initialFocus = null } = {}) {
+export function openModal(dialog, { opener = null, initialFocus = null, onClose } = {}) {
   // Opening an already-open dialog (a habitual Cmd+P) must hand back the
   // controller that can actually close it, not a no-op that leaves the page
   // inert and the dialog on screen.
@@ -84,6 +85,7 @@ export function openModal(dialog, { opener = null, initialFocus = null } = {}) {
     dialog.removeEventListener('keydown', onKeydown);
     for (const node of inerted) node.removeAttribute('inert');
     if (opener && typeof opener.focus === 'function') opener.focus();
+    onClose?.();
   }
 
   const controller = { close };

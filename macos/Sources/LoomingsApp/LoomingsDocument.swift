@@ -18,6 +18,17 @@ final class LoomingsDocument: NSDocument {
     private(set) var lastKnownStamp: FileStamp?
     private(set) var shelfEntry: ShelfEntry?
 
+    /// True for a document from a share link until it is saved. The writer of
+    /// the link chose its citation file names, so a path that leaves the
+    /// document's folder stays unread.
+    var cameFromShareLink = false {
+        didSet {
+            guard cameFromShareLink != oldValue else { return }
+            invalidateRestorableState()
+            refreshCitations()
+        }
+    }
+
     var shelf = LocalShelf.shared
     var notesRecentDocuments = true
     private var isSaving = false
@@ -56,6 +67,36 @@ final class LoomingsDocument: NSDocument {
                 }
             }
         }
+    }
+
+    /// An untitled document for the text of a share link.
+    static func shared(text: String) -> LoomingsDocument {
+        let document = LoomingsDocument()
+        document.pendingText = text
+        document.displayName = "Shared Document"
+        document.cameFromShareLink = true
+        return document
+    }
+
+    // An unsaved document comes back after a restart, and a copy is unsaved
+    // too: the mark must stay with the text.
+
+    private static let shareLinkKey = "cameFromShareLink"
+
+    override func encodeRestorableState(with coder: NSCoder) {
+        super.encodeRestorableState(with: coder)
+        coder.encode(cameFromShareLink, forKey: Self.shareLinkKey)
+    }
+
+    override func restoreState(with coder: NSCoder) {
+        super.restoreState(with: coder)
+        cameFromShareLink = coder.decodeBool(forKey: Self.shareLinkKey)
+    }
+
+    override func duplicate() throws -> NSDocument {
+        let copy = try super.duplicate()
+        (copy as? LoomingsDocument)?.cameFromShareLink = cameFromShareLink
+        return copy
     }
 
     override func makeWindowControllers() {
@@ -142,11 +183,13 @@ final class LoomingsDocument: NSDocument {
 
         saveGeneration.recordSave(snapshot: lastWrittenGeneration)
         lastKnownStamp = FileStamp(url: url)
+        cameFromShareLink = false
         if let entry = shelf.entry(containing: url) {
             shelfEntry = entry
             try? shelf.touch(id: entry.id, at: Date())
             applyTitle()
         }
+        refreshCitations()
     }
 
     // MARK: - Shelf
@@ -157,6 +200,47 @@ final class LoomingsDocument: NSDocument {
     var canSaveToShelf: Bool {
         guard let url = fileURL else { return true }
         return shelf.contains(url)
+    }
+
+    /// The folder for relative image links. An untitled or shelf document
+    /// has none: a path from the shelf's private folder means nothing to
+    /// the writer, and the link stays absolute.
+    var imageLinkDirectory: URL? {
+        guard let url = fileURL, !shelf.contains(url) else { return nil }
+        return url.deletingLastPathComponent()
+    }
+
+    /// Snapshot mode only: the input file, for relative images and
+    /// bibliographies. The document never writes to it.
+    var snapshotFileURL: URL?
+
+    /// The file that relative links in the preview and export start from.
+    var linkBaseURL: URL? { snapshotFileURL ?? fileURL }
+
+    /// The file that relative citation files start from. A shelf document has
+    /// no folder for the writer, as for images.
+    var citationDocumentURL: URL? {
+        snapshotFileURL ?? (imageLinkDirectory == nil ? nil : fileURL)
+    }
+
+    /// The document's text or home changed in a way the editor cannot see.
+    private func refreshCitations() {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                for controller in self?.windowControllers ?? [] {
+                    (controller as? EditorWindowController)?.updateCitations()
+                }
+            }
+        }
+    }
+
+    /// Reads the citation files again if they changed on disk.
+    func checkCitationFiles() {
+        MainActor.assumeIsolated {
+            for controller in windowControllers {
+                (controller as? EditorWindowController)?.citations.checkFiles()
+            }
+        }
     }
 
     override func validateUserInterfaceItem(_ item: any NSValidatedUserInterfaceItem) -> Bool {
@@ -188,10 +272,12 @@ final class LoomingsDocument: NSDocument {
             lastKnownStamp = FileStamp(url: shelf.contentURL(for: entry))
             saveGeneration.recordSave(snapshot: generation)
             updateChangeCount(.changeCleared)
+            cameFromShareLink = false
             if notesRecentDocuments {
                 NSDocumentController.shared.noteNewRecentDocumentURL(shelf.contentURL(for: entry))
             }
             applyTitle()
+            refreshCitations()
         } catch {
             presentError(error)
         }

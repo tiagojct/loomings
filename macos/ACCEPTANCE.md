@@ -81,6 +81,12 @@ removed afterwards.
 | Share links `#d=p.` / `#d=z.` | Yes | Raw DEFLATE, limits, Node↔Swift tests |
 | Share link copy/open and family/mode import | Yes | Copy tested; Open Share Link modal not automated |
 | About and Ensigns attribution | Yes | About panel |
+| Citations and reference list in preview, print and HTML export | Yes | One JS implementation in JavaScriptCore; report fixtures; self-test |
+| Citation marks, notes and `@` completion | Yes | Self-test with the real list |
+| References menu: bibliography, style, language | Yes | Self-test: one edit and one Undo for each choice; the file panels are not automated |
+| Library view, filter, `[@key]` insertion | Yes | The `filters` and `insertCitation` rules match the web; self-test with Return and the field; double click reaches the same path, the real click is not automated |
+| VoiceOver labels of the References view | Yes | Self-test reads the labels and roles through the accessibility API; not checked by ear |
+| References tabs | Yes | A two-part control at the top of the right column, Split only, with the web's rule for when it shows; self-test with a click on each part. The state is per window, not per session |
 
 ## Verification
 
@@ -228,3 +234,54 @@ decodes it from the rendered page instead).
 - The shelf looks a document up by identifier and ignores sidecars that name a file
   outside the shelf.
 - Mixed line endings are normalised to the first one found, with a test.
+
+## Citations in JavaScriptCore (2026-11-04)
+
+The citation code of `src/citations` runs as one bundle in JavaScriptCore
+(`macos/Resources/Citations/citations.js`, 623 kB, 188 kB gzip). Command:
+`swift run -c release --package-path macos LoomingsBench --citations`. Each row
+of the bench is one new engine. These are the medians of six engines on the machine
+above, APA, en-US.
+
+| Measurement | 1 entry, 1 citation | 200 entries, 60 citations |
+|---|---:|---:|
+| `CitationEngine.init` (finds the file) | 0.14 ms | 0.14 ms |
+| Bundle load (first call) | 28 ms | 29 ms |
+| First report (bibliography, first engine, render) | 1.60 s | 2.02 s |
+| Same text again (cached render) | 0.22 ms | 3.3 ms |
+| A new citation (render, same engine) | 5.9 ms | 406 ms |
+
+- Startup with no citations: `LoomingsApp` links `LoomingsCitations`, and so
+  JavaScriptCore, but the launch time is not measured. A document with no
+  `bibliography:` or `references:` line near the start of a frontmatter stops at
+  `CitationGate`: no engine, no bundle load, no JavaScript. The self-test checks this.
+- Startup with a bibliography: the bench uses APA. In the app, with the default style
+  (Chicago author-date), en-US and one entry, the first `analyse` of an engine took 3.6 s
+  in each self-test run. A changed bibliography builds a new citeproc engine, so it costs
+  the same. For the first report the preview shows the literal keys, because there is no
+  earlier report to keep. After a changed bibliography it keeps the last preview.
+- Each window has its own engine, made on the first document that passes the gate.
+  Peak footprint of `--snapshot`, one run each, the same text with and without
+  `bibliography:`, two entries: 192 MB and 169 MB, so one engine costs about 23 MB. This is
+  one small document, not a limit, and the cost of more windows is not measured.
+- Typing with a slow engine (0.7 s for each report, in `--self-test`, one
+  release run of each): Insert p95 is 1.1 ms to 1.8 ms with and without the engine. The
+  longest run loop turn stays under the 350 ms limit of the check. A build that
+  waits on the engine from the main thread gave a 735 ms turn and failed the check,
+  and its Insert p95 stayed at 1.4 ms, so Insert p95 alone does not show this fault.
+- Run the self-test as `caffeinate -i .../Loomings --self-test`. A Mac in Maintenance
+  Sleep stalls the run: a 3.6 s report took 29 s, and three checks of about 15 runs timed
+  out that way, each inside a sleep in `pmset -g log`.
+- The cost is once per engine setup. A change of style, locale or entries builds a new
+  engine, so it costs about the first engine time again.
+- Memory in the bench: the process footprint changes between 13 MB and 110 MB through
+  these runs, because the collector runs at different times. This is not a figure for one
+  engine.
+- These runs use the JIT, because the ad-hoc build has no hardened runtime. A Developer
+  ID build with the hardened runtime needs the `com.apple.security.cs.allow-jit`
+  entitlement, or JavaScriptCore runs without the JIT. That build is not measured.
+- No time limit stops a script that does not end. It stops only the citation queue, not
+  the editor.
+- Licences: `LICENSE-citeproc`, `LICENSE-citation-js` and `LICENSE-CSL.md` are next to
+  the bundle. The first line of the bundle names citeproc and its licence file, because
+  the bundle holds citeproc and MIT code in one file. About has the attribution.

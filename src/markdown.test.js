@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { stripFrontmatter, renderMarkdown, renderPreview, SAFE_URL } from './markdown.js';
+import { createCitationDocument, citedHtml } from './citations/document.js';
 
 describe('markdown and frontmatter', () => {
   it('strips YAML frontmatter at the start of a document', () => {
@@ -104,5 +105,17 @@ describe('URL sanitization', () => {
     expect(html).toMatch(/<li data-line="5">/);
     // Export and the native fixtures keep markdown-it's own output.
     expect(renderMarkdown(raw)).not.toContain('data-line-end');
+  });
+});
+
+describe('a document without bibliography', () => {
+  it('gives the output of the renderer, with citations as text', async () => {
+    const source = '---\ntitle: Plain\n---\n\nText [@a] and @b.\n\n```mermaid\ngraph TD\n```\n';
+    const fail = () => { throw new Error('nothing must load'); };
+    const doc = createCitationDocument({ client: fail, assets: fail, listFiles: fail, onChange: fail });
+    const report = await doc.flush(source);
+    expect(citedHtml(source, report, renderPreview)).toBe(renderPreview(source));
+    expect(citedHtml(source, report, renderMarkdown)).toBe(renderMarkdown(source));
+    expect(renderPreview(source)).toContain('[@a]');
   });
 });

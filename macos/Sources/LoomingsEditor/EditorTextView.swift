@@ -25,6 +25,72 @@ public final class EditorTextView: NSTextView {
     /// Option-click asks what is under the pointer instead of placing the
     /// caret (an option-drag still makes a rectangular selection).
     var onOptionClick: ((Int) -> Void)?
+    /// Takes the pasted text and returns true if it used it.
+    var onPaste: ((String) -> Bool)?
+
+    /// The sign and the query at the caret, when the caret is in a place for
+    /// a citation.
+    var citationQueryRange: (() -> NSRange?)?
+    /// What each row of the open citation list inserts. Nil when the list
+    /// holds the system's words.
+    var citationRows: [String: String]?
+    /// Takes the location of the sign when the writer closes the list.
+    var onCitationListDismissed: ((Int) -> Void)?
+
+    /// True while a key press reaches the text. A key press can come through
+    /// an input method, and it arrives here too.
+    public private(set) var isTyping = false
+
+    public override func keyDown(with event: NSEvent) {
+        asTyping { super.keyDown(with: event) }
+    }
+
+    /// Runs `body` as a key press. The self-test and the tests type this way.
+    public func asTyping(_ body: () -> Void) {
+        let outer = isTyping
+        isTyping = true
+        body()
+        isTyping = outer
+    }
+
+    public override var rangeForUserCompletion: NSRange {
+        citationQueryRange?() ?? super.rangeForUserCompletion
+    }
+
+    /// The citation list does not put a row in the text while the writer
+    /// browses, so the text changes only when the writer takes a row. Typing
+    /// closes the list with a final call too, and that takes no row.
+    public override func insertCompletion(
+        _ word: String,
+        forPartialWordRange charRange: NSRange,
+        movement: Int,
+        isFinal flag: Bool
+    ) {
+        guard let rows = citationRows else {
+            super.insertCompletion(word, forPartialWordRange: charRange, movement: movement, isFinal: flag)
+            return
+        }
+        guard flag else { return }
+        citationRows = nil
+        switch movement {
+        case NSTextMovement.return.rawValue, NSTextMovement.tab.rawValue:
+            guard let insertion = rows[word] else { return }
+            // Undo must remove the key only, not the words before it.
+            breakUndoCoalescing()
+            super.insertCompletion(insertion, forPartialWordRange: charRange, movement: movement, isFinal: true)
+        case NSTextMovement.cancel.rawValue:
+            onCitationListDismissed?(charRange.location)
+        default:
+            break
+        }
+    }
+
+    public override func paste(_ sender: Any?) {
+        if let text = NSPasteboard.general.string(forType: .string), onPaste?(text) == true {
+            return
+        }
+        super.paste(sender)
+    }
 
     public override func mouseDown(with event: NSEvent) {
         if let onOptionClick, event.modifierFlags.contains(.option), event.clickCount == 1,
@@ -39,7 +105,7 @@ public final class EditorTextView: NSTextView {
         super.mouseDown(with: event)
     }
 
-    /// Decorations by owner ("pair", "notes", "line"), so each feature
+    /// Decorations by owner ("pair", "notes", "citations", "line"), so each feature
     /// replaces only its own.
     private var layers: [String: [EditorDecoration]] = [:]
 

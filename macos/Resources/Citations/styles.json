@@ -1,0 +1,42 @@
+{
+  "styles": [
+    {
+      "id": "chicago-author-date",
+      "title": "Chicago (author-date)"
+    },
+    {
+      "id": "apa",
+      "title": "APA"
+    },
+    {
+      "id": "vancouver",
+      "title": "Vancouver"
+    },
+    {
+      "id": "american-medical-association",
+      "title": "AMA"
+    },
+    {
+      "id": "ieee",
+      "title": "IEEE"
+    }
+  ],
+  "languages": [
+    {
+      "id": "en-US",
+      "label": "English (US)"
+    },
+    {
+      "id": "en-GB",
+      "label": "English (UK)"
+    },
+    {
+      "id": "pt-PT",
+      "label": "Português (Portugal)"
+    },
+    {
+      "id": "es-ES",
+      "label": "Español (España)"
+    }
+  ]
+}

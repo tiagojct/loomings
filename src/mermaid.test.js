@@ -1,0 +1,176 @@
+// @vitest-environment happy-dom
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+/** @param {string} html */
+function root(html) {
+  const el = document.createElement('div');
+  el.innerHTML = html;
+  return el;
+}
+
+import { renderPreview } from './markdown.js';
+
+/** Real preview markup for a mermaid fence. @param {string} src */
+const fence = (src) =>
+  renderPreview('```mermaid\n' + src.replace(/&gt;/g, '>').replace(/&lt;/g, '<') + '\n```');
+
+/** @type {typeof import('./mermaid.js')} */
+let m;
+beforeEach(async () => {
+  vi.resetModules();
+  vi.doUnmock('pele/lazy');
+  m = await import('./mermaid.js');
+});
+
+describe('mermaid renderer', () => {
+  it('replaces a mermaid fence with its svg and keeps data-line', async () => {
+    const el = root(fence('graph TD; A--&gt;B'));
+    expect(m.hasDiagrams(el)).toBe(true);
+    await m.renderDiagrams(el, async () => ({ svg: '<svg id="d"></svg>' }));
+    const pre = el.querySelector('pre');
+    expect(pre?.getAttribute('data-line')).toBe('0');
+    expect(pre?.hasAttribute('data-line-end')).toBe(true);
+    expect(pre?.classList.contains('mermaid')).toBe(true);
+    expect(pre?.querySelector('svg#d')).not.toBeNull();
+    expect(pre?.querySelector('code')).toBeNull();
+  });
+
+  it('leaves other code blocks alone', async () => {
+    const html = '<pre data-line="1"><code class="language-js">let a;</code></pre>';
+    const el = root(html);
+    expect(m.hasDiagrams(el)).toBe(false);
+    const render = vi.fn();
+    await m.renderDiagrams(el, render);
+    expect(render).not.toHaveBeenCalled();
+    expect(el.innerHTML).toBe(html);
+  });
+
+  it('shows the source and the error as text for a diagram that fails', async () => {
+    const el = root(fence('bad source'));
+    await m.renderDiagrams(el, async () => {
+      throw new Error('<b>x</b>');
+    });
+    const pre = el.querySelector('pre');
+    expect(pre?.classList.contains('mermaid-error')).toBe(true);
+    expect(pre?.getAttribute('data-line')).toBe('0');
+    expect(pre?.hasAttribute('data-line-end')).toBe(true);
+    expect(pre?.querySelector('code')?.textContent).toBe('bad source\n');
+    expect(pre?.querySelector('p')?.textContent).toContain('<b>x</b>');
+    expect(el.querySelector('b')).toBeNull();
+  });
+
+  it('does not call render twice for the same source', async () => {
+    const render = vi.fn(async () => ({ svg: '<svg></svg>' }));
+    await m.renderDiagrams(root(fence('graph TD; A--&gt;B')), render);
+    await m.renderDiagrams(root(fence('graph TD; A--&gt;B')), render);
+    expect(render).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not cache a failed module load', async () => {
+    const src = 'graph TD; A--&gt;B';
+    const el = root(fence(src));
+    await m.renderDiagrams(el, async () => {
+      throw new m.LoadError('chunk failed');
+    });
+    expect(el.querySelector('pre')?.classList.contains('mermaid-error')).toBe(true);
+    const again = root(fence(src));
+    await m.renderDiagrams(again, async () => ({ svg: '<svg id="ok"></svg>' }));
+    expect(again.querySelector('svg#ok')).not.toBeNull();
+  });
+
+  it('passes links false and images false', async () => {
+    const renderAsync = vi.fn(async () => ({ svg: '<svg></svg>' }));
+    vi.doMock('pele/lazy', () => ({ renderAsync }));
+    vi.resetModules();
+    const fresh = await import('./mermaid.js');
+    await fresh.renderDiagrams(root(fence('graph TD; A--&gt;B')));
+    expect(renderAsync).toHaveBeenCalledWith('graph TD; A-->B\n', {
+      links: false,
+      images: false,
+    });
+  });
+
+  it('a hostile label produces no script element', async () => {
+    const el = root(
+      fence('graph TD\n A["&lt;script&gt;alert(1)&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;"] --&gt; B'),
+    );
+    await m.renderDiagrams(el);
+    expect(el.querySelector('svg')).not.toBeNull();
+    expect(el.querySelector('script')).toBeNull();
+    expect(el.querySelector('[onerror]')).toBeNull();
+  });
+
+  it('renderDiagramsInHtml returns the html with svg in place', async () => {
+    const html = fence('graph TD; A--&gt;B') + '<p>after</p>';
+    const out = await m.renderDiagramsInHtml(html, async () => ({ svg: '<svg id="x"></svg>' }));
+    expect(out).toContain('<svg id="x"></svg>');
+    expect(out).toContain('<p>after</p>');
+    expect(out).not.toContain('language-mermaid');
+  });
+
+  it('renderDiagramsInHtml keeps the source when the render fails', async () => {
+    const out = await m.renderDiagramsInHtml(fence('graph TD; Q--&gt;R'), async () => {
+      throw new Error('bad');
+    });
+    expect(out).toContain('Q--&gt;R');
+    expect(out).toContain('mermaid-error');
+  });
+
+  it('applies cache hits before it awaits a miss', async () => {
+    await m.renderDiagrams(root(fence('graph TD; B--&gt;C')), async () => ({ svg: '<svg id="b"></svg>' }));
+    const el = root(fence('graph TD; A--&gt;B') + fence('graph TD; B--&gt;C'));
+    /** @type {(v: {svg: string}) => void} */
+    let release = () => {};
+    const pending = new Promise((resolve) => { release = resolve; });
+    const done = m.renderDiagrams(el, () => pending);
+    const pres = el.querySelectorAll('pre');
+    expect(pres[1].querySelector('svg#b')).not.toBeNull();
+    expect(pres[0].querySelector('svg')).toBeNull();
+    release({ svg: '<svg id="a"></svg>' });
+    await done;
+    expect(pres[0].querySelector('svg#a')).not.toBeNull();
+  });
+
+  it('renderDiagramsInHtml returns html without diagrams unchanged', async () => {
+    const html = '<p>a &amp; b<br></p><pre><code class="language-js">x</code></pre>';
+    expect(await m.renderDiagramsInHtml(html)).toBe(html);
+  });
+
+  it('a chunk load failure inside render is a load error and is not cached', async () => {
+    class PeleError extends Error {}
+    const renderAsync = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch dynamically imported module'))
+      .mockResolvedValue({ svg: '<svg id="ok"></svg>' });
+    vi.doMock('pele/lazy', () => ({ renderAsync, PeleError }));
+    vi.resetModules();
+    const fresh = await import('./mermaid.js');
+    const src = 'graph TD; Z--&gt;Y';
+    const first = root(fence(src));
+    await fresh.renderDiagrams(first);
+    expect(first.querySelector('pre')?.classList.contains('mermaid-error')).toBe(true);
+    const second = root(fence(src));
+    await fresh.renderDiagrams(second);
+    expect(second.querySelector('svg#ok')).not.toBeNull();
+  });
+
+  it('a PeleError is a cached diagram error', async () => {
+    class PeleError extends Error {}
+    const renderAsync = vi.fn().mockRejectedValue(new PeleError('syntax'));
+    vi.doMock('pele/lazy', () => ({ renderAsync, PeleError }));
+    vi.resetModules();
+    const fresh = await import('./mermaid.js');
+    await fresh.renderDiagrams(root(fence('graph TD; P--&gt;Q')));
+    await fresh.renderDiagrams(root(fence('graph TD; P--&gt;Q')));
+    expect(renderAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('peleSeriesCss makes tints of the accent and the text over the ground', () => {
+    const css = m.peleSeriesCss({ accent: '#a', fg: '#f' }, '#g');
+    expect(css).toContain('--pele-series-1: #a;');
+    expect(css).toContain('--pele-series-2: color-mix(in srgb, #f 72%, #g);');
+    expect(css).toContain('--pele-series-3: color-mix(in srgb, #a 58%, #g);');
+    expect(css).toContain('--pele-series-8: color-mix(in srgb, #f 16%, #g);');
+    expect(css).toContain('--pele-critical: #a;');
+  });
+});

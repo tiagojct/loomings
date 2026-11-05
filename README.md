@@ -20,6 +20,8 @@ unless you put it in a link.
 - Shortcuts: **⌘B / ⌘I** wrap, **⌘\`** code, **⌘K** link. Lists continue on Return, stop on a second Return.
 - Smart typography (curly quotes, em dashes, ellipses), YAML frontmatter dimmed.
 - **Outline** (⌘P), **find and replace** (⌘F), **focus mode** (⌘⇧D), **typewriter scrolling** (⌘⇧Y), **full screen** (⌘⇧F), word goal, reading time, column width. All three sit in the toolbar's Focus menu too.
+- **Diagrams**: a `mermaid` code fence draws as a diagram in the preview, in print and in the HTML export. The source stays if a diagram fails.
+- **Citations**: add a `.bib` file and name it in `bibliography:`. Pandoc citations such as `[@key]` become formatted citations with a reference list in the preview, in print and in the HTML export. `csl:` sets the style. The References menu and the References tab in Split list the library and insert keys. The files stay in your browser.
 - **Three views**: Write, Split (⌘\), Preview (⌘⇧P). Split keeps the two panes in step as you scroll either one.
 - **Export**: Markdown, standalone HTML in the current theme, or Print / PDF of the rendered document.
 

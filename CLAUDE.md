@@ -31,7 +31,43 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 - `src/palettes.js` — the ten Ensigns colour families. The only place a colour
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
-- `src/share.js` — document ⇄ URL fragment. Pure, tested.
+- `src/share.js` — document ⇄ URL fragment. Pure, tested. A share link always
+  carries the cited entries: `session.shareSource` adds one `references:` line
+  (sanitised CSL JSON, only the fields that citeproc needs) to the shared text,
+  and never to the writer's document. It parses and scans and does not format.
+  `document.js` `shareSource` calls it after the sources are in, with the flush
+  limit, and falls back to the plain text with a status. Every `shareUrl` caller
+  in `editor.js` goes through it. An absent `.bib` gives no note when
+  `references:` holds every cited key. A bundled `csl:` travels by name; another
+  style stays with the writer (`shareStyleNote`), and the reader gets the
+  default style with a note (`styleNote` formats; `styleError` keeps keys).
+- `src/citations/` — citations and references. This JS is the only
+  implementation of the citation rules: the native app runs the same code
+  in JavaScriptCore. `scan.js` finds the citations, `frontmatter.js` reads and
+  writes the keys, `bib.js` parses BibTeX, `item.js` cleans an entry,
+  `library.js` turns the frontmatter and the stored files into sources,
+  `engine.js` wraps citeproc, `session.js` makes the report, the one output
+  of this code, and `output.js` places it in the text. They are pure, except
+  `assets.js` (Vite globs for the bundled styles and locales). `worker.js` and
+  `client.js` run the session in a worker. `document.js` connects the worker
+  to the editor: it holds the last report and asks for one text at a time.
+  `reportFor(text)` is the quick read for the preview: the held report, moved
+  to the offsets of this text, or null after a change of style, language or
+  files. `flush(text)` waits for the report of exactly this text, so print and
+  export use it. `library()` is a cheap read for completion. `editor.js` has
+  the marks, the notes and completion. `panel.js` has the References tab and
+  the rules of the References menu; `editor.js` at the root of `src/` holds
+  the tab state. The stored files live in IndexedDB (`browser.js`).
+- `src/mermaid.js` — renders `mermaid` fences with Pele, loaded on demand.
+  `renderDiagrams` works on a root; `renderDiagramsInHtml` on a string (HTML
+  export). A failed diagram keeps its source. Colours come from `--pele-*`
+  variables (`style.css`, `handoutCss`, the export's style block).
+- `src/search.js` — accent-insensitive find. It wraps the `normalize` that
+  each `SearchCursor` sets on itself, because the library has no option;
+  `search.test.js` fails if that stops working. `src/typography.js` — smart
+  typography, resting during a composition. `src/links.js` — a URL pasted
+  over a selection; `macos/Tests/LoomingsEditorTests/Fixtures/paste-links.json`
+  is the contract with `PasteLink`, so a rule change goes there first.
 - `src/lessons.js` — index of `lessons/NN-slug.md` via `import.meta.glob`;
   each entry carries its `file`, the key in `lessons/checks.json`.
 - `src/teaching/` — the teaching features' rules, pure and tested, matching
@@ -126,6 +162,16 @@ release numbers.
   snapshot yields. `Tests/LoomingsTeachingTests/Fixtures/*.json` are the
   contract the web port must pass too. Lesson checks live in
   `lessons/checks.json` (exported with the lessons).
+- `Sources/LoomingsCitations` — runs the bundle of `src/citations` in
+  JavaScriptCore on a private queue (`CitationEngine`), so the citation rules
+  are not repeated in Swift. An engine call waits: do not call it from the main
+  thread. `CitationGate` keeps JavaScript away from a document with no
+  `bibliography:` or `references:` key. `CitationSourceReader` reads the files
+  that the plan of the citation code names. `ReferenceList` is the one rule that
+  is in both languages: the filter of the References view runs on each key, and
+  the `filters` fixture keeps it the same as `filterLibrary`, with non-Latin
+  text. Its fold must stay `foldText`: `lowercased(with:)`, not `lowercased()`,
+  for the Greek final sigma, and the spaces of `\s`, not `isWhitespace`.
 - `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
   app-owned handler, snapshot, visible-region styling, footprint) over
   10 KB–10 MB corpora.
@@ -134,11 +180,13 @@ release numbers.
 
 ```sh
 ./macos/scripts/build-app.sh            # build macos/dist/Loomings.app
-macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test
+caffeinate -i macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test   # a Mac that sleeps stalls the run, and its waits time out
 swift test --package-path macos         # Swift Testing; CLT has no XCTest
 swift run -c release --package-path macos LoomingsBench
 
 node scripts/export-native-resources.mjs       # palettes + lessons + example
+npm run export:native                          # the same, and the citation bundle first
+node macos/scripts/render-citation-fixtures.mjs # citation report fixtures
 node macos/scripts/render-web-fixtures.mjs     # preview HTML fixtures
 node macos/scripts/render-share-fixtures.mjs   # cross-language share fixtures
 ```
@@ -189,6 +237,15 @@ Stage 2 decisions worth preserving:
   `macos/Resources/AppIcon.icns`; `build-app.sh` copies that. Do not feed
   `icons/rendered` or the Icon Composer export to the native bundle: they are
   full-bleed and glassy.
+- Share links with citations: `CitationController.shareText` runs
+  `CitationEngine.shareSource` on the citation queue, with `exportLimit`, and
+  gives the plain text and a failure after the limit. Copy Share Link, Show QR
+  Code and the Handout QR code use it. `LoomingsDocument.cameFromShareLink`
+  (Open Share Link, cleared on a save, kept by a copy and by restoration)
+  sets `allowPaths: false` in `planNativeSources`: an absolute or parent path
+  in `bibliography:` or `csl:` stays unread, with a note, until the save.
+  `citation-fixtures.json` has the `shares` cases; the Swift tests also send a
+  native link through the web code in Node.
 - Share fixtures are generated with `node macos/scripts/render-share-fixtures.mjs`;
   the Swift tests decode those and also run the web decoder through Node, so
   both directions are exercised. No custom URL scheme or universal link is
@@ -253,6 +310,39 @@ Stage 2 decisions worth preserving:
   inside the frame) or block margins (they take the fill). Quotes use the
   bundled Source Serif 4 italic; strong text inside them falls back to bold
   roman because no bold italic is bundled.
+- Dropped images: `ImageLink` writes `./` or `../` paths, because the
+  preview's URL filter refuses a bare name, and encodes only what would end
+  the destination, so accented names stay readable. Web documents have no
+  folder, so this is native only.
+- Citation flow: `CitationController` owns one engine for each window. It
+  asks for a report after a pause, on its own queue, and never joins the parse.
+  The preview, the export, the marks and the References view read the report.
+  A frontmatter change or a citation insertion goes through
+  `CitationController.change`: the work runs on the queue, then the window
+  applies one undoable edit, and starts again if the writer typed.
+- Citation resources: `macos/Resources/Citations` holds `citations.js`, the
+  styles and locales, the licences and `styles.json` (the titles of the
+  References menu, because the menu needs them before JavaScript runs). All of
+  it comes from the web code. After a change in `src/citations/`, run
+  `npm run export:native`, then `node macos/scripts/render-citation-fixtures.mjs`.
+- References menu: its items go to the first responder, so a window with no
+  editor leaves them disabled. The checked items come from the citation queue
+  in `menuWillOpen`, so the first opening for a text gets its marks a moment
+  later, and it starts an engine for a document with no citations. Do not use
+  `menuNeedsUpdate` for this: it also runs for each key equivalent.
+- The right column (`rightColumn`) holds the preview, `ReferencesView` and a
+  `ModeSwitch` with Preview and References. The library is for Split only, as on
+  the web: Preview always shows the preview, and Show References goes to Split.
+  `showsColumnTabs` follows `createReferencesView` in `panel.js`: the control
+  shows in Split when the document has citation keys or the window asked. The
+  tab stays through mode changes, for each window. While the library shows, the
+  preview does not render and has no sync or pairing. The command does not move
+  the divider. The column is hidden before the first
+  layout: with it, the split view gave it all the width, and the editor scrolled
+  sideways. In `ReferencesView`, each width constraint stays below the split
+  view's holding priority (250): a stronger one moves the divider, and one above
+  500 shrinks the window. `--snapshot` with
+  `-LoomingsSnapshotReferences YES` writes `references.png`.
 - Native shortcuts that collide with macOS conventions were deliberately not
   kept: Column Width and Word Goal have no key equivalent (⇧⌘W is Close All,
   ⇧⌘G is Find Previous).

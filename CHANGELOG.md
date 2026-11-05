@@ -6,8 +6,84 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+### Web app
+
+- Citations. A `bibliography:` or `references:` key in the frontmatter turns
+  Pandoc citations into formatted citations and a reference list in the
+  preview, in print and in the HTML export. `csl:` sets the style and `lang:`
+  the language. In the editor, citations have the marker colour, an unknown
+  key gets a note, and `@` completes keys.
+- A References tab in the right column of Split lists the library, with a
+  filter that ignores accents. Each entry says if the document cites it. A
+  cited key with no entry goes at the top. A click inserts `[@key]`. On a
+  narrow screen the list opens in a dialog.
+- A References menu adds and removes `.bib` and `.csl` files and sets the
+  bibliography, the style and the language in the frontmatter. Undo reverts a
+  choice. Files stay in this browser. Nothing is uploaded.
+- A share link carries the cited entries in one `references:` line, so the
+  reader sees the same citations and the reference list with no file. The
+  writer's document does not change. The QR code and the print QR code use the
+  same text. A `.bib` of the same name at the reader wins, and an absent `.bib`
+  gives no note when the link holds every cited entry. A bundled style travels
+  by name. An uploaded style stays with the writer: the status says so, and the
+  reader gets the default style with a note.
+- A language in `lang:` applies to each style, also to a style with its own
+  default locale, such as AMA.
+- A share link does not keep a `references:` line with entries that the text
+  does not cite.
+- A long run of spaces in a citation or an entry no longer stops the citations.
+  A print or a share link restarts a citation worker that gives no answer in
+  10 s, so later reports work.
+- A style that is not found no longer leaves the citations as keys. The default
+  style formats them, and the note says so.
+- About credits citeproc-js, citation-js and the CSL styles and locales.
+  The citeproc-js and citation-js licences are in `public/licenses/`.
+- On a narrow screen, toolbar menus open under their button. The scrolling
+  toolbar clipped them.
+- Mermaid diagrams appear in the preview, in print and in the HTML export.
+  Print uses the light palette. A diagram that fails to render keeps its
+  source.
+- Find ignores accents: "ciencia" finds "ciência" and "saúde" finds "saude".
+  Match case keeps the exact comparison.
+- A URL pasted over selected words makes a link. The `url` placeholder of
+  Insert Link, a URL, a selection of two lines and inline code keep the
+  ordinary paste.
+- Smart typography rests during a composition, so a dead key is not broken.
+- A straight quote after a word closes. The opening quote's pattern matched
+  every character, so every quote opened (the native editor was correct).
+
 ### Native macOS app (`macos/`)
 
+- A References menu between Format and Theme. Choose Bibliography… adds a
+  `.bib` file, and a second file gives a flow list. Citation Style has the
+  five bundled styles and Choose File…. Language has the four bundled
+  locales. Each choice is one undoable edit of the frontmatter, and it makes
+  the frontmatter when there is none. A path is relative to the document's
+  folder, `../refs.bib` included. An untitled or shelf document gets an
+  absolute path. A dependent style with no parent gives a sheet that names the
+  parent, and nothing is written.
+- Show References goes to Split with the library in the right column. In
+  Split, a control at the top of the column selects Preview or References. It
+  shows when the document has citation keys or the writer asked for the
+  library. Preview always shows the preview. Escape in the column gives the
+  focus to the editor. A filter field ignores accents. Each row says if the document cites the entry, and a
+  cited key with no entry goes first. Return or a double click inserts
+  `[@key]` with the web's rule, as one Undo step, and the focus goes back to
+  the editor.
+- Share links carry the cited entries, as on the web: Copy Share Link, Show
+  QR Code and the print QR code. The menu command waits up to 10 seconds, then
+  gives the plain text and a status. A document from Open Share Link does not
+  read an absolute or parent path in `bibliography:` or `csl:` until it is
+  saved, and a note says so.
+- About credits citeproc-js, citation-js and the CSL styles and locales.
+  `LICENSE-citation-js` is next to the citation bundle.
+
+- A URL pasted over selected words makes a link, with the web's rule and a
+  shared fixture.
+- An image dropped on the editor inserts a link at the drop point, with the
+  alt text selected. The path is relative to the document's folder; an
+  untitled or shelf document gets an absolute path.
+- Smart typography rests while text is marked.
 - The learner's checker agrees with the web on every shared case and on a
   636-document corpus: setext headings with text after them or in CRLF,
   marks and images after a tab or on a lazy line, lone CR line endings, an

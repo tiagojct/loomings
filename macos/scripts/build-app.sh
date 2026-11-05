@@ -28,12 +28,14 @@ sed \
     -e "s/__BUILD__/$BUILD/g" \
     "$MACOS/Resources/Info.plist" > "$APP/Contents/Info.plist"
 
-# Shared native resources: palettes, teaching material, and font files.
+# Shared native resources: palettes, teaching material, font files and the
+# citation bundle with its styles and locales.
 cp "$MACOS/Resources/palettes.json" "$APP/Contents/Resources/"
 cp "$MACOS/Resources/cheatsheet.md" "$APP/Contents/Resources/"
 cp "$MACOS/Resources/example.md" "$APP/Contents/Resources/"
 cp -R "$MACOS/Resources/lessons" "$APP/Contents/Resources/lessons"
 cp -R "$MACOS/Resources/Fonts" "$APP/Contents/Resources/Fonts"
+cp -R "$MACOS/Resources/Citations" "$APP/Contents/Resources/Citations"
 
 # The native icon is built from macos/scripts/build-icon.swift in the
 # Adamastor style (padded squircle + keyline). Do not generate it from the

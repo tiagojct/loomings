@@ -220,4 +220,23 @@ struct DocumentAnalysisTests {
         #expect(covered("both", .strong) && covered("both", .emphasis))
         #expect(!output.styleRanges.contains { NSLocationInRange(text.range(of: "code").location, $0.range) }, "code is never styled")
     }
+
+    @Test("Code ranges cover inline code and code blocks, in order")
+    func codeRanges() {
+        let text = "A `code` here.\n\n```\nfence\n```\n\nText.\n\n    indented\n"
+        let ranges = MarkdownParser.parse(text).codeRanges
+        let found = ranges.map { (text as NSString).substring(with: $0) }
+        #expect(found.count == 3)
+        #expect(found[0] == "`code`")
+        #expect(found[1].contains("fence"))
+        #expect(found[2].contains("indented"))
+        #expect(ranges == ranges.sorted { $0.location < $1.location })
+    }
+
+    @Test("Text in the frontmatter is not code")
+    func codeRangesAfterFrontmatter() {
+        let text = "---\ntitle: `x`\n---\nA `code` here.\n"
+        let found = MarkdownParser.parse(text).codeRanges.map { (text as NSString).substring(with: $0) }
+        #expect(found == ["`code`"])
+    }
 }

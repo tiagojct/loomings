@@ -51,7 +51,7 @@ public struct SelectionStatistics: Sendable, Equatable {
 /// returned; results are applied only when their revision is still current,
 /// so a slow parse never blocks typing or overwrites newer text.
 @MainActor
-public final class EditorController: NSObject, NSTextViewDelegate {
+public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorageDelegate {
     public let textView: EditorTextView
 
     /// Called after a user edit, never for programmatic `setText`.
@@ -174,6 +174,187 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         return true
     }
 
+    // MARK: - Citations
+
+    /// The citations of the last report, in text order. The app sets them,
+    /// and each edit moves them. An unknown key has a squiggle. A known
+    /// citation has no colour: the colour of a report cannot reach text that
+    /// is laid out, and the marks do not write to the text storage.
+    public private(set) var citationMarks: [CitationMark] = []
+    public var citationRanges: [NSRange] { citationMarks.map(\.range) }
+    /// The library of the last report. An empty list means no completion.
+    public private(set) var citationKeys: [CitationCompletion] = []
+    /// The next parse opens the citation list.
+    public private(set) var isCompletionArmed = false
+
+    /// The count of queries, to prove that one list makes one query.
+    public private(set) var citationMatchRuns: UInt64 = 0
+    private var preparedRows: (range: NSRange, rows: [CitationCompletion])?
+    /// True while rows wait for a list that is about to open.
+    public var hasPreparedRows: Bool { preparedRows != nil }
+    private var typedOneCharacter = false
+    /// The sign whose list the writer closed.
+    private var dismissedSign: Int?
+
+    /// Takes a report. `reportedSource` is the text of the report: the writer
+    /// can type while the report is on its way, so the marks go through the
+    /// change to the current text.
+    public func setCitations(_ marks: [CitationMark], keys: [CitationCompletion], reportedSource: String) {
+        citationKeys = keys
+        preparedRows = nil
+        let length = (textView.string as NSString).length
+        let change = TextChange.between(reportedSource, textView.string)
+        let moved = marks.compactMap { mark -> CitationMark? in
+            guard let range = change == nil ? mark.range : change?.map(mark.range), NSMaxRange(range) <= length else { return nil }
+            return CitationMark(range: range, isUnknown: mark.isUnknown)
+        }.sorted { $0.range.location < $1.range.location }
+        guard moved != citationMarks else { return }
+        citationMarks = moved
+        updateCitationSquiggles()
+    }
+
+    public func clearCitations() {
+        citationKeys = []
+        isCompletionArmed = false
+        preparedRows = nil
+        guard !citationMarks.isEmpty else { return }
+        citationMarks = []
+        updateCitationSquiggles()
+    }
+
+    private func updateCitationSquiggles() {
+        let tint = palette?.colors.accentColor ?? .systemOrange
+        textView.setDecorations(
+            citationMarks.filter(\.isUnknown).map { EditorDecoration(range: $0.range, style: .squiggle(tint)) },
+            for: "citations"
+        )
+    }
+
+    /// A delegate call for each processed edit, undo and redo too, and before
+    /// layout, so the next layout already sees the moved marks. The later
+    /// `didProcessEditing` is no good: there the range can cover the paragraph.
+    public nonisolated func textStorage(
+        _ textStorage: NSTextStorage,
+        willProcessEditing editedMask: NSTextStorageEditActions,
+        range editedRange: NSRange,
+        changeInLength delta: Int
+    ) {
+        guard editedMask.contains(.editedCharacters) else { return }
+        MainActor.assumeIsolated {
+            moveCitationMarks(TextChange(
+                range: NSRange(location: editedRange.location, length: editedRange.length - delta),
+                newLength: editedRange.length
+            ))
+        }
+    }
+
+    private func moveCitationMarks(_ change: TextChange) {
+        guard !citationMarks.isEmpty else { return }
+        citationMarks = citationMarks.compactMap { mark in
+            change.map(mark.range).map { CitationMark(range: $0, isUnknown: mark.isUnknown) }
+        }
+        updateCitationSquiggles()
+    }
+
+    /// The sign and the query at the caret, when the document has keys and
+    /// the caret is in a place for a citation. The code and frontmatter ranges
+    /// do not move with an edit, so there is no answer until the parse of
+    /// this text is in place.
+    private func citationQueryRange() -> NSRange? {
+        guard lastAppliedRevision == revision, !citationKeys.isEmpty, !textView.hasMarkedText() else { return nil }
+        let selection = textView.selectedRange()
+        guard selection.length == 0,
+              let text = textView.textStorage?.mutableString,
+              let range = CitationCompletion.queryRange(in: text, caret: selection.location),
+              !isCodeOrFrontmatter(at: range.location) else {
+            return nil
+        }
+        return range
+    }
+
+    private func isCodeOrFrontmatter(at location: Int) -> Bool {
+        if let frontmatterRange, NSLocationInRange(location, frontmatterRange) { return true }
+        var low = 0
+        var high = codeRanges.count
+        while low < high {
+            let mid = (low + high) / 2
+            if NSMaxRange(codeRanges[mid]) <= location {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        return low < codeRanges.count && codeRanges[low].location <= location
+    }
+
+    private func citationRows(for range: NSRange) -> [CitationCompletion] {
+        guard let text = textView.textStorage?.mutableString else { return [] }
+        citationMatchRuns &+= 1
+        let query = text.substring(with: NSRange(location: range.location + 1, length: range.length - 1))
+        return CitationCompletion.matches(query, in: citationKeys)
+    }
+
+    public func textView(
+        _ textView: NSTextView,
+        completions words: [String],
+        forPartialWordRange charRange: NSRange,
+        indexOfSelectedItem index: UnsafeMutablePointer<Int>?
+    ) -> [String] {
+        self.textView.citationRows = nil
+        guard let range = citationQueryRange(), range == charRange else { return words }
+        let prepared = preparedRows?.range == range ? preparedRows?.rows : nil
+        preparedRows = nil
+        let rows = prepared ?? citationRows(for: range)
+        guard !rows.isEmpty else { return [] }
+        self.textView.citationRows = Dictionary(rows.map { ($0.row, "@\($0.key)") }, uniquingKeysWith: { first, _ in first })
+        index?.pointee = 0
+        return rows.map(\.row)
+    }
+
+    /// A typed sign arms the list, and so does a typed character after it,
+    /// because typing closes the list. A space right after the sign is a sign
+    /// in a sentence. The cost is zero with no library.
+    private func updateCompletionArming() {
+        let typed = typedOneCharacter
+        typedOneCharacter = false
+        isCompletionArmed = false
+        guard !citationKeys.isEmpty else { return }
+        let caret = textView.selectedRange()
+        guard caret.length == 0, let text = textView.textStorage?.mutableString,
+              let range = CitationCompletion.queryRange(in: text, caret: caret.location) else {
+            dismissedSign = nil
+            return
+        }
+        guard typed, !textView.hasMarkedText(), range.location != dismissedSign else { return }
+        let afterSign = range.length > 1 ? text.character(at: range.location + 1) : nil
+        isCompletionArmed = afterSign != 0x20
+    }
+
+    /// The parse is what tells code from text, so the list opens after it.
+    /// `complete` runs a nested event loop until the list closes. A main
+    /// queue block would hold the later blocks for that time, so `complete`
+    /// must start from the run loop.
+    private func openArmedCompletion() {
+        guard isCompletionArmed else { return }
+        isCompletionArmed = false
+        guard textView.window?.firstResponder === textView, let range = citationQueryRange() else { return }
+        // No matches, no `complete`. The delegate takes these rows.
+        let rows = citationRows(for: range)
+        guard !rows.isEmpty else { return }
+        preparedRows = (range, rows)
+        let revision = self.revision
+        RunLoop.main.perform { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard self.revision == revision, self.citationQueryRange() == range else {
+                    self.preparedRows = nil
+                    return
+                }
+                self.textView.complete(nil)
+            }
+        }
+    }
+
     /// Parses again now, for example after the companion's inputs changed.
     public func reanalyze() {
         scheduleParse(after: 0)
@@ -187,6 +368,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
     private var spans: [MarkdownSyntaxSpan] = []
     private var styleRanges: [MarkdownStyleRange] = []
+    private var codeRanges: [NSRange] = []
     /// What Styled Markdown has covered since the last parse.
     private var markdownStyledRange = NSRange(location: 0, length: 0)
 
@@ -308,6 +490,8 @@ public final class EditorController: NSObject, NSTextViewDelegate {
     // MARK: - Public surface
 
     public func setText(_ text: String) {
+        // The controller gives no new report for the same text.
+        let keptMarks = text == textView.string ? citationMarks : []
         isApplyingProgrammaticChange = true
         textView.string = text
         textView.setSelectedRange(NSRange(location: 0, length: 0))
@@ -318,10 +502,15 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
         spans = []
         styleRanges = []
+        codeRanges = []
         markdownStyledRange = NSRange(location: 0, length: 0)
         frontmatterRange = nil
         needsAttributeRefresh = true
         styledRange = NSRange(location: 0, length: 0)
+        citationMarks = keptMarks
+        updateCitationSquiggles()
+        isCompletionArmed = false
+        dismissedSign = nil
 
         if let palette {
             applyPalette(palette)
@@ -357,6 +546,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
         spans = output.spans
         styleRanges = output.styleRanges
+        codeRanges = output.codeRanges
         markdownStyledRange = NSRange(location: 0, length: 0)
         appliedParses &+= 1
         lastAppliedRevision = revision
@@ -367,6 +557,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         applyFrontmatterAttribute(output.spans)
         applyAnalysis(output)
         applyVisibleStyling()
+        openArmedCompletion()
     }
 
     public func observeScrolling(in scrollView: NSScrollView) {
@@ -434,7 +625,9 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         // must not advance the parse revision.
         guard let replacementString else { return true }
 
+        // A dead key can pass through ' or " on its way to an accented letter.
         if isSmartTypographyEnabled,
+           !textView.hasMarkedText(),
            replacementString.count == 1,
            let character = replacementString.first,
            let storage = textView.textStorage,
@@ -448,6 +641,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         }
 
         pendingCharacterEdit = true
+        typedOneCharacter = self.textView.isTyping && replacementString.count == 1
         return true
     }
 
@@ -497,6 +691,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         // Rendering attributes never mutate text, so a composition may be
         // styled while it is still being composed.
         scheduleParse(after: parseDebounce)
+        updateCompletionArming()
         lastEditHandlerNanoseconds = DispatchTime.now().uptimeNanoseconds - start
         onEdit?()
         reportTypedMarker()
@@ -683,6 +878,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
 
         spans = output.spans
         styleRanges = output.styleRanges
+        codeRanges = output.codeRanges
         markdownStyledRange = NSRange(location: 0, length: 0)
         appliedParses &+= 1
         lastAppliedRevision = revision
@@ -691,6 +887,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         applyFrontmatterAttribute(output.spans)
         applyAnalysis(output)
         applyVisibleStyling()
+        openArmedCompletion()
     }
 
     private func applyFrontmatterAttribute(_ spans: [MarkdownSyntaxSpan]) {
@@ -806,6 +1003,41 @@ public final class EditorController: NSObject, NSTextViewDelegate {
         return true
     }
 
+    /// Makes a link from a URL pasted over selected words. False means an
+    /// ordinary paste.
+    @discardableResult
+    public func pasteLink(_ pasted: String) -> Bool {
+        let selection = textView.selectedRange()
+        guard selection.length > 0 else { return false }
+        let text = textView.string as NSString
+        let lineStart = text.lineRange(for: NSRange(location: selection.location, length: 0)).location
+        let before = text.substring(with: NSRange(location: lineStart, length: selection.location - lineStart))
+        guard let link = PasteLink.markdown(
+            selected: text.substring(with: selection),
+            pasted: pasted,
+            before: before
+        ) else {
+            return false
+        }
+        textView.insertText(link, replacementRange: selection)
+        return true
+    }
+
+    /// Inserts a link for each image at `location`. `directory` is the
+    /// document's folder. One image has its alt text selected.
+    public func insertImages(_ files: [URL], at location: Int, relativeTo directory: URL?) {
+        guard !files.isEmpty else { return }
+        let start = min(location, (textView.string as NSString).length)
+        let insertions = files.map { ImageLink.insertion(for: $0, relativeTo: directory) }
+        textView.insertText(
+            insertions.map(\.text).joined(separator: "\n\n"),
+            replacementRange: NSRange(location: start, length: 0)
+        )
+        if insertions.count == 1, let alt = insertions.first?.alt {
+            textView.setSelectedRange(NSRange(location: start + alt.location, length: alt.length))
+        }
+    }
+
     private func replaceSelection(with text: String) -> Bool {
         let selection = textView.selectedRange()
         textView.insertText(text, replacementRange: selection)
@@ -862,6 +1094,7 @@ public final class EditorController: NSObject, NSTextViewDelegate {
             )
             applyFocusAttributes(to: NSRange(location: 0, length: length))
         }
+        updateCitationSquiggles()
         needsAttributeRefresh = true
         scheduleVisibleStyling()
     }
@@ -1295,6 +1528,10 @@ public final class EditorController: NSObject, NSTextViewDelegate {
             }
         }
         textView.delegate = self
+        textView.textStorage?.delegate = self
+        textView.onPaste = { [weak self] text in self?.pasteLink(text) ?? false }
+        textView.citationQueryRange = { [weak self] in self?.citationQueryRange() }
+        textView.onCitationListDismissed = { [weak self] sign in self?.dismissedSign = sign }
     }
 }
 

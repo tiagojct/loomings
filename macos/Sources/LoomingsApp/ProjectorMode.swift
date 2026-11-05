@@ -7,6 +7,7 @@ import LoomingsTheme
 enum ProjectorMode {
     static let editorFontSize: CGFloat = 28
     static let previewBodySize: CGFloat = 26
+    static let referencesTextSize: CGFloat = 20
     static let columnWidth: ColumnWidth = .wide
 }
 

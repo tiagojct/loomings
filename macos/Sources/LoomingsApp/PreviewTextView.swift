@@ -94,6 +94,12 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
         return nil
     }
 
+    /// A text view keeps this command for the completion list. The preview
+    /// has none, so Escape goes up to the column.
+    override func cancelOperation(_ sender: Any?) {
+        nextResponder?.tryToPerform(#selector(cancelOperation(_:)), with: sender)
+    }
+
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let pointerArea { removeTrackingArea(pointerArea) }

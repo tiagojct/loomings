@@ -1,4 +1,5 @@
 import AppKit
+import LoomingsCitations
 import LoomingsDocuments
 import LoomingsEditor
 import LoomingsMarkdown
@@ -16,6 +17,7 @@ final class EditorWindowController: NSWindowController,
     NSMenuItemValidation
 {
     let editor = EditorController()
+    let citations = CitationController()
     weak var loomingsDocument: LoomingsDocument?
 
     enum ViewMode: Int {
@@ -28,6 +30,13 @@ final class EditorWindowController: NSWindowController,
     private let scrollView = DocumentScrollView()
     private let previewScrollView = NSScrollView()
     private let previewTextView = PreviewTextView()
+    /// The right pane of Split, and the page of Preview. In Split it can hold
+    /// the library in the place of the preview, under `columnTabs`.
+    private let rightColumn = RightColumnView()
+    private let columnTabs = ModeSwitch(labels: ["Preview", "References"], name: "Right column")
+    private let referencesView = ReferencesView()
+    /// The room above the preview and the library.
+    private var columnTop: NSLayoutConstraint!
     private let splitView = ThemedSplitView()
     private let statusBar = StatusBarView()
     private var statusHeightConstraint: NSLayoutConstraint!
@@ -39,6 +48,8 @@ final class EditorWindowController: NSWindowController,
     private var syncUntil = Date.distantPast
     private var previewGeneration = 0
     private let previewPipeline = PreviewPipeline()
+    /// Links the text in the preview to the editor's text, when they differ.
+    private var citationLines: CitationLineMap?
     private let previewQueue = DispatchQueue(
         label: "eu.tiagojacinto.loomings.preview",
         qos: .userInitiated
@@ -89,6 +100,18 @@ final class EditorWindowController: NSWindowController,
                     }
                 }
             }
+        }
+
+        scrollView.onInsertImages = { [weak self] urls, point in
+            guard let self else { return }
+            let textView = self.editor.textView
+            let location = textView.characterIndexForInsertion(at: textView.convert(point, from: nil))
+            self.editor.insertImages(
+                urls,
+                at: location,
+                relativeTo: self.loomingsDocument?.imageLinkDirectory
+            )
+            self.window?.makeFirstResponder(textView)
         }
 
         document.editor = editor
@@ -187,8 +210,36 @@ final class EditorWindowController: NSWindowController,
         splitView.dividerStyle = .thin
         splitView.delegate = self
         splitView.translatesAutoresizingMaskIntoConstraints = false
+        rightColumn.translatesAutoresizingMaskIntoConstraints = false
+        referencesView.translatesAutoresizingMaskIntoConstraints = false
+        columnTabs.translatesAutoresizingMaskIntoConstraints = false
+        rightColumn.addSubview(columnTabs)
+        let columnContent = NSLayoutGuide()
+        rightColumn.addLayoutGuide(columnContent)
+        columnTop = columnContent.topAnchor.constraint(equalTo: rightColumn.topAnchor)
+        NSLayoutConstraint.activate([
+            columnTabs.topAnchor.constraint(equalTo: rightColumn.topAnchor, constant: Self.columnTabsInset),
+            columnTabs.centerXAnchor.constraint(equalTo: rightColumn.centerXAnchor),
+            columnTop,
+            columnContent.bottomAnchor.constraint(equalTo: rightColumn.bottomAnchor),
+            columnContent.leadingAnchor.constraint(equalTo: rightColumn.leadingAnchor),
+            columnContent.trailingAnchor.constraint(equalTo: rightColumn.trailingAnchor),
+        ])
+        for view in [previewScrollView, referencesView] as [NSView] {
+            rightColumn.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.topAnchor.constraint(equalTo: columnContent.topAnchor),
+                view.bottomAnchor.constraint(equalTo: columnContent.bottomAnchor),
+                view.leadingAnchor.constraint(equalTo: columnContent.leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: columnContent.trailingAnchor),
+            ])
+        }
+
+        // A window starts in Write. With the column in the first layout, the
+        // split view can give it all the width, and the editor scrolls sideways.
+        rightColumn.isHidden = true
         splitView.addArrangedSubview(scrollView)
-        splitView.addArrangedSubview(previewScrollView)
+        splitView.addArrangedSubview(rightColumn)
 
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         containerView.addSubview(splitView)
@@ -226,6 +277,8 @@ final class EditorWindowController: NSWindowController,
             self.applyTeachingReport()
             if self.editor.lastAppliedRevision == self.editor.revision, self.editor.revision > 0 {
                 self.history.textChanged(self.editor.source)
+                // The parse is done, so this is never on the edit path.
+                self.updateCitations()
             }
             self.scheduleStatusUpdate()
             self.lineRuler.needsDisplay = true
@@ -243,6 +296,21 @@ final class EditorWindowController: NSWindowController,
         }
         previewTextView.onScroll = { [weak self] in
             self?.syncEditorToPreview()
+        }
+        citations.onReport = { [weak self] report in
+            self?.apply(report)
+        }
+        referencesView.onInsert = { [weak self] key in
+            self?.insertCitation(key: key)
+        }
+        referencesView.onLeave = { [weak self] in
+            self?.leaveColumn()
+        }
+        rightColumn.onEscape = { [weak self] in
+            self?.leaveColumn()
+        }
+        columnTabs.onSelect = { [weak self] index in
+            self?.selectColumn(ColumnTab(rawValue: index) ?? .preview)
         }
         refreshCompanion()
         statusBar.onExerciseClick = { [weak self] in
@@ -262,6 +330,500 @@ final class EditorWindowController: NSWindowController,
             self?.pair(previewBlock: block)
         }
     }
+
+    // MARK: - Citations
+
+    func updateCitations() {
+        citations.update(
+            source: editor.source,
+            documentURL: loomingsDocument?.citationDocumentURL,
+            allowPaths: citationPathsAllowed
+        )
+        syncRightColumn()
+        guard citations.isActive else {
+            editor.clearCitations()
+            updateNoteCount()
+            return
+        }
+        // Undo can bring back the text of the last report. No new report
+        // comes for that text, so the dropped marks come from the last one.
+        if let report = citations.latestResult?.report, editor.citationRanges.count != report.citations.count {
+            applyMarks(of: report, keys: editor.citationKeys)
+            updateNoteCount()
+        }
+    }
+
+    private func apply(_ report: CitationReport) {
+        refreshPreview()
+        updateLibrary()
+        applyMarks(of: report, keys: report.library.map {
+            CitationCompletion(key: $0.key, authors: $0.authors, year: $0.year, title: $0.title)
+        })
+        updateNoteCount()
+    }
+
+    private func applyMarks(of report: CitationReport, keys: [CitationCompletion]) {
+        guard let source = citations.latestResult?.source else { return }
+        editor.setCitations(
+            report.citations.map {
+                CitationMark(range: NSRange(location: $0.from, length: $0.to - $0.from), isUnknown: !$0.missing.isEmpty)
+            },
+            keys: keys,
+            reportedSource: source
+        )
+    }
+
+    /// The notes of the newest report, in the current text. A note goes when
+    /// an edit touches its place; the next report brings it back.
+    private func citationNotes() -> [DocumentNote] {
+        guard let latest = citations.latestResult else { return [] }
+        let notes = latest.report.documentNotes
+        guard notes.contains(where: { $0.range != nil }),
+              let change = TextChange.between(latest.source, editor.source) else {
+            return notes
+        }
+        return notes.compactMap { note in
+            guard let range = note.range else { return note }
+            var moved = note
+            moved.range = change.map(range)
+            return moved.range == nil ? nil : moved
+        }
+    }
+
+    /// Asks for a file in the place of `name`, a missing file.
+    private func chooseCitationFile(named name: String) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = ["bib", "csl"].compactMap { UTType(filenameExtension: $0) }
+        panel.allowsOtherFileTypes = true
+        panel.message = "Choose the file for \(name)."
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url else { return }
+            self?.useCitationFile(url, for: name)
+        }
+    }
+
+    /// Writes the file in the frontmatter in the place of the missing `name`.
+    func useCitationFile(_ url: URL, for name: String) {
+        let path = CitationFileName.value(
+            for: url,
+            folder: loomingsDocument?.citationDocumentURL?.deletingLastPathComponent()
+        )
+        changeFrontmatter { engine, source in
+            let change = try engine.fileChange(source, name: name, path: path)
+            return try engine.setMeta(source, key: change.key, value: change.value)
+        }
+    }
+
+    /// Sets one citation key of the frontmatter. A nil value removes the key.
+    func setCitationMeta(key: String, value: String?) {
+        changeFrontmatter { engine, source in
+            try engine.setMeta(source, key: key, value: value)
+        }
+    }
+
+    // MARK: - References menu
+
+    /// Why a chosen file cannot be used.
+    private enum CitationChoiceError: Error, CustomStringConvertible {
+        case style(String)
+
+        var description: String {
+            switch self {
+            case .style(let reason): return reason
+            }
+        }
+    }
+
+    /// The folder for a chosen file. An untitled or shelf document has none,
+    /// so its paths are absolute.
+    private var citationFolder: URL? {
+        loomingsDocument?.citationDocumentURL?.deletingLastPathComponent()
+    }
+
+    private func chooseFile(type: String, message: String, then use: @escaping (URL) -> Void) {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [UTType(filenameExtension: type)].compactMap { $0 }
+        panel.allowsOtherFileTypes = true
+        panel.message = message
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else { return }
+            use(url)
+        }
+    }
+
+    @objc func chooseBibliography(_ sender: Any?) {
+        chooseFile(type: "bib", message: "Choose a BibTeX file for this document.") { [weak self] url in
+            self?.addBibliography(url)
+        }
+    }
+
+    /// Adds the file to `bibliography`. The frontmatter comes when it is needed.
+    func addBibliography(_ url: URL) {
+        let path = CitationFileName.value(for: url, folder: citationFolder)
+        changeFrontmatter { engine, source in
+            try engine.addBibliography(source, path: path)
+        }
+    }
+
+    @objc func chooseBundledStyle(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String else { return }
+        setChoice(key: "csl", value: id)
+    }
+
+    @objc func chooseLanguage(_ sender: NSMenuItem) {
+        guard let tag = sender.representedObject as? String else { return }
+        setChoice(key: "lang", value: tag)
+    }
+
+    private func setChoice(key: String, value: String) {
+        changeFrontmatter { engine, source in
+            try engine.setChoice(source, key: key, value: value)
+        }
+    }
+
+    @objc func chooseStyleFile(_ sender: Any?) {
+        chooseFile(type: "csl", message: "Choose a CSL style for this document.") { [weak self] url in
+            self?.useStyleFile(url)
+        }
+    }
+
+    /// Sets the style file. The plan of the citation code reads the file as a
+    /// document would: a dependent style with no parent gives a sheet, and
+    /// nothing is written.
+    func useStyleFile(_ url: URL) {
+        let folder = citationFolder
+        let path = CitationFileName.value(for: url, folder: folder)
+        changeFrontmatter { engine, source in
+            let request = CitationSourceRequest(bibliography: [], csl: path, lang: nil)
+            let load = try CitationSourceReader.load(request, folder: folder, engine: engine)
+            if let reason = load.sources.styleError { throw CitationChoiceError.style(reason) }
+            return try engine.setMeta(source, key: "csl", value: path)
+        }
+    }
+
+    /// The checked items for one text. The answer comes from the citation
+    /// queue, so a menu that opens for a new text gets its marks a moment later.
+    private var referenceChoices: (source: String, choices: CitationChoices)?
+
+    private var currentChoices: CitationChoices? {
+        guard let referenceChoices, (referenceChoices.source as NSString).isEqual(to: editor.source) else { return nil }
+        return referenceChoices.choices
+    }
+
+    /// Calls `done` when the menu can show the marks of the current text. The
+    /// first call for a document with no citations starts its engine.
+    func refreshReferenceChoices(then done: @escaping () -> Void) {
+        guard currentChoices == nil else {
+            done()
+            return
+        }
+        let source = editor.source
+        citations.change(source: source) { engine, text in
+            try engine.referenceChoices(text)
+        } completion: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let choices):
+                self.referenceChoices = (source, choices)
+                done()
+            case .failure:
+                self.markupOverlay.show("The References menu cannot show the current choices.")
+            }
+        }
+    }
+
+    // MARK: - References column
+
+    /// What the control at the top of the right column selects.
+    private enum ColumnTab: Int {
+        case preview
+        case references
+    }
+
+    private static let columnTabsInset: CGFloat = 8
+
+    /// Stays through mode changes, for each window, as on the web.
+    private var columnTab = ColumnTab.preview
+    /// The writer asked for the library, so the control stays with this window.
+    private var askedForReferences = false
+
+    /// Only Split has the control: Preview always shows the preview.
+    private var showsColumnTabs: Bool {
+        viewMode == .split && (askedForReferences || citations.isActive)
+    }
+
+    private var isLibraryShown: Bool { showsColumnTabs && columnTab == .references }
+
+    /// Show References goes to Split with the library. In Split it switches.
+    @objc func toggleReferences(_ sender: Any?) {
+        askedForReferences = true
+        if viewMode == .split {
+            selectColumn(isLibraryShown ? .preview : .references)
+        } else {
+            columnTab = .references
+            setViewMode(.split)
+        }
+        if isLibraryShown {
+            window?.makeFirstResponder(referencesView.filterField)
+        } else {
+            leaveColumn()
+        }
+    }
+
+    private func selectColumn(_ tab: ColumnTab) {
+        columnTab = tab
+        applyRightColumn()
+        if !isLibraryShown {
+            refreshPreview()
+            layoutPreview()
+        }
+    }
+
+    /// Escape in the column. Preview has no editor to go to.
+    private func leaveColumn() {
+        guard viewMode == .split else { return }
+        window?.makeFirstResponder(editor.textView)
+    }
+
+    /// Puts the control and the preview or the library in the right column.
+    /// The divider stays where the writer put it.
+    private func applyRightColumn() {
+        let showRight = viewMode != .write
+        let showTabs = showsColumnTabs
+        let showLibrary = isLibraryShown
+        clearPairing()
+        rightColumn.isHidden = !showRight
+        columnTabs.isHidden = !showTabs
+        columnTabs.selectedIndex = columnTab.rawValue
+        columnTop.constant = showTabs ? ModeSwitch.height + Self.columnTabsInset * 2 : 0
+        previewScrollView.isHidden = !showRight || showLibrary
+        referencesView.isHidden = !showLibrary
+        updateLibrary()
+    }
+
+    /// The citation keys of the text decide if the control shows, so an edit
+    /// can change the column.
+    private func syncRightColumn() {
+        guard columnTabs.isHidden == showsColumnTabs || referencesView.isHidden == isLibraryShown else {
+            updateLibrary()
+            return
+        }
+        let wasLibrary = !referencesView.isHidden
+        applyRightColumn()
+        if wasLibrary, !isLibraryShown {
+            refreshPreview()
+            layoutPreview()
+        }
+    }
+
+    private func updateLibrary() {
+        guard isLibraryShown else { return }
+        referencesView.update(
+            report: citations.latestResult?.report,
+            waiting: citations.isActive && citations.latestResult == nil
+        )
+    }
+
+    /// Inserts a citation of `key` at the end of the selection, by the rule of
+    /// the citation code: one edit, one Undo. The focus goes back to the
+    /// editor.
+    func insertCitation(key: String) {
+        let source = editor.source
+        let position = NSMaxRange(editor.textView.selectedRange())
+        citations.change(source: source) { engine, text in
+            try engine.insertCitation(text, position: position, key: key)
+        } completion: { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let insertion):
+                // The writer can type or move the caret during the work.
+                guard self.editor.source == source,
+                      NSMaxRange(self.editor.textView.selectedRange()) == position else {
+                    self.insertCitation(key: key)
+                    return
+                }
+                self.place(insertion)
+            case .failure(let error):
+                let alert = NSAlert()
+                alert.messageText = "The citation could not be inserted."
+                alert.informativeText = String(describing: error)
+                self.present(alert)
+            }
+        }
+    }
+
+    private func place(_ insertion: CitationInsertion) {
+        let textView = editor.textView
+        let range = NSRange(location: insertion.from, length: 0)
+        textView.breakUndoCoalescing()
+        guard editor.replace(range: range, with: insertion.insert) else { return }
+        textView.breakUndoCoalescing()
+        let caret = NSRange(location: insertion.from + (insertion.insert as NSString).length, length: 0)
+        textView.setSelectedRange(caret)
+        textView.scrollRangeToVisible(caret)
+        window?.makeFirstResponder(textView)
+    }
+
+    var isLibraryShownForTesting: Bool { isLibraryShown && !referencesView.isHidden }
+    var columnTabsForTesting: ModeSwitch? { columnTabs.isHidden ? nil : columnTabs }
+    var previewTextViewForTesting: NSTextView { previewTextView }
+    /// The left edge of the editor pane, and of the page in it.
+    var editorEdgesForTesting: (pane: CGFloat, page: CGFloat) { (scrollView.frame.minX, scrollView.contentView.bounds.minX) }
+    /// The widths of the editor and the right column.
+    var columnWidthsForTesting: (editor: CGFloat, right: CGFloat) { (scrollView.frame.width, rightColumn.frame.width) }
+    var referencesViewForTesting: ReferencesView { referencesView }
+    /// The last sheet of a refused choice.
+    private(set) var choiceAlertForTesting: NSAlert?
+
+    /// Applies `edit` as one undoable edit that covers only the text that
+    /// differs, so the caret and the rest of the document stay in place. When
+    /// the writer types during the work, the work starts again on the new text.
+    private func changeFrontmatter(_ edit: @escaping CitationController.TextEdit) {
+        let source = editor.source
+        citations.change(source: source, with: edit) { [weak self] result in
+            guard let self else { return }
+            switch result {
+            case .success(let changed):
+                guard self.editor.source == source else {
+                    self.changeFrontmatter(edit)
+                    return
+                }
+                guard let change = TextChange.between(source, changed) else { return }
+                self.editor.textView.breakUndoCoalescing()
+                self.editor.replace(range: change.range, with: change.replacement(in: changed))
+                self.editor.textView.breakUndoCoalescing()
+            case .failure(let error):
+                let alert = NSAlert()
+                alert.messageText = error is CitationChoiceError
+                    ? "This style cannot be used."
+                    : "The frontmatter could not be changed."
+                alert.informativeText = String(describing: error)
+                self.choiceAlertForTesting = alert
+                self.present(alert)
+            }
+        }
+    }
+
+    /// False for a document from a share link that is not saved.
+    private var citationPathsAllowed: Bool {
+        loomingsDocument?.cameFromShareLink != true
+    }
+
+    /// One export, fixed when it starts: the page and the share link come from
+    /// one text, and the writer can type during the wait.
+    private struct ExportPage {
+        let source: String
+        /// The text of the share link: the source with the cited entries.
+        let shareSource: String
+        let markdown: String
+        let documentURL: URL?
+        let title: String
+    }
+
+    private var currentPage: ExportPage {
+        let source = editor.source
+        return ExportPage(
+            source: source,
+            shareSource: source,
+            markdown: citations.report(for: source)?.markdownSource ?? source,
+            documentURL: loomingsDocument?.linkBaseURL,
+            title: exportTitle
+        )
+    }
+
+    /// Runs `body` with the text to export: the source with its citations
+    /// formatted when the report for this text comes in time. The closure
+    /// holds this window controller on purpose: a window that closes during
+    /// the wait still gets its file, and the export limit bounds the wait.
+    /// - Parameters:
+    ///   - statusFirst: the status comes before `body`, not after it.
+    ///   - sharing: the page has a share link. Its text gets the rest of the
+    ///     export limit, so one export never waits twice.
+    private func withExportPage(
+        statusFirst: Bool = false,
+        sharing: Bool = false,
+        _ body: @escaping (ExportPage) -> Void
+    ) {
+        let start = currentPage
+        let started = Date()
+        let finish = { (text: CitationController.ExportText, shared: CitationController.ShareText?) in
+            let page = ExportPage(
+                source: start.source,
+                shareSource: shared?.source ?? start.source,
+                markdown: text.markdown,
+                documentURL: start.documentURL,
+                title: start.title
+            )
+            let status = text.status ?? shared?.failure
+            self.exportStatus = status
+            if statusFirst {
+                self.showExportStatus(status) { body(page) }
+            } else {
+                body(page)
+                self.showExportStatus(status)
+            }
+        }
+        citations.exportText(
+            source: start.source,
+            documentURL: loomingsDocument?.citationDocumentURL,
+            allowPaths: citationPathsAllowed
+        ) { text in
+            guard sharing else {
+                finish(text, nil)
+                return
+            }
+            let left = max(0, self.citations.exportLimit - Date().timeIntervalSince(started))
+            self.citations.shareText(
+                source: start.source,
+                documentURL: self.loomingsDocument?.citationDocumentURL,
+                allowPaths: self.citationPathsAllowed,
+                limit: left
+            ) { shared in
+                finish(text, shared)
+            }
+        }
+    }
+
+    private func showExportStatus(_ status: String?, then next: @escaping () -> Void = {}) {
+        guard let status, showsExportStatusSheet else {
+            next()
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = "Check the citations in this export."
+        alert.informativeText = status
+        present(alert, then: next)
+    }
+
+    /// A sheet when the window is open. An export can end after its window
+    /// closes, and then the alert has no window.
+    private func present(_ alert: NSAlert, then next: @escaping () -> Void = {}) {
+        if let window, window.isVisible {
+            alert.beginSheetModal(for: window) { _ in next() }
+        } else {
+            afterMainQueueBlock {
+                alert.runModal()
+                next()
+            }
+        }
+    }
+
+    /// An export can end inside a block on the main queue. A modal run there
+    /// holds each later block of the queue until the modal ends, so a modal
+    /// run must start from the run loop.
+    private func afterMainQueueBlock(_ work: @escaping () -> Void) {
+        RunLoop.main.perform { MainActor.assumeIsolated(work) }
+    }
+
+    private(set) var exportStatus: String?
+    var showsExportStatusSheet = true
+    var printHookForTesting: ((HandoutTextView) -> Void)?
+
+    /// The text of the last render that reached the preview pipeline.
+    private(set) var previewInputForTesting: String?
+    private(set) var previewRendersForTesting = 0
 
     // MARK: - View modes and preview
 
@@ -364,26 +926,41 @@ final class EditorWindowController: NSWindowController,
             issues.map { EditorDecoration(range: $0.range, style: .squiggle(tint)) },
             for: "notes"
         )
-        statusBar.setNotes(count: issues.count)
+        lintNoteCount = issues.count
+        updateNoteCount()
     }
 
-    private func lineNumber(of issue: LintIssue) -> Int {
-        editor.lineNumber(at: issue.range.location)
+    /// The count of the last parse. A citation report can come between an
+    /// edit and its parse, and the checker's notes must not go away then.
+    private var lintNoteCount = 0
+
+    private func updateNoteCount() {
+        statusBar.setNotes(count: lintNoteCount + citationNotes().count)
+    }
+
+    /// The notes for the current text.
+    private var currentNotes: [DocumentNote] {
+        DocumentNote.merged(lint: currentReport?.lintIssues ?? [], citation: citationNotes())
     }
 
     private var notesPopover: NSPopover?
 
-    private func showNotes(_ only: [LintIssue]? = nil) {
-        guard let issues = only ?? currentReport?.lintIssues, !issues.isEmpty else { return }
+    private func showNotes(_ only: [DocumentNote]? = nil) {
+        let notes = only ?? currentNotes
+        guard !notes.isEmpty else { return }
         let content = TeachingPopovers.notes(
-            issues,
-            line: { [weak self] in self?.lineNumber(of: $0) ?? 1 },
+            notes,
+            line: { [weak self] in self?.editor.lineNumber(at: $0.location) ?? 1 },
             onFix: { [weak self] in self?.fixFromNotes($0) },
-            onGo: { [weak self] in self?.reveal($0.range) }
+            onGo: { [weak self] in self?.reveal($0) },
+            onChooseFile: { [weak self] name in
+                self?.notesPopover?.close()
+                self?.chooseCitationFile(named: name)
+            }
         )
         notesPopover?.close()
-        if let only, let first = only.first,
-           let rect = editor.textView.segmentFrames(for: first.range).first {
+        if let only, let range = only.first?.range,
+           let rect = editor.textView.segmentFrames(for: range).first {
             notesPopover = TeachingPopovers.show(content, relativeTo: rect, of: editor.textView, palette: ThemeManager.shared.resolved())
         } else {
             notesPopover = TeachingPopovers.show(content, relativeTo: statusBar.bounds, of: statusBar, palette: ThemeManager.shared.resolved())
@@ -399,6 +976,17 @@ final class EditorWindowController: NSWindowController,
     }
 
     func showNotesForTesting() { showNotes() }
+    func closeNotesForTesting() { notesPopover?.close() }
+    var noteMessagesForTesting: [String] { currentNotes.map(\.message) }
+    /// The titles of the buttons in the open list of notes.
+    var noteButtonsForTesting: [String] {
+        func buttons(in view: NSView) -> [String] {
+            view.subviews.flatMap { subview -> [String] in
+                ((subview as? NSButton).map { [$0.title] } ?? []) + buttons(in: subview)
+            }
+        }
+        return notesPopover?.contentViewController.map { buttons(in: $0.view) } ?? []
+    }
     var isNotesPopoverShownForTesting: Bool { notesPopover?.isShown ?? false }
     func fixFromNotesPopoverForTesting(_ index: Int) {
         guard let issues = currentReport?.lintIssues, issues.indices.contains(index) else { return }
@@ -419,8 +1007,11 @@ final class EditorWindowController: NSWindowController,
 
     /// Option-click: a note under the pointer first, else what the marker means.
     private func explain(at location: Int) {
-        if let issue = currentReport?.lintIssues.first(where: { NSLocationInRange(location, $0.range) || NSMaxRange($0.range) == location }) {
-            showNotes([issue])
+        let here = currentNotes.filter { note in
+            note.range.map { NSLocationInRange(location, $0) || NSMaxRange($0) == location } ?? false
+        }
+        if !here.isEmpty {
+            showNotes(here)
             return
         }
         guard let (span, explanation) = explanation(at: location) else { return }
@@ -460,6 +1051,7 @@ final class EditorWindowController: NSWindowController,
 
     func windowWillClose(_ notification: Notification) {
         history.flush()
+        citations.close()
         replayController?.close()
         removeSentFiles()
     }
@@ -602,23 +1194,30 @@ final class EditorWindowController: NSWindowController,
 
     /// Split view only: the source under the pointer lights its preview block.
     private func pair(editorLocation location: Int?) {
-        guard viewMode == .split, let location else {
+        guard viewMode == .split, !isLibraryShown, let location else {
             previewTextView.highlightedBlockIndex = nil
             return
         }
         previewTextView.highlightedBlockIndex = PreviewDocument.blockIndex(
             in: previewTextView.blocks,
-            containing: location
+            containing: citationLines?.markdownLocation(forSource: location) ?? location
         )
     }
 
     /// Split view only: the preview block under the pointer lights its source.
     private func pair(previewBlock block: PreviewBlock?) {
-        guard viewMode == .split else {
+        guard viewMode == .split, !isLibraryShown else {
             editor.pairedRange = nil
             return
         }
-        editor.pairedRange = block?.sourceRange
+        editor.pairedRange = block.flatMap(sourceRange(of:))
+    }
+
+    /// A block's range in the editor. With citations, a block's range is in
+    /// the formatted text, and the reference list has no source.
+    private func sourceRange(of block: PreviewBlock) -> NSRange? {
+        guard let citationLines else { return block.sourceRange }
+        return citationLines.sourceRange(forMarkdown: block.sourceRange)
     }
 
     private func clearPairing() {
@@ -630,6 +1229,7 @@ final class EditorWindowController: NSWindowController,
     func pairForTesting(previewBlockAt index: Int) {
         pair(previewBlock: previewTextView.blocks.indices.contains(index) ? previewTextView.blocks[index] : nil)
     }
+    var previewBlockCountForTesting: Int { previewTextView.blocks.count }
     var previewHighlightedBlockKind: String? {
         previewTextView.highlightedBlockIndex.map { previewTextView.blocks[$0].kind.rawValue }
     }
@@ -639,7 +1239,7 @@ final class EditorWindowController: NSWindowController,
     func pairBothForSnapshot(editorLocation location: Int) {
         pair(editorLocation: location)
         if let index = previewTextView.highlightedBlockIndex {
-            editor.pairedRange = previewTextView.blocks[index].sourceRange
+            editor.pairedRange = sourceRange(of: previewTextView.blocks[index])
         }
     }
 
@@ -649,7 +1249,7 @@ final class EditorWindowController: NSWindowController,
         let showPreview = viewMode != .write
 
         scrollView.isHidden = !showEditor
-        previewScrollView.isHidden = !showPreview
+        applyRightColumn()
         modeSwitch?.selectedIndex = viewMode.rawValue
         splitView.adjustSubviews()
 
@@ -708,7 +1308,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func schedulePreviewUpdate() {
-        guard viewMode != .write else { return }
+        guard viewMode != .write, !isLibraryShown else { return }
         previewWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in
             self?.refreshPreview()
@@ -718,35 +1318,47 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func refreshPreview() {
-        guard viewMode != .write else { return }
+        guard viewMode != .write, !isLibraryShown else { return }
+        let source = editor.source
+        var markdown = source
+        switch citations.previewText(for: source) {
+        case .render(let text):
+            markdown = text
+        case .keepLast:
+            // The report comes soon. Literal keys must not flash until then.
+            if !previewTextView.blocks.isEmpty { return }
+        }
+        previewInputForTesting = markdown
+        previewRendersForTesting += 1
         previewGeneration += 1
         let generation = previewGeneration
-        let source = editor.source
-        let documentURL = loomingsDocument?.fileURL
+        let documentURL = loomingsDocument?.linkBaseURL
         let resolved = ThemeManager.shared.resolved()
         let theme = previewTheme(resolved)
 
         let pipeline = previewPipeline
         previewQueue.async { [weak self] in
             let rendered = pipeline.render(
-                source: source,
+                source: markdown,
                 documentURL: documentURL,
                 palette: resolved,
                 theme: theme
             )
+            let lines = markdown == source ? nil : CitationLineMap(source: source, markdown: markdown)
             DispatchQueue.main.async {
                 guard let self,
                       generation == self.previewGeneration,
                       self.viewMode != .write else {
                     return
                 }
+                self.citationLines = lines
                 self.previewTextView.render(rendered, documentURL: documentURL)
             }
         }
     }
 
     private func syncPreviewToEditor() {
-        guard viewMode == .split, !isLocked(by: "preview") else { return }
+        guard viewMode == .split, !isLibraryShown, !isLocked(by: "preview") else { return }
         let visible = editor.visibleCharacterRange()
         let starts = editor.analysis.lineStarts
         guard !starts.isEmpty else { return }
@@ -765,7 +1377,7 @@ final class EditorWindowController: NSWindowController,
     }
 
     private func syncEditorToPreview() {
-        guard viewMode == .split, !isLocked(by: "editor") else { return }
+        guard viewMode == .split, !isLibraryShown, !isLocked(by: "editor") else { return }
         guard let line = previewTextView.topSourceLine() else { return }
         lockSync("preview")
         editor.scrollToLine(Int(floor(max(0, line))) + 1)
@@ -800,6 +1412,7 @@ final class EditorWindowController: NSWindowController,
         let resolved = ThemeManager.shared.resolved()
         editor.applyPalette(resolved)
         previewTextView.applyTheme(previewTheme(resolved))
+        referencesView.apply(palette: resolved, textSize: isProjectorMode ? ProjectorMode.referencesTextSize : 13)
         markupOverlay.applyPalette(resolved)
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
@@ -908,13 +1521,15 @@ final class EditorWindowController: NSWindowController,
         previewTextView.scroll(toSourceLine: line)
     }
 
+    /// With no report for the current text, the output has the literal keys.
     func renderedHTMLForTesting() -> String {
-        let rendered = PreviewRenderer().render(
-            source: editor.source,
-            documentURL: loomingsDocument?.fileURL
-        )
+        documentHTML(currentPage)
+    }
+
+    private func documentHTML(_ page: ExportPage) -> String {
+        let rendered = PreviewRenderer().render(source: page.markdown, documentURL: page.documentURL)
         return PreviewHTMLExport.document(
-            title: exportTitle,
+            title: page.title,
             bodyHTML: rendered.html,
             palette: ThemeManager.shared.resolved()
         )
@@ -924,12 +1539,17 @@ final class EditorWindowController: NSWindowController,
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("loomings-handout-\(UUID().uuidString).pdf")
         defer { try? FileManager.default.removeItem(at: url) }
-        Handout.writePDF(makeHandout(), to: url)
+        Handout.writePDF(makeHandout(currentPage), to: url)
         return (try? Data(contentsOf: url)) ?? Data()
     }
 
-    private func makeHandout() -> HandoutTextView {
-        Handout.view(source: editor.source, documentURL: loomingsDocument?.fileURL, title: exportTitle)
+    private func makeHandout(_ page: ExportPage) -> HandoutTextView {
+        Handout.view(
+            source: page.shareSource,
+            markdown: page.markdown,
+            documentURL: page.documentURL,
+            title: page.title
+        )
     }
 
     func refreshStatus() {
@@ -1009,19 +1629,17 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "html") else {
             return
         }
-        let rendered = PreviewRenderer().render(
-            source: editor.source,
-            documentURL: loomingsDocument?.fileURL
-        )
-        let html = PreviewHTMLExport.document(
-            title: exportTitle,
-            bodyHTML: rendered.html,
-            palette: ThemeManager.shared.resolved()
-        )
-        do {
-            try html.data(using: .utf8)?.write(to: url, options: .atomic)
-        } catch {
-            NSAlert(error: error).runModal()
+        exportHTML(to: url)
+    }
+
+    func exportHTML(to url: URL, completion: (() -> Void)? = nil) {
+        withExportPage { page in
+            defer { completion?() }
+            do {
+                try self.documentHTML(page).data(using: .utf8)?.write(to: url, options: .atomic)
+            } catch {
+                self.present(NSAlert(error: error))
+            }
         }
     }
 
@@ -1029,19 +1647,36 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "pdf") else {
             return
         }
-        if !Handout.writePDF(makeHandout(), to: url) {
+        withExportPage(sharing: true) { page in
+            // No panel, so this run is not modal.
+            if Handout.writePDF(self.makeHandout(page), to: url) { return }
             let alert = NSAlert()
             alert.messageText = "The PDF could not be written."
             alert.informativeText = "Check that the folder can be written to, then try again."
-            alert.runModal()
+            self.present(alert)
         }
     }
 
     @objc func printPreview(_ sender: Any?) {
-        let operation = NSPrintOperation(view: makeHandout(), printInfo: Handout.printInfo())
+        withExportPage(statusFirst: true, sharing: true) { page in
+            self.print(page)
+        }
+    }
+
+    private func print(_ page: ExportPage) {
+        let view = makeHandout(page)
+        if let printHookForTesting {
+            printHookForTesting(view)
+            return
+        }
+        let operation = NSPrintOperation(view: view, printInfo: Handout.printInfo())
         operation.showsPrintPanel = true
         operation.showsProgressPanel = true
-        operation.run()
+        if let window, window.isVisible {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            afterMainQueueBlock { operation.run() }
+        }
     }
 
     // MARK: - Formatting actions
@@ -1062,19 +1697,37 @@ final class EditorWindowController: NSWindowController,
         editor.insertLink()
     }
 
+    /// Calls `body` with the text for a share link. The main thread does not
+    /// wait. A document with no citation keys gets its answer at once.
+    private func withShareText(_ body: @escaping (CitationController.ShareText) -> Void) {
+        citations.shareText(
+            source: editor.source,
+            documentURL: loomingsDocument?.citationDocumentURL,
+            allowPaths: citationPathsAllowed,
+            completion: body
+        )
+    }
+
     @objc func copyShareLink(_ sender: Any?) {
-        do {
-            let url = try ShareLink.url(
-                for: editor.source,
-                family: ThemeManager.shared.family,
-                mode: ThemeManager.shared.mode.rawValue
-            )
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(url.absoluteString, forType: .string)
-        } catch {
-            NSAlert(error: error).runModal()
+        withShareText { shared in
+            do {
+                let url = try ShareLink.url(
+                    for: shared.source,
+                    family: ThemeManager.shared.family,
+                    mode: ThemeManager.shared.mode.rawValue
+                )
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                self.shareStatus = shared.failure ?? shared.styleNote
+                if let status = self.shareStatus { self.markupOverlay.show(status) }
+            } catch {
+                self.present(NSAlert(error: error))
+            }
         }
     }
+
+    /// What the last Copy Share Link had to say.
+    private(set) var shareStatus: String?
 
     func jump(to item: OutlineItem) {
         let length = editor.textView.textStorage?.length ?? 0
@@ -1106,6 +1759,22 @@ final class EditorWindowController: NSWindowController,
             return saved
         case #selector(replayWritingHistory(_:)), #selector(deleteWritingHistory(_:)):
             return history.hasHistory(fileURL: loomingsDocument?.fileURL)
+        case #selector(chooseBundledStyle(_:)):
+            let choices = currentChoices
+            menuItem.state = choices != nil && choices?.style == menuItem.representedObject as? String ? .on : .off
+            return window?.attachedSheet == nil
+        case #selector(chooseStyleFile(_:)):
+            let choices = currentChoices
+            menuItem.state = choices != nil && choices?.style == nil ? .on : .off
+            return window?.attachedSheet == nil
+        case #selector(chooseLanguage(_:)):
+            let choices = currentChoices
+            menuItem.state = choices != nil && choices?.language == menuItem.representedObject as? String ? .on : .off
+            return window?.attachedSheet == nil
+        case #selector(chooseBibliography(_:)):
+            return window?.attachedSheet == nil
+        case #selector(toggleReferences(_:)):
+            menuItem.state = isLibraryShown ? .on : .off
         default:
             return true
         }
@@ -1204,6 +1873,7 @@ final class EditorWindowController: NSWindowController,
 
     private func applyToolbarPalette(_ resolved: ResolvedPalette?) {
         modeSwitch?.applyPalette(resolved)
+        columnTabs.applyPalette(resolved)
         for button in toolButtons {
             button.applyPalette(resolved)
         }
@@ -1314,9 +1984,9 @@ final class EditorWindowController: NSWindowController,
     }
 
     /// The share link as a QR code to show a room, or why there is none.
-    private func qrContent() -> (image: NSImage?, caption: String) {
+    private func qrContent(for source: String) -> (image: NSImage?, caption: String) {
         let manager = ThemeManager.shared
-        guard let url = try? ShareLink.url(for: editor.source, family: manager.family, mode: manager.mode.rawValue),
+        guard let url = try? ShareLink.url(for: source, family: manager.family, mode: manager.mode.rawValue),
               let code = ShareQRCode.image(for: url, side: 720) else {
             return (nil, "This document is too long for a QR code; share it as a link.")
         }
@@ -1324,7 +1994,15 @@ final class EditorWindowController: NSWindowController,
     }
 
     @objc private func showQRCode(_ sender: Any?) {
-        let content = qrContent()
+        withShareText { shared in
+            if let failure = shared.failure { self.markupOverlay.show(failure) }
+            self.showQRCode(for: shared.source)
+        }
+    }
+
+    private func showQRCode(for source: String) {
+        qrSourceForTesting = source
+        let content = qrContent(for: source)
         var rows: [NSView] = []
         if let image = content.image {
             let view = NSImageView(image: image)
@@ -1340,7 +2018,9 @@ final class EditorWindowController: NSWindowController,
     }
 
     var shareMenuTitlesForTesting: [String] { makeShareMenu().items.map(\.title) }
-    var qrCaptionForTesting: String? { qrContent().caption }
+    var qrCaptionForTesting: String? { qrContent(for: editor.source).caption }
+    private(set) var qrSourceForTesting: String?
+    func showQRCodeForTesting() { showQRCode(nil) }
 }
 
 /// Owns the preview renderer and its block cache. Only ever called on the
@@ -1366,6 +2046,15 @@ private final class PreviewPipeline: @unchecked Sendable {
             themed = true
         }
         return renderer.render(source: source, documentURL: documentURL)
+    }
+}
+
+/// The right column. Escape in the preview or on the control comes here.
+final class RightColumnView: NSView {
+    var onEscape: (() -> Void)?
+
+    override func cancelOperation(_ sender: Any?) {
+        onEscape?()
     }
 }
 

@@ -334,7 +334,16 @@ body.view-split #content-area { max-width: none; }
   background: var(--bg);
   overflow-y: auto;
 }
-body.view-split #preview { border-left: 1px solid var(--border); }
+/* Outside Split the column adds no box, so the preview stays a flex child. */
+#preview-column { display: contents; }
+body.view-split #preview-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 50%;
+  min-width: 0;
+  border-left: 1px solid var(--border);
+}
+body.view-split #preview { flex: 1 1 0; min-height: 0; }
 #preview > :first-child { margin-top: 0; }
 #preview img { max-width: 100%; }
 #preview table { border-collapse: collapse; margin: 1em 0; font-family: var(--font-ui); font-size: 0.9em; }
@@ -369,6 +378,44 @@ body.view-split #preview { border-left: 1px solid var(--border); }
   margin: 1em 0;
 }
 #preview pre code { background: none; padding: 0; color: var(--fg-dim); }
+#preview .pele {
+  --pele-bg: var(--bg);
+  --pele-fg: var(--fg);
+  --pele-muted: var(--fg-dim);
+  --pele-line: var(--fg-dim);
+  --pele-surface: var(--bg-elev);
+  --pele-surface-alt: var(--bg-deep);
+  --pele-border: var(--border);
+  --pele-accent: var(--accent);
+  --pele-series-1: var(--accent);
+  --pele-series-2: color-mix(in srgb, var(--fg) 72%, var(--bg));
+  --pele-series-3: color-mix(in srgb, var(--accent) 58%, var(--bg));
+  --pele-series-4: color-mix(in srgb, var(--fg) 50%, var(--bg));
+  --pele-series-5: color-mix(in srgb, var(--accent) 40%, var(--bg));
+  --pele-series-6: color-mix(in srgb, var(--fg) 32%, var(--bg));
+  --pele-series-7: color-mix(in srgb, var(--accent) 24%, var(--bg));
+  --pele-series-8: color-mix(in srgb, var(--fg) 16%, var(--bg));
+  --pele-critical: var(--accent);
+}
+#preview pre.mermaid {
+  background: none;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  text-align: center;
+}
+#preview pre.mermaid svg { max-width: 100%; height: auto; }
+#preview pre.mermaid-error p {
+  margin: 0.75em 0 0;
+  color: var(--fg-dim);
+  font-size: 0.9em;
+}
+#preview .cite-missing { color: var(--fg-dim); }
+#preview .references { margin-top: 2.5em; }
+#preview .csl-entry { margin-bottom: 0.6em; overflow-wrap: anywhere; }
+/* Numbered styles. Citeproc puts the number and the text in two blocks. */
+#preview .csl-left-margin { float: left; width: 2.75em; }
+#preview .csl-right-inline { margin-left: 2.75em; }
 #preview blockquote {
   border-left: 3px solid var(--accent);
   padding-left: 16px;
@@ -551,6 +598,144 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
 #stats span    { color: var(--fg-ghost); font-variant-numeric: tabular-nums; }
 
 .hidden { display: none !important; }
+
+/* The right column of Split: tabs, and the library. The font sizes in the
+   panel are in em, so projector mode can set them all. */
+#references-tabs {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-deep);
+  font-family: var(--font-ui);
+  font-size: 12px;
+}
+#references-tabs button {
+  padding: 5px 10px 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  cursor: pointer;
+}
+#references-tabs button:hover { color: var(--accent-light); }
+#references-tabs button[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--fg); }
+#references-tabs button:focus-visible { outline-offset: -2px; }
+
+#references-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 16px 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.references-field { display: flex; flex-direction: column; flex-shrink: 0; gap: 4px; }
+.references-field label { color: var(--fg-dim); font-size: 0.86em; }
+.references-field input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elev);
+  color: var(--fg);
+  font: inherit;
+}
+.references-count { flex-shrink: 0; margin: 6px 0 0; color: var(--fg-dim); font-size: 0.86em; }
+.references-count:empty { display: none; }
+.references-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 6px -8px 0;
+  padding: 0 0 24px;
+  overflow-y: auto;
+  list-style: none;
+}
+.reference-row {
+  display: block;
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.reference-row { cursor: pointer; }
+button.reference-row:hover { background: var(--bg-deep); }
+.reference-row:focus-visible { outline-offset: -2px; }
+.reference-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.reference-key { min-width: 0; font-family: var(--font-mono); font-size: 0.9em; overflow-wrap: anywhere; }
+.reference-mark { flex-shrink: 0; color: var(--fg-dim); font-size: 0.8em; }
+.reference-missing .reference-mark { color: var(--accent-light); }
+.reference-byline, .reference-title { display: block; overflow-wrap: anywhere; }
+.reference-byline { color: var(--fg-dim); font-size: 0.9em; }
+.references-empty { flex-shrink: 0; padding: 12px 0 24px; color: var(--fg-dim); }
+.references-empty p { margin: 0 0 10px; }
+.references-empty button,
+#references-dialog-close {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.references-empty button:hover,
+#references-dialog-close:hover { border-color: var(--accent); color: var(--accent-light); }
+body.projector #references-panel { font-size: 22px; }
+body.projector #references-tabs { font-size: 18px; }
+
+#references-menu { min-width: min(280px, calc(100vw - 20px)); }
+.tb-menu-note {
+  margin: 6px 0 0;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-dim);
+  font-size: 12px;
+}
+
+/* A narrow screen has no Split: the panel moves here. */
+#references-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
+}
+#references-dialog-inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 560px;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  overflow: hidden;
+}
+#references-dialog-head {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+#references-dialog-head h2 { margin: 0; font-family: var(--font-ui); font-size: 14px; font-weight: 600; color: var(--fg); }
+#references-dialog-body { display: flex; flex: 1 1 auto; min-height: 0; }
 
 /* The UA picks the highlight text colour from the OS appearance, which turns
    white on a light page in dark mode; pin both halves of the selection. */
@@ -842,7 +1027,10 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
 
 @media (pointer: coarse) {
   #web-toolbar button,
-  #web-toolbar select {
+  #web-toolbar select,
+  #references-tabs button,
+  #references-dialog-close,
+  .references-empty button {
     min-height: 44px;
   }
 
@@ -861,6 +1049,17 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
 
   #web-toolbar > * {
     flex-shrink: 0;
+  }
+
+  /* The toolbar scrolls here, so it clips an absolute menu. A fixed menu with
+     no top stays under its button and is not clipped. */
+  #web-toolbar .tb-menu {
+    position: fixed;
+    top: auto;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    margin-top: 6px;
   }
 }
 
@@ -883,9 +1082,11 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
 @media print {
   html, body { height: auto; overflow: visible; background: #fff; color: #000; }
   #web-toolbar, #statusbar, #editor, #palette, #about, #cheatsheet, .tb-menu, #explain, #projector-caption,
-  #qr-dialog, .masthead, .skip { display: none !important; }
+  #qr-dialog, .masthead, .skip, #references-tabs, #references-panel, #references-dialog { display: none !important; }
   #editor-container { display: block; overflow: visible; background: #fff; }
   #content-area { display: block; max-width: none; overflow: visible; }
+  #preview-column,
+  body.view-split #preview-column { display: block; border: none; }
   #preview {
     display: block !important;
     position: static;
@@ -904,8 +1105,13 @@ body.projector .cm-activeLine { background: color-mix(in srgb, var(--selection) 
   #preview a { color: var(--print-link, #000); text-decoration: underline; }
   #preview code, #preview pre { background: var(--print-code-bg, #f2f2f2); border-color: var(--print-border, #ccc); }
   #preview pre code { color: var(--print-fg, #000); }
+  #preview pre.mermaid-error p { color: var(--print-dim, #333); }
   #preview blockquote { border-left-color: var(--print-border, #999); color: var(--print-dim, #333); }
   #preview a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 0.85em; color: var(--print-dim, #555); }
+  /* A reference prints its links as text, so the rule above would print each one twice. */
+  #preview :is(.cite, .references) a[href^="http"]::after { content: none; }
+  #preview .cite-missing { color: var(--print-dim, #555); }
+  #preview .csl-entry { break-inside: avoid; }
   #preview .paired { background: none; box-shadow: none; }
   #preview .handout-qr { display: block; break-inside: avoid; margin-top: 2.5em; text-align: center; color: var(--print-fg); }
   #preview .handout-qr svg { display: block; margin: 0 auto; }

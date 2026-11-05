@@ -1,6 +1,7 @@
 import AppKit
 import Darwin
 import Foundation
+import LoomingsCitations
 import LoomingsEditor
 import LoomingsMarkdown
 import LoomingsPreview
@@ -9,6 +10,7 @@ import LoomingsTheme
 
 // Stage 1 measurements. Run in a release build:
 //   swift run -c release --package-path macos LoomingsBench
+//   swift run -c release --package-path macos LoomingsBench --citations
 // The app-owned handler is measured separately from the whole insert call so
 // a slow AppKit layout is not mistaken for our work.
 
@@ -458,6 +460,58 @@ private func percentile(_ values: [Double], _ fraction: Double) -> Double {
     return sorted[index]
 }
 
+/// The citation code in JavaScriptCore: each row is one new engine, so each
+/// has the cost of a first document. Run from a process with no other work.
+private func printCitationTable(runs: Int) {
+    let resources = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Resources/Citations")
+    let time = { (work: () -> Void) -> Double in
+        let start = DispatchTime.now().uptimeNanoseconds
+        work()
+        return Double(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000
+    }
+
+    print("footprint before: \(format(footprintMB())) MB")
+    for (entries, citations) in [(1, 1), (200, 60)] {
+        let bib = (0..<entries).map {
+            "@article{key\($0),\n  author = {Author\($0), Ana and Other, Rui},\n"
+                + "  title = {Entry number \($0)},\n  journal = {Journal},\n  year = {\(1900 + $0)}\n}"
+        }.joined(separator: "\n")
+        let body = (0..<citations).map { "A sentence [@key\($0 * 3 % entries)]." }.joined(separator: "\n\n")
+        let source = "---\nbibliography: refs.bib\n---\n\(body)\n"
+
+        print("citations: \(entries) entries, \(citations) citations, APA, one engine for each row")
+        print("init ms | bundle ms | first report ms | same text ms | new citation ms | footprint MB")
+        for _ in 0..<runs {
+            var engine: CitationEngine?
+            let setup = time { engine = try? CitationEngine(resources: resources) }
+            guard let engine else {
+                print("no bundle at \(resources.path)")
+                return
+            }
+            // The first call loads the bundle and does almost no other work.
+            let load = time { _ = try? engine.readMeta("") }
+            let first = time {
+                engine.setSources(CitationSources(
+                    bibs: [.init(name: "refs.bib", text: bib)],
+                    styleXml: engine.bundledStyle("apa"),
+                    localeXml: engine.bundledLocale("en-US"),
+                    fallbackLocaleXml: engine.bundledLocale("en-US"),
+                    lang: "en-US"
+                ))
+                _ = engine.analyse(source)
+            }
+            let same = time { _ = engine.analyse(source) }
+            let changed = time { _ = engine.analyse(source + "\nA new sentence [@key0].\n") }
+            print([setup, load, first, same, changed, footprintMB()].map(format).joined(separator: " | "))
+        }
+        print("")
+    }
+}
+
 private func footprintMB() -> Double {
     var info = task_vm_info_data_t()
     var count = mach_msg_type_number_t(
@@ -496,7 +550,9 @@ private func architecture() -> String {
 
 MainActor.assumeIsolated {
     NSApplication.shared.setActivationPolicy(.accessory)
-    if CommandLine.arguments.contains("--teaching") {
+    if CommandLine.arguments.contains("--citations") {
+        printCitationTable(runs: 6)
+    } else if CommandLine.arguments.contains("--teaching") {
         printTeachingTable(sizes: [10 * 1024, 100 * 1024, 1024 * 1024, 10 * 1024 * 1024])
     } else if CommandLine.arguments.contains("--preview") {
         // Just the preview table, without the 10 MB editor runs.

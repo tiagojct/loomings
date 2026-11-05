@@ -105,4 +105,24 @@ describe('modal dialog', () => {
     expect(background.hasAttribute('inert')).toBe(false);
     expect(document.activeElement).toBe(opener);
   });
+
+  it('runs onClose after each kind of close', () => {
+    let closed = 0;
+    openModal(dialog, { opener, onClose: () => { closed++; } });
+    dialog.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    expect(closed).toBe(1);
+    openModal(dialog, { opener, onClose: () => { closed++; } }).close();
+    expect(closed).toBe(2);
+  });
+
+  it('leaves hidden items out of the Tab cycle', () => {
+    const hidden = document.createElement('div');
+    hidden.className = 'hidden';
+    hidden.innerHTML = '<button>Hidden</button>';
+    dialog.appendChild(hidden);
+    openModal(dialog, { opener });
+    last.focus();
+    dialog.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }));
+    expect(document.activeElement).toBe(first);
+  });
 });

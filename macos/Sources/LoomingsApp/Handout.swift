@@ -33,11 +33,14 @@ enum Handout {
         return info
     }
 
-    static func view(source: String, documentURL: URL?, title: String) -> HandoutTextView {
+    /// - Parameters:
+    ///   - source: the text of the share link.
+    ///   - markdown: the text to print, with its citations formatted.
+    static func view(source: String, markdown: String, documentURL: URL?, title: String) -> HandoutTextView {
         let manager = ThemeManager.shared
         let light = manager.library?.resolve(family: manager.family, mode: .light, systemIsDark: false)
         let theme = light.map { PreviewTheme.themed($0) } ?? .standard
-        let rendered = PreviewRenderer(theme: theme, producesHTML: false).render(source: source, documentURL: documentURL)
+        let rendered = PreviewRenderer(theme: theme, producesHTML: false).render(source: markdown, documentURL: documentURL)
 
         let content = NSMutableAttributedString(attributedString: rendered.attributed)
         content.append(qrBlock(source: source, theme: theme))
@@ -45,6 +48,7 @@ enum Handout {
         let width = paperSize.width - sideMargin * 2
         let view = HandoutTextView(frame: NSRect(x: 0, y: 0, width: width, height: 200))
         view.title = title
+        view.sharedSource = source
         view.footerColor = theme.secondaryTextColor
         view.footerFont = NSFont(name: "SourceSerif4-Regular", size: 9) ?? .systemFont(ofSize: 9)
         view.isEditable = false
@@ -114,6 +118,8 @@ enum Handout {
 /// A text view that prints "title · page n of N" at the foot of every page.
 final class HandoutTextView: NSTextView {
     var title = ""
+    /// The text in the share link.
+    var sharedSource = ""
     var footerColor: NSColor = .secondaryLabelColor
     var footerFont: NSFont = .systemFont(ofSize: 9)
 

@@ -53,13 +53,23 @@ let package = Package(
             name: "LoomingsPreview",
             dependencies: ["LoomingsMarkdown", "LoomingsTheme"]
         ),
+        .target(
+            name: "LoomingsCitations",
+            dependencies: ["LoomingsDocuments", "LoomingsTeaching"],
+            linkerSettings: [.linkedFramework("JavaScriptCore")]
+        ),
         .executableTarget(
             name: "LoomingsApp",
-            dependencies: ["LoomingsDocuments", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTheme", "LoomingsShare", "LoomingsTeaching"]
+            dependencies: ["LoomingsCitations", "LoomingsDocuments", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTheme", "LoomingsShare", "LoomingsTeaching"]
         ),
         .executableTarget(
             name: "LoomingsBench",
-            dependencies: ["LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTeaching"]
+            dependencies: ["LoomingsCitations", "LoomingsEditor", "LoomingsMarkdown", "LoomingsPreview", "LoomingsTeaching"]
+        ),
+        .testTarget(
+            name: "LoomingsCitationsTests",
+            dependencies: ["LoomingsCitations", "LoomingsDocuments", "LoomingsShare", "LoomingsTeaching"],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "LoomingsMarkdownTests",
@@ -67,7 +77,8 @@ let package = Package(
         ),
         .testTarget(
             name: "LoomingsEditorTests",
-            dependencies: ["LoomingsEditor"]
+            dependencies: ["LoomingsEditor"],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "LoomingsDocumentsTests",

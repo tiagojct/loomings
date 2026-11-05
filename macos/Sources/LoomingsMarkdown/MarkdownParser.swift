@@ -11,6 +11,7 @@ public enum MarkdownParser {
         var spans: [MarkdownSyntaxSpan] = []
         var outline: [OutlineItem] = []
         var styles: [MarkdownStyleRange] = []
+        var code: [NSRange] = []
         var nodeCount = 0
 
         withExtendedLifetime(tree) {
@@ -23,6 +24,10 @@ public enum MarkdownParser {
                     if let range = clamped(map.nsRange(for: node.range), text: text) {
                         let style: MarkdownTextStyle = node.kind == .heading ? .heading : node.kind == .strong ? .strong : .emphasis
                         styles.append(MarkdownStyleRange(range: range, style: style))
+                    }
+                case .code, .codeBlock:
+                    if let range = clamped(map.nsRange(for: node.range), text: text) {
+                        code.append(range)
                     }
                 default:
                     break
@@ -41,6 +46,7 @@ public enum MarkdownParser {
             // cmark reads the closing --- as a setext underline.
             outline.removeAll { $0.range.location < NSMaxRange(frontmatter) }
             styles.removeAll { $0.range.location < NSMaxRange(frontmatter) }
+            code.removeAll { $0.location < NSMaxRange(frontmatter) }
             normalized.removeAll { $0.intersects(frontmatter) }
             normalized.append(
                 MarkdownSyntaxSpan(range: frontmatter, kind: .frontmatter)
@@ -55,7 +61,8 @@ public enum MarkdownParser {
             lineStarts: map.lineStarts,
             wordCount: TextStatistics.countWords(source),
             characterCount: map.characterCount,
-            styleRanges: styles.sorted { $0.range.location < $1.range.location }
+            styleRanges: styles.sorted { $0.range.location < $1.range.location },
+            codeRanges: code.sorted { $0.location < $1.location }
         )
     }
 

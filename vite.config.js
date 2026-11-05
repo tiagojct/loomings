@@ -1,6 +1,8 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { citeprocNotice } from './scripts/citeproc-notice.js';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
@@ -60,6 +62,16 @@ export default defineConfig({
   clearScreen: false,
   base: BASE,
   plugins: [loomingsServiceWorker()],
+  worker: {
+    rolldownOptions: {
+      output: {
+        banner: (chunk) => (chunk.moduleIds.some((id) => /[\\/]node_modules[\\/]citeproc[\\/]/.test(id))
+          ? `${citeprocNotice('/app/licenses/citeproc-LICENSE.txt')}\n` : ''),
+      },
+    },
+  },
+  // citation-js reads sync-fetch-undici; the app has no network path.
+  resolve: { alias: { 'sync-fetch-undici': fileURLToPath(new URL('./src/citations/stub-fetch.js', import.meta.url)) } },
   server: {
     port: 1420,
     strictPort: true,

@@ -4,7 +4,7 @@
 
 ## Platform
 
-web
+web, with a separate native macOS app in `macos/`
 
 ## Users
 
@@ -49,18 +49,44 @@ without giving up the property that makes it work.
 
 - Static site, no backend, no accounts, no tracking in the app; the landing
   page alone loads one analytics script (umami).
-- Colours come from four palettes (Pequod, Glauca, Try-Works, Ambergris), each
-  with a dark and a light mode; a light/dark/system theme and eight looks in
-  total. Palettes are WCAG-checked by the test suite.
+- Colours come from ten Ensigns families (`src/palettes.js`), each with a dark
+  and a light mode, and a light/dark/system setting. The test suite checks the
+  palettes against WCAG floors.
 - Features: in-place Markdown rendering, split view with scroll sync, outline
   palette, focus mode, typewriter scrolling, full screen, word goal, stats,
-  find and replace, six bundled lessons, cheatsheet, print/PDF, standalone
-  HTML export, share links, offline install.
+  find and replace, Mermaid diagrams (in the preview, print and HTML export),
+  citations and references from BibTeX and CSL files kept in the browser (with
+  a References tab and a menu for the bibliography, style and language),
+  six bundled lessons, cheatsheet, print/PDF, standalone HTML export, share
+  links, offline install. Teaching: the learner's checker,
+  marker glossary, exercise checks, section word limits, paired lines,
+  projector mode, handouts with a QR code.
+  The native app has the same citations, from files read next to the document,
+  with a References menu and a References tab in Split. It does not draw diagrams
+  yet: CoreSVG ignores `var()`, so the Pele colours do not apply.
 - Deployed as a container behind Cloudflare and Caddy at
   `loomings.tiagojacinto.eu`; the app lives at `/app/`, the landing page owns
   the root. CSP is strict and self-only, so the landing page cannot fetch
   third-party fonts or images.
 - Source is MIT licensed at `github.com/tiagojct/loomings`.
+
+## Scope
+
+Loomings is a Markdown editor for writing and for teaching Markdown. A new
+feature must help a writer finish a draft, or help a teacher or student with
+Markdown. Loomings does not do these things:
+
+- Accounts, sync, comments or live collaboration. The share link is the way a
+  document travels.
+- Notes, tags, wikilinks, a file tree or a knowledge base. A document is one
+  file.
+- New Markdown syntax. Lessons teach the syntax that works in other tools.
+- Plugins or user scripts. They conflict with the strict CSP, and a class needs
+  every copy of the app to behave the same way.
+- Format conversion beyond HTML and PDF. Pandoc does this better.
+- AI features or network requests from the app.
+- Editor features that only one surface can have, unless the feature belongs to
+  that platform (for example, a dropped image needs a folder, so it is native).
 
 ## Brand Commitments
 

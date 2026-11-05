@@ -8,8 +8,11 @@ import { history, defaultKeymap, historyKeymap, indentWithTab } from '@codemirro
 import { markdown } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '@codemirror/language';
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
+import './search.js';
 import { tags as t } from '@lezer/highlight';
 import { renderMarkdown, renderPreview } from './markdown.js';
+import { linkFromPaste } from './links.js';
+import { smartTypography } from './typography.js';
 import { blockForLine, previewBlocks } from './pairing.js';
 import { analyse } from './teaching/report.js';
 import { explain, markerAt, frontmatterRange } from './teaching/glossary.js';
@@ -18,7 +21,7 @@ import { outline, sections, limitsIn, sectionAt } from './teaching/sections.js';
 import lessonChecks from '../lessons/checks.json';
 import { PROJECTOR, markerName, createProjector } from './projector.js';
 import { qrSvg, qrPrintSide } from './qr.js';
-import { handoutCss, paperFor } from './handout.js';
+import { handoutCss, paperFor, oneAtATime, withWaitStatus } from './handout.js';
 import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
@@ -30,10 +33,19 @@ import {
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
+  listCitationFiles, refreshCitationFiles, pickCitationFile, deleteCitationFile,
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
+import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
+import {
+  createCitationDocument, citedHtml, citationsLeftLiteral, documentMeta, documentUsesCitations,
+} from './citations/document.js';
+import { citationExtensions, citationReportEffect, citationNotes, citationThemeRules } from './citations/editor.js';
+import {
+  createReferencesView, insertCitation, metaChange, nextTab, referencesMenuHtml, renderLibrary, toggleBibliography,
+} from './citations/panel.js';
 import { readThemeParams, withoutThemeParams } from './theme-link.js';
 import { LESSONS, lessonBySlug } from './lessons.js';
 
@@ -166,6 +178,7 @@ function makeTheme(p, isDark) {
     '.cm-search [name=close]': { color: p.fgDim },
     '.cm-searchMatch': { backgroundColor: p.accent + '40' },
     '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: p.accentLight + '70' },
+    ...citationThemeRules(p),
   }, { dark: isDark });
 }
 
@@ -422,30 +435,7 @@ const notesPlugin = ViewPlugin.fromClass(class {
   }
 }, { decorations: v => v.decorations });
 
-const smartTypographyHandler = EditorView.inputHandler.of((view, from, to, text) => {
-  if (!smartTypo) return false;
-  if (text === '"') {
-    const prev = from > 0 ? view.state.sliceDoc(from - 1, from) : ' ';
-    const rep = /\s|^|\(|\[|\{/.test(prev) ? '“' : '”';
-    view.dispatch({ changes: { from, to, insert: rep }, selection: { anchor: from + 1 } });
-    return true;
-  }
-  if (text === "'") {
-    const prev = from > 0 ? view.state.sliceDoc(from - 1, from) : ' ';
-    const rep = /\s|^|\(|\[|\{/.test(prev) ? '‘' : '’';
-    view.dispatch({ changes: { from, to, insert: rep }, selection: { anchor: from + 1 } });
-    return true;
-  }
-  if (text === '-' && from > 0 && view.state.sliceDoc(from - 1, from) === '-') {
-    view.dispatch({ changes: { from: from - 1, to, insert: '—' }, selection: { anchor: from } });
-    return true;
-  }
-  if (text === '.' && from >= 2 && view.state.sliceDoc(from - 2, from) === '..') {
-    view.dispatch({ changes: { from: from - 2, to, insert: '…' }, selection: { anchor: from - 1 } });
-    return true;
-  }
-  return false;
-});
+const smartTypographyHandler = smartTypography(() => smartTypo);
 
 function insertLink(view) {
   const sel = view.state.selection.main;
@@ -551,6 +541,7 @@ function buildState(doc = '') {
       frontmatterPlugin,
       pairedLinesPlugin,
       notesPlugin,
+      ...citationExtensions((text) => citations.reportFor(text), () => citations.library()),
       highlightCompartment.of(syntaxHighlighting(makeHighlight(p))),
       themeCompartment.of(makeTheme(p, activeTheme === 'dark')),
       lineNumbersCompartment.of(lineNumbersOn ? lineNumbers() : []),
@@ -591,6 +582,22 @@ function buildState(doc = '') {
           if (pos === null || !explainAt(pos, false)) return false;
           explainOpenedByClick = true;
           e.preventDefault();
+          return true;
+        },
+        paste: (e, v) => {
+          const sel = v.state.selection.main;
+          if (sel.empty) return false;
+          const before = v.state.sliceDoc(v.state.doc.lineAt(sel.from).from, sel.from);
+          const pasted = e.clipboardData?.getData('text/plain') ?? '';
+          const link = linkFromPaste(v.state.sliceDoc(sel.from, sel.to), pasted, before);
+          if (!link) return false;
+          e.preventDefault();
+          v.dispatch({
+            changes: { from: sel.from, to: sel.to, insert: link },
+            selection: { anchor: sel.from + link.length },
+            userEvent: 'input.paste',
+            scrollIntoView: true,
+          });
           return true;
         },
       }),
@@ -635,6 +642,8 @@ function getText() { return view.state.doc.toString(); }
 function setText(text) {
   view.dispatch({
     changes: { from: 0, to: view.state.doc.length, insert: text },
+    // The citation marks follow the new report, which is none after a reset.
+    effects: citationReportEffect.of(null),
   });
 }
 
@@ -909,7 +918,8 @@ function scheduleStats() {
 
 /** @type {ReturnType<typeof setTimeout>|null} */ let previewTimer = null;
 function schedulePreview() {
-  if (!previewShown()) return;
+  // With the References tab open this still runs: an edit can hide the tabs.
+  if (effectiveViewMode() === 'editor') return;
   if (previewTimer) clearTimeout(previewTimer);
   previewTimer = setTimeout(updatePreview, 150);
 }
@@ -1151,11 +1161,25 @@ const session = createSession({
   onError: (message) => flashStatus(message),
 });
 
+// The worker and the citeproc code load only for a document that uses them.
+const citations = createCitationDocument({
+  client: async () => (await import('./citations/client.js')).createCitationClient(),
+  assets: () => import('./citations/assets.js'),
+  listFiles: listCitationFiles,
+  onChange: () => {
+    updatePreview({ onlyIfChanged: true });
+    view.dispatch({ effects: citationReportEffect.of(null) });
+    refreshNotes();
+    renderReferencesPanel();
+  },
+});
+
 function markDirty() {
   session.markEdited();
   scheduleStats();
   schedulePreview();
   scheduleTeaching();
+  citations.update(getText);
 }
 
 function markClean() { session.markClean(); }
@@ -1169,10 +1193,10 @@ window.addEventListener('pagehide', () => session.flushScratch());
 
 /** @type {ReturnType<typeof setTimeout>|null} */ let statusTimer = null;
 
-function flashStatus(msg) {
+function flashStatus(msg, ms = 2000) {
   statusApp.textContent = msg;
   if (statusTimer) clearTimeout(statusTimer);
-  statusTimer = setTimeout(refreshStatusBar, 2000);
+  statusTimer = setTimeout(refreshStatusBar, ms);
 }
 
 function basename(p) {
@@ -1254,8 +1278,12 @@ async function handleSaveAs() {
 
 async function exportHtml() {
   const p = roles(themeFamily, activeTheme);
+  const lp = roles(themeFamily, 'light');
   const title = currentFile ? displayName(currentFile) : 'Untitled';
-  const rendered = renderMarkdown(getText());
+  const text = getText();
+  const report = await citations.flush(text);
+  const partial = citationsLeftLiteral(text, report);
+  const rendered = await renderDiagramsInHtml(citedHtml(text, report, renderMarkdown));
   const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1278,7 +1306,23 @@ async function exportHtml() {
                color: ${p.fgDim}; margin-left: 0; font-style: italic; }
   hr { border: none; border-top: 1px solid ${p.border}; margin: 2em 0; }
   img { max-width: 100%; }
-  @media print { body { background: #fff; color: #000; } }
+  pre.mermaid { background: none; border: 0; padding: 0; text-align: center; }
+  pre.mermaid svg { max-width: 100%; height: auto; }
+  pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
+  .cite-missing { color: ${p.fgDim}; }
+  .references { margin-top: 2.5em; }
+  .csl-entry { margin-bottom: 0.6em; overflow-wrap: anywhere; }
+  .csl-left-margin { float: left; width: 2.75em; }
+  .csl-right-inline { margin-left: 2.75em; }
+  .pele { --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
+          --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
+          --pele-accent: ${p.accent}; ${peleSeriesCss(p, p.bg)} }
+  @media print { body { background: #fff; color: #000; }
+    .cite-missing { color: ${lp.fgDim}; }
+    .csl-entry { break-inside: avoid; }
+    /* --pele-bg is the paper colour (#fff) of the body rule above. */
+    .pele { --pele-bg: #fff; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
+            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; ${peleSeriesCss(lp, '#fff')} } }
 </style>
 </head>
 <body>
@@ -1288,7 +1332,7 @@ ${rendered}
 `;
   try {
     const path = await downloadHtml(html, title + '.html');
-    if (path) flashStatus('Exported ' + basename(path));
+    if (path) flashStatus('Exported ' + basename(path) + (partial ? '; citations were not ready' : ''));
   } catch (err) {
     flashStatus('Export failed: ' + (err?.message || err));
   }
@@ -1311,6 +1355,8 @@ async function fileNew() {
   }
   await session.discardScratch();
   attachedChecks = null;
+  citations.reset();
+  referencesView.newDocument();
   setText('');
   currentFile = null;
   currentDocId = null;
@@ -1399,16 +1445,28 @@ document.addEventListener('fullscreenchange', () => {
 //  View modes: editor / split / preview
 // ==========================
 
+const previewColumn   = el('preview-column');
+const tabList         = el('references-tabs');
+const previewTabEl    = el('tab-preview');
+const referencesTabEl = el('tab-references');
+const referencesPanel = el('references-panel');
+
+const referencesView  = createReferencesView();
+
 function effectiveViewMode() {
   return (viewMode === 'split' && narrowMq.matches) ? 'editor' : viewMode;
 }
-function previewShown() { return effectiveViewMode() !== 'editor'; }
+function referencesShown() { return referencesView.shown; }
+function previewShown() { return effectiveViewMode() !== 'editor' && !referencesShown(); }
+// Scroll sync and paired lines need both panes of Split.
+function panesPaired() { return effectiveViewMode() === 'split' && !referencesShown(); }
 
 function applyViewMode() {
   const mode = effectiveViewMode();
   for (const m of VIEW_MODES) body.classList.toggle('view-' + m, m === mode);
   editorEl.classList.toggle('hidden', mode === 'preview');
-  preview.classList.toggle('hidden', mode === 'editor');
+  applyReferencesView();
+  preview.classList.toggle('hidden', mode === 'editor' || referencesShown());
   /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('#web-toolbar [data-view]')).forEach((b) => {
     b.setAttribute('aria-pressed', String(b.dataset.view === mode));
   });
@@ -1431,7 +1489,11 @@ function setViewMode(mode) {
 function togglePreview() { setViewMode(effectiveViewMode() === 'preview' ? 'editor' : 'preview'); }
 function toggleSplit()   { setViewMode(viewMode === 'split' ? 'editor' : 'split'); }
 
-narrowMq.addEventListener('change', applyViewMode);
+narrowMq.addEventListener('change', () => {
+  // The dialog is for a narrow screen. Close it first: it holds the panel.
+  referencesModal?.close();
+  applyViewMode();
+});
 
 // ==========================
 //  Scroll sync (split mode)
@@ -1465,7 +1527,7 @@ function invalidatePreviewBlocks() {
 window.addEventListener('resize', invalidatePreviewBlocks, { passive: true });
 
 function syncPreviewToEditor() {
-  if (effectiveViewMode() !== 'split' || syncLockedBy('preview')) return;
+  if (!panesPaired() || syncLockedBy('preview')) return;
   const scroller = view.scrollDOM;
   const blocks = getPreviewBlocks();
   if (!blocks.length) return;
@@ -1498,7 +1560,7 @@ function syncPreviewToEditor() {
 }
 
 function syncEditorToPreview() {
-  if (effectiveViewMode() !== 'split' || syncLockedBy('editor')) return;
+  if (!panesPaired() || syncLockedBy('editor')) return;
   const blocks = getPreviewBlocks();
   if (!blocks.length) return;
   const top = preview.scrollTop;
@@ -1519,10 +1581,10 @@ function syncEditorToPreview() {
 }
 
 view.scrollDOM.addEventListener('scroll', () => {
-  if (effectiveViewMode() === 'split') requestAnimationFrame(syncPreviewToEditor);
+  if (panesPaired()) requestAnimationFrame(syncPreviewToEditor);
 }, { passive: true });
 preview.addEventListener('scroll', () => {
-  if (effectiveViewMode() === 'split') requestAnimationFrame(syncEditorToPreview);
+  if (panesPaired()) requestAnimationFrame(syncEditorToPreview);
 }, { passive: true });
 
 // ==========================
@@ -1557,7 +1619,7 @@ function clearPairing() {
 }
 
 view.contentDOM.addEventListener('mousemove', (e) => {
-  if (effectiveViewMode() !== 'split') return;
+  if (!panesPaired()) return;
   if (pairFrame !== null) cancelAnimationFrame(pairFrame);
   const { clientX: x, clientY: y } = e;
   pairFrame = requestAnimationFrame(() => {
@@ -1579,7 +1641,7 @@ view.contentDOM.addEventListener('mouseleave', () => {
 });
 
 preview.addEventListener('mouseover', (e) => {
-  if (effectiveViewMode() !== 'split') return;
+  if (!panesPaired()) return;
   const node = /** @type {HTMLElement} */ (e.target).closest('[data-line-end]');
   if (!(node instanceof HTMLElement) || !preview.contains(node)) { lightSourceLines(null); return; }
   const line = Number(node.dataset.line);
@@ -1589,13 +1651,216 @@ preview.addEventListener('mouseover', (e) => {
 
 preview.addEventListener('mouseleave', () => lightSourceLines(null));
 
-function updatePreview() {
+let previewGeneration = 0;
+/** @type {string|null} */ let previewHtml = null;
+
+// onlyIfChanged: a citation report that gives the same HTML starts no new
+// render, so the diagrams are not drawn again.
+function updatePreview({ onlyIfChanged = false } = {}) {
+  const switched = applyReferencesView();
   if (!previewShown()) return;
-  preview.innerHTML = renderPreview(getText());
+  const text = getText();
+  const html = citedHtml(text, citations.reportFor(text), renderPreview);
+  if (onlyIfChanged && !switched && html === previewHtml) return;
+  previewHtml = html;
+  const generation = ++previewGeneration;
+  preview.innerHTML = html;
   pairedBlockEl = null;
   invalidatePreviewBlocks();
   if (effectiveViewMode() === 'split') syncPreviewToEditor();
+  if (!hasDiagrams(preview)) return;
+  // Diagrams change the block heights. Skip the work if a newer render started.
+  renderDiagrams(preview).then(() => {
+    if (generation !== previewGeneration) return;
+    lightPreviewBlock(null);
+    invalidatePreviewBlocks();
+    if (effectiveViewMode() === 'split') syncPreviewToEditor();
+  }, () => {});
 }
+
+// ==========================
+//  References: the tabs of Split, the panel and the menu
+// ==========================
+// The panel is a sibling of the preview, and one of the two is hidden. On a
+// narrow screen there is no Split, so the same panel moves into a dialog.
+
+/** @type {{close: () => void}|null} */ let referencesModal = null;
+/** @type {{name: string, kind: 'bib'|'csl'}[]} */ let storedCitationFiles = [];
+let libraryFilter = '';
+
+/** @param {HTMLElement} node @param {HTMLElement} tab @param {boolean} on */
+function markTabPanel(node, tab, on) {
+  if (on) {
+    node.setAttribute('role', 'tabpanel');
+    node.setAttribute('aria-labelledby', tab.id);
+  } else {
+    node.removeAttribute('role');
+    node.removeAttribute('aria-labelledby');
+  }
+}
+
+/**
+ * Sets the tabs and the panel for the view and the document.
+ *
+ * @returns {boolean} true when References and Preview changed places
+ */
+function applyReferencesView() {
+  const { tabs, references, switched } = referencesView.apply({
+    split: effectiveViewMode() === 'split',
+    uses: () => documentUsesCitations(getText()),
+  });
+  tabList.classList.toggle('hidden', !tabs);
+  for (const [tab, name] of /** @type {[HTMLElement, string][]} */ ([[previewTabEl, 'preview'], [referencesTabEl, 'references']])) {
+    tab.setAttribute('aria-selected', String(referencesView.tab === name));
+    tab.tabIndex = referencesView.tab === name ? 0 : -1;
+  }
+  markTabPanel(preview, previewTabEl, tabs);
+  markTabPanel(referencesPanel, referencesTabEl, tabs && !referencesModal);
+  if (!referencesModal) referencesPanel.classList.toggle('hidden', !references);
+  // Also with no switch: another document can have no report to announce it.
+  renderReferencesPanel();
+  if (!switched) return false;
+  preview.classList.toggle('hidden', references);
+  clearPairing();
+  invalidatePreviewBlocks();
+  return true;
+}
+
+function renderReferencesPanel() {
+  if (referencesPanel.classList.contains('hidden')) return;
+  const held = citations.current();
+  renderLibrary(referencesPanel, held?.report ?? null, libraryFilter, {
+    waiting: !held && documentUsesCitations(getText()),
+  });
+}
+
+/** @param {string} tab */
+function selectTab(tab) {
+  if (tab === referencesView.tab) return;
+  referencesView.select(tab);
+  updatePreview();
+}
+
+tabList.addEventListener('click', (e) => {
+  const tab = /** @type {HTMLElement} */ (e.target).closest('[data-tab]');
+  if (tab instanceof HTMLElement) selectTab(tab.dataset.tab || 'preview');
+});
+
+tabList.addEventListener('keydown', (e) => {
+  const tabs = [previewTabEl, referencesTabEl];
+  const next = nextTab(tabs.indexOf(/** @type {HTMLElement} */ (e.target)), e.key, tabs.length);
+  if (next === null) return;
+  e.preventDefault();
+  selectTab(tabs[next].dataset.tab || 'preview');
+  tabs[next].focus();
+});
+
+referencesPanel.addEventListener('input', (e) => {
+  if (!(e.target instanceof HTMLInputElement)) return;
+  libraryFilter = e.target.value;
+  renderReferencesPanel();
+});
+
+referencesPanel.addEventListener('click', (e) => {
+  const target = /** @type {HTMLElement} */ (e.target);
+  if (target.closest('[data-action="add-file"]')) { addCitationFile(); return; }
+  const row = target.closest('button[data-key]');
+  if (row instanceof HTMLElement) insertReference(row.dataset.key ?? '');
+});
+
+/** Inserts a key at the end of the selection. The panel stays in Split. */
+function insertReference(key) {
+  referencesModal?.close();
+  if (effectiveViewMode() === 'preview') setViewMode('editor');
+  const { insert, from } = insertCitation(getText(), view.state.selection.main.to, key);
+  view.dispatch({
+    changes: { from, insert },
+    selection: { anchor: from + insert.length },
+    scrollIntoView: true,
+    userEvent: 'input',
+  });
+  view.focus();
+}
+
+/** The filter field, or Add File when the library is empty. */
+function libraryFocus() {
+  return /** @type {HTMLElement|null} */ (
+    referencesPanel.querySelector('.references-field:not(.hidden) input') ?? referencesPanel.querySelector('.references-empty button')
+  );
+}
+
+function openReferencesDialog() {
+  el('references-dialog-body').append(referencesPanel);
+  referencesPanel.classList.remove('hidden');
+  renderReferencesPanel();
+  referencesModal = openModal(el('references-dialog'), {
+    opener: el('tb-references'),
+    initialFocus: libraryFocus(),
+    onClose: () => {
+      referencesModal = null;
+      previewColumn.append(referencesPanel);
+      applyReferencesView();
+    },
+  });
+  applyReferencesView();
+}
+
+el('references-dialog-close').addEventListener('click', () => referencesModal?.close());
+el('references-dialog').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) referencesModal?.close();
+});
+
+function showLibrary() {
+  if (narrowMq.matches) { openReferencesDialog(); return; }
+  referencesView.ask();
+  if (viewMode === 'split') updatePreview(); else setViewMode('split');
+  libraryFocus()?.focus();
+}
+
+async function loadStoredFiles() {
+  storedCitationFiles = (await listCitationFiles()).map(({ name, kind }) => ({ name, kind }));
+}
+
+/**
+ * Changes a citation key of the frontmatter with one transaction, so Undo
+ * reverts it.
+ *
+ * @param {Parameters<typeof metaChange>[1]} key
+ * @param {string|null} value
+ */
+function setDocumentMeta(key, value) {
+  try {
+    const change = metaChange(getText(), key, value);
+    if (change) view.dispatch({ changes: change, userEvent: 'input' });
+  } catch (err) {
+    flashStatus('Could not change the frontmatter: ' + String(err?.message || err).replace(/^setCitationMeta: /, ''));
+  }
+}
+
+/** @param {string} name */
+async function removeCitationFile(name) {
+  if (!(await ask(`Remove ${name} from this browser?`))) return;
+  if (!(await deleteCitationFile(name))) { flashStatus(`Could not remove ${name}`); return; }
+  flashStatus(`Removed ${name}`);
+  await loadStoredFiles();
+  await citations.refresh();
+}
+
+const referencesMenuEl = el('references-menu');
+attachMenu(el('tb-references'), referencesMenuEl, {
+  onOpen: () => { referencesMenuEl.innerHTML = referencesMenuHtml(documentMeta(getText()), storedCitationFiles); },
+  onPick: (item) => {
+    const { action, bib, style, lang, remove } = item.dataset;
+    // A radio that is on stays on. With no `csl:` the default style is on, and a click must write nothing.
+    const on = item.getAttribute('aria-checked') === 'true';
+    if (action === 'show') showLibrary();
+    if (action === 'add-file') addCitationFile();
+    if (bib) setDocumentMeta('bibliography', toggleBibliography(documentMeta(getText()).bibliography, bib));
+    if (style && !on) setDocumentMeta('csl', style);
+    if (lang && !on) setDocumentMeta('lang', lang);
+    if (remove) removeCitationFile(remove);
+  },
+});
 
 // Print / PDF: the handout. The print stylesheet shows only the rendered
 // preview, so make it current even in editor-only mode; add the share link
@@ -1604,27 +1869,59 @@ function updatePreview() {
 const QR_CAPTION = 'Scan to open this document in Loomings.';
 const QR_TOO_LONG = 'This document is too long for a QR code; share it as a link.';
 
-async function printPreview() {
+// A share link carries the cited entries. A long sentence stays longer on the status bar.
+const SHARE_STATUS_TIME = 6000;
+
+function textToShare(/** @type {string} */ text) {
+  return withWaitStatus(citations.shareSource(text), () => {
+    if (statusTimer) clearTimeout(statusTimer);
+    statusApp.textContent = 'Preparing citations for the link';
+  }, refreshStatusBar);
+}
+
+async function printHandout() {
   const text = getText();
+  // Take the title now: the user can open another document during the wait.
+  const title = currentFile ? displayName(currentFile) : firstHeading(text) || '';
+  const report = await withWaitStatus(citations.flush(text), () => {
+    if (statusTimer) clearTimeout(statusTimer);
+    statusApp.textContent = 'Preparing citations for print';
+  }, refreshStatusBar);
+  // Citations that are not ready have used the whole wait. The link then has only the text.
+  const literal = citationsLeftLiteral(text, report);
+  const shared = literal ? { text, failure: null } : await textToShare(text);
+  if (literal) flashStatus('Citations are not ready; printing without them');
+  else if (shared.failure) flashStatus(shared.failure, SHARE_STATUS_TIME);
   let qr = '';
   if (text.trim()) {
     /** @type {string|null} */ let url = null;
-    try { url = await shareUrl(text, location.href); } catch (_) { url = null; }
+    try { url = await shareUrl(shared.text, location.href); } catch (_) { url = null; }
     const side = url ? qrPrintSide(url) : null;
     const svg = url && side ? qrSvg(url, 1, `${side}pt`) : null;
     qr = `<section class="handout-qr">${svg || ''}<p>${svg ? QR_CAPTION : QR_TOO_LONG}</p></section>`;
   }
   const wasShown = previewShown();
-  preview.innerHTML = renderPreview(text) + qr;
-  pairedBlockEl = null;
-  invalidatePreviewBlocks();
+  // A preview update during the wait below would replace this page. Mark
+  // the page, then build it again if that happens.
+  let seen = ++previewGeneration;
+  const build = async () => {
+    preview.innerHTML = citedHtml(text, report, renderPreview) + qr;
+    pairedBlockEl = null;
+    invalidatePreviewBlocks();
+    await renderDiagrams(preview);
+  };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await build();
+    if (seen === previewGeneration) break;
+    seen = previewGeneration;
+  }
   // Some mobile browsers never fire afterprint; a new print replaces the
   // last one's page style rather than piling up.
   document.getElementById('handout-page')?.remove();
   const page = document.createElement('style');
   page.id = 'handout-page';
   page.textContent = handoutCss({
-    title: currentFile ? displayName(currentFile) : firstHeading(text) || '',
+    title,
     palette: roles(themeFamily, 'light'),
     paper: paperFor(navigator.language || 'en-GB'),
   });
@@ -1639,6 +1936,8 @@ async function printPreview() {
   window.print();
 }
 
+const printPreview = oneAtATime(printHandout);
+
 // ==========================
 //  Share link as a QR code
 // ==========================
@@ -1651,9 +1950,11 @@ const qrCaption = el('qr-caption');
 async function showQrCode() {
   const text = getText();
   if (!text.trim()) { flashStatus('Nothing to share yet'); return; }
+  const shared = await textToShare(text);
   let url;
-  try { url = await shareUrl(text, location.href); }
+  try { url = await shareUrl(shared.text, location.href); }
   catch (err) { flashStatus('Could not build link: ' + (err?.message || err)); return; }
+  if (shared.failure) flashStatus(shared.failure, SHARE_STATUS_TIME);
   const svg = qrSvg(url, 4);
   const paper = roles(themeFamily, 'light');
   qrCodeEl.innerHTML = svg || '';
@@ -1746,6 +2047,8 @@ const notesMenu   = el('notes-menu');
 let teachingRevision = 0;
 /** @type {{revision: number, issues: import('./teaching/lint.js').LintIssue[]}} */
 let teaching = { revision: -1, issues: [] };
+/** @type {(import('./teaching/lint.js').LintIssue & {fileLevel?: boolean, action?: {title: string, kind: string}})[]} */
+let noteList = [];
 /** @type {ReturnType<typeof setTimeout>|null} */ let teachingTimer = null;
 
 function scheduleTeaching() {
@@ -1788,34 +2091,67 @@ function runTeaching() {
  * @param {import('./teaching/report.js').TeachingReport} report
  */
 function applyTeaching(revision, report) {
-  const issues = report.issues;
-  teaching = { revision, issues };
+  teaching = { revision, issues: report.issues };
   limitedSections = report.sections;
   updateExercise({ results: report.results, notes: report.notes });
   updateSectionStatus();
-  view.dispatch({ effects: notesEffect.of(issues) });
-  notesWrap.classList.toggle('hidden', issues.length === 0);
-  notesButton.textContent = issues.length === 1 ? '1 note' : `${issues.length} notes`;
-  notesButton.setAttribute('aria-label', issues.length === 1 ? '1 Markdown note' : `${issues.length} Markdown notes`);
+  refreshNotes();
+}
+
+/**
+ * The notes of the checker and of the citation report in one list. The
+ * checker notes come first. Either part can arrive late: this runs when
+ * either one changes, and keeps the part that did not change. The wavy marks
+ * are for a note whose text is the text in the editor, so they use the
+ * checker issues of the current revision and a report of the current text.
+ */
+function refreshNotes() {
+  const text = getText();
+  const report = citations.reportFor(text);
+  const held = citations.current();
+  const citeNotes = citationNotes(report, text.length);
+  noteList = [...teaching.issues, ...citeNotes];
+  const marks = [
+    ...(teaching.revision === teachingRevision ? teaching.issues : []),
+    ...(held?.text === text ? citeNotes : []),
+  ];
+  view.dispatch({ effects: notesEffect.of(marks) });
+  notesWrap.classList.toggle('hidden', noteList.length === 0);
+  notesButton.textContent = noteList.length === 1 ? '1 note' : `${noteList.length} notes`;
+  notesButton.setAttribute('aria-label', noteList.length === 1 ? '1 Markdown note' : `${noteList.length} Markdown notes`);
   if (!notesMenu.classList.contains('hidden')) renderNotesMenu();
 }
 
 function renderNotesMenu() {
   const doc = view.state.doc;
-  notesMenu.innerHTML = teaching.issues.map((issue, i) => {
+  notesMenu.innerHTML = noteList.map((issue, i) => {
     const line = doc.lineAt(Math.min(issue.from, doc.length)).number;
-    const fix = issue.fix
-      ? `<button type="button" class="tb-menu-item" role="menuitem" data-fix="${i}" aria-describedby="note-${i}">${escapeHtml(issue.fix.title)}</button>`
+    const title = issue.fix?.title ?? issue.action?.title;
+    const fix = title
+      ? `<button type="button" class="tb-menu-item" role="menuitem" data-fix="${i}" aria-describedby="note-${i}">${escapeHtml(title)}</button>`
       : '';
+    const go = issue.fileLevel
+      ? ''
+      : `<button type="button" class="tb-menu-item" role="menuitem" data-go="${i}" aria-describedby="note-${i}">Go to line ${line}</button>`;
     return `<div class="note-row" role="none">
         <p class="note-message" id="note-${i}">${escapeHtml(issue.message)}</p>
-        <div class="note-actions" role="none">${fix}<button type="button" class="tb-menu-item" role="menuitem" data-go="${i}" aria-describedby="note-${i}">Go to line ${line}</button></div>
+        <div class="note-actions" role="none">${fix}${go}</div>
       </div>`;
   }).join('');
 }
 
-/** @param {import('./teaching/lint.js').LintIssue} issue */
+/** Asks for the missing citation file and reads the citations again. */
+async function addCitationFile() {
+  const file = await pickCitationFile();
+  if (!file) return;
+  flashStatus(file.stored ? `Added ${file.name}; it stays in this browser` : `Could not save ${file.name} in this browser`);
+  await loadStoredFiles();
+  await citations.refresh();
+}
+
+/** @param {import('./teaching/lint.js').LintIssue & {action?: {title: string, kind: string}}} issue */
 function applyFix(issue) {
+  if (issue.action) { addCitationFile(); return; }
   const fix = issue.fix;
   if (!fix || teaching.revision !== teachingRevision || fix.to > view.state.doc.length) return;
   view.dispatch({
@@ -1844,7 +2180,7 @@ attachMenu(notesButton, notesMenu, {
     runTeaching();
   },
   onPick: (item) => {
-    const issue = teaching.issues[Number(item.dataset.fix ?? item.dataset.go)];
+    const issue = noteList[Number(item.dataset.fix ?? item.dataset.go)];
     if (!issue) return;
     if (item.dataset.fix !== undefined) applyFix(issue);
     else goToPosition(issue.from);
@@ -2035,6 +2371,8 @@ async function loadFile(payload) {
   await session.discardScratch(); // the buffer we're replacing is no longer relevant to recover
   // Checks come only with a bundled lesson; any other document drops them.
   attachedChecks = payload.attached || null;
+  citations.reset();
+  referencesView.newDocument();
   setText(payload.content);
   currentDocId = payload.docId || null;
   if (!payload.path) {
@@ -2057,7 +2395,19 @@ async function loadFile(payload) {
 //  Drag-and-drop to open
 // ==========================
 
-initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));
+initDragDrop(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)), ({ name, stored }) => {
+  flashStatus(stored ? `Added ${name}; it stays in this browser` : `Could not save ${name} in this browser`);
+  if (!stored) return;
+  loadStoredFiles();
+  citations.refresh();
+});
+
+// A citation file can change on disk while the user is in another app.
+window.addEventListener('focus', async () => {
+  const changed = await refreshCitationFiles();
+  await loadStoredFiles();
+  if (changed.length) citations.refresh();
+});
 
 // ==========================
 //  Share links (document in the URL fragment)
@@ -2072,14 +2422,22 @@ async function copyShareLink() {
   const text = getText();
   if (!text.trim()) { flashStatus('Nothing to share yet'); return; }
   try {
-    const url = await shareUrl(text, location.href);
+    const shared = await textToShare(text);
+    const url = await shareUrl(shared.text, location.href);
     const kb = Math.max(1, Math.round(url.length / 1024));
+    // The wait for the citations can end the click's right to the clipboard.
+    let copied = false;
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(url);
-      flashStatus(`Link copied (${kb} KB); the whole document travels in it`);
-    } else {
-      window.prompt('Copy this link:', url);
+      try {
+        await navigator.clipboard.writeText(url);
+        copied = true;
+      } catch (_) { copied = false; }
     }
+    if (!copied) window.prompt('Copy this link:', url);
+    const status = shared.failure ?? shared.styleNote;
+    const done = `Link copied (${kb} KB)`;
+    if (status) flashStatus(copied ? `${done}. ${status}` : status, SHARE_STATUS_TIME);
+    else if (copied) flashStatus(`${done}; the whole document travels in it`);
   } catch (err) {
     flashStatus('Could not build link: ' + (err?.message || err));
   }
@@ -2309,6 +2667,7 @@ async function offerScratchRecovery() {
 (async () => {
   initAbout();
   applyViewMode();
+  loadStoredFiles();
   // Files handed over by the OS (installed app) arrive asynchronously and
   // go through loadFile's own dirty check.
   initLaunchQueue(loadFile, (err) => flashStatus('Open failed: ' + (err?.message || err)));

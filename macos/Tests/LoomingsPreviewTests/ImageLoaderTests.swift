@@ -121,4 +121,19 @@ struct ImageLoaderTests {
         #expect(first != second)
         #expect(PreviewImageLoader.cacheKey("https://example.com/a.png", baseURL: dir) == "https://example.com/a.png")
     }
+
+    @Test("An encoded destination, as a dropped image writes it, finds its file")
+    func encodedDestination() throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pixel = try #require(Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="))
+        try pixel.write(to: dir.appendingPathComponent("my photo (1) 50%.png"))
+        #expect(PreviewURL.sanitizedImage("./my%20photo%20%281%29%2050%25.png") != nil)
+        guard case .image = PreviewImageLoader.load("./my%20photo%20%281%29%2050%25.png", baseURL: dir) else {
+            Issue.record("the encoded destination did not load")
+            return
+        }
+    }
 }

@@ -5,6 +5,62 @@ import Testing
 @MainActor
 @Suite("Editor controller")
 struct EditorControllerTests {
+    @Test("Pasting a URL over selected words makes a link")
+    func pasteLink() {
+        let editor = EditorController()
+        editor.setText("Call me Ishmael.\n")
+        editor.textView.setSelectedRange(NSRange(location: 8, length: 7))
+        #expect(editor.pasteLink("https://example.org"))
+        #expect(editor.source == "Call me [Ishmael](https://example.org).\n")
+        #expect(editor.textView.selectedRange() == NSRange(location: 38, length: 0))
+    }
+
+    @Test("Pasting with no selection, or over a placeholder, stays a plain paste")
+    func plainPaste() {
+        let editor = EditorController()
+        editor.setText("[word](url)\n")
+        #expect(!editor.pasteLink("https://example.org"))
+        editor.textView.setSelectedRange(NSRange(location: 7, length: 3))
+        #expect(!editor.pasteLink("https://example.org"))
+        #expect(editor.source == "[word](url)\n")
+    }
+
+    @Test("A dropped image goes in at the point, with its alt text selected")
+    func oneImage() {
+        let editor = EditorController()
+        editor.setText("ab\n")
+        editor.insertImages(
+            [URL(fileURLWithPath: "/Users/a/lung-chart.png")],
+            at: 1,
+            relativeTo: URL(fileURLWithPath: "/Users/a")
+        )
+        #expect(editor.source == "a![lung chart](./lung-chart.png)b\n")
+        #expect(editor.textView.selectedRange() == NSRange(location: 3, length: 10))
+    }
+
+    @Test("Dropped images each take a paragraph")
+    func twoImages() {
+        let editor = EditorController()
+        editor.setText("")
+        editor.insertImages(
+            [URL(fileURLWithPath: "/a/one.png"), URL(fileURLWithPath: "/a/two.png")],
+            at: 99,
+            relativeTo: nil
+        )
+        #expect(editor.source == "![one](/a/one.png)\n\n![two](/a/two.png)")
+    }
+
+    @Test("Smart typography rests while text is marked")
+    func markedText() {
+        let editor = EditorController()
+        editor.setText("")
+        let textView = editor.textView
+        textView.setMarkedText("'", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: 0, length: 0))
+        #expect(textView.hasMarkedText())
+        #expect(editor.textView(textView, shouldChangeTextIn: NSRange(location: 1, length: 0), replacementString: "'"))
+        #expect(!editor.source.contains("‘"))
+    }
+
     @Test("Parse applies to the current revision")
     func parseAppliesToTheCurrentRevision() {
         let editor = EditorController()
@@ -275,5 +331,531 @@ struct EditorControllerTests {
             #expect(bold, "\(name) keeps bold")
             #expect(slanted, "\(name) is slanted")
         }
+    }
+}
+
+@MainActor
+@Suite("Citation completion")
+struct CitationCompletionTests {
+    nonisolated private static let keys = [
+        CitationCompletion(key: "silva2020", authors: "Silva", year: "2020", title: "Lung function at home"),
+        CitationCompletion(key: "jacome2021", authors: "Jácome, Costa", year: "2021", title: "Saúde e pulmão"),
+    ]
+
+    private static let bibliography = "---\nbibliography: refs.bib\n---\n"
+
+    private func editor(_ text: String, keys: [CitationCompletion] = keys) -> EditorController {
+        let editor = EditorController()
+        editor.setText(text)
+        editor.reparseSynchronously()
+        editor.setCitations([], keys: keys, reportedSource: text)
+        editor.textView.setSelectedRange(NSRange(location: (text as NSString).length, length: 0))
+        return editor
+    }
+
+    private func offers(_ editor: EditorController) -> [String] {
+        var index = -1
+        let range = editor.textView.rangeForUserCompletion
+        return editor.textView.completions(forPartialWordRange: range, indexOfSelectedItem: &index) ?? []
+    }
+
+    private func type(_ text: String, in editor: EditorController) {
+        editor.textView.asTyping {
+            editor.textView.insertText(text, replacementRange: editor.textView.selectedRange())
+        }
+    }
+
+    private func offersKey(_ editor: EditorController, _ key: String) -> Bool {
+        offers(editor).contains { $0.hasPrefix(key + " ") }
+    }
+
+    @Test("The sign after a space offers each key, with its authors and year")
+    func afterSpace() {
+        let editor = editor("A claim @")
+        #expect(editor.textView.rangeForUserCompletion == NSRange(location: 8, length: 1))
+        #expect(offers(editor) == ["silva2020  Silva 2020", "jacome2021  Jácome, Costa 2021"])
+    }
+
+    @Test("The sign after a bracket, a hyphen or a line start offers keys")
+    func otherStarts() {
+        #expect(offersKey(editor("A claim [@"), "silva2020"))
+        #expect(offersKey(editor("A claim [-@"), "silva2020"))
+        #expect(offersKey(editor("@"), "silva2020"))
+    }
+
+    @Test("Nothing in an email address or after a backslash")
+    func email() {
+        #expect(!offersKey(editor("ana@sil"), "silva2020"))
+        #expect(!offersKey(editor("\\@sil"), "silva2020"))
+        #expect(!offersKey(editor("ção@sil"), "silva2020"))
+    }
+
+    @Test("The first item is selected, so Return takes it")
+    func firstSelected() {
+        let editor = editor("A claim @")
+        var index = -1
+        _ = editor.textView.completions(forPartialWordRange: editor.textView.rangeForUserCompletion, indexOfSelectedItem: &index)
+        #expect(index == 0)
+    }
+
+    @Test("Each word of the query must be in the key, the authors or the title")
+    func matching() {
+        #expect(offers(editor("@silv")) == ["silva2020  Silva 2020"])
+        #expect(offers(editor("@lung home")) == ["silva2020  Silva 2020"])
+        #expect(offers(editor("@costa")) == ["jacome2021  Jácome, Costa 2021"])
+        #expect(offers(editor("@nobody")).isEmpty)
+    }
+
+    @Test("Accents and case are ignored in both directions")
+    func folding() {
+        #expect(offersKey(editor("@jacome"), "jacome2021"))
+        #expect(offersKey(editor("@JÁCOME"), "jacome2021"))
+        #expect(offersKey(editor("@saude"), "jacome2021"))
+        #expect(offersKey(editor("@pulmão"), "jacome2021"))
+    }
+
+    @Test("The query stops at brackets, semicolons, line ends and a far sign")
+    func queryLimits() {
+        #expect(!offersKey(editor("[@a] sil"), "silva2020"))
+        #expect(!offersKey(editor("[@a; sil"), "silva2020"))
+        #expect(!offersKey(editor("@\nsil"), "silva2020"))
+        #expect(!offersKey(editor("@" + String(repeating: "s", count: 41)), "silva2020"))
+    }
+
+    @Test("A second citation in a group has its own query")
+    func group() {
+        #expect(offers(editor("[@a; @silv")) == ["silva2020  Silva 2020"])
+    }
+
+    @Test("No list with an empty library")
+    func emptyLibrary() {
+        let editor = editor("A claim @", keys: [])
+        #expect(editor.textView.rangeForUserCompletion != NSRange(location: 8, length: 1))
+        #expect(!offersKey(editor, "silva2020"))
+    }
+
+    @Test("No list in the frontmatter")
+    func frontmatter() {
+        let text = "---\nauthor: @x\n---\nBody.\n"
+        let editor = editor(text)
+        editor.textView.setSelectedRange(NSRange(location: 13, length: 0))
+        #expect(!offersKey(editor, "silva2020"))
+    }
+
+    @Test("No list in inline code, in a fence or in an indented block")
+    func code() {
+        let inline = "A `code @ here` line.\n"
+        let first = editor(inline)
+        first.textView.setSelectedRange(NSRange(location: 9, length: 0))
+        #expect(!offersKey(first, "silva2020"))
+
+        let after = "A `code` and @ here.\n"
+        let second = editor(after)
+        second.textView.setSelectedRange(NSRange(location: 14, length: 0))
+        #expect(offersKey(second, "silva2020"))
+
+        let fence = "```\n@ here\n```\n"
+        let third = editor(fence)
+        third.textView.setSelectedRange(NSRange(location: 5, length: 0))
+        #expect(!offersKey(third, "silva2020"))
+
+        let block = "Text.\n\n    @ here\n"
+        let fourth = editor(block)
+        fourth.textView.setSelectedRange(NSRange(location: 12, length: 0))
+        #expect(!offersKey(fourth, "silva2020"))
+    }
+
+    @Test("A manual list waits for the parse: code ranges do not move with an edit")
+    func staleCodeRangeBelow() {
+        let text = "```\n@ here\n```\n"
+        let editor = editor(text)
+        let above = String(repeating: "word ", count: 20) + "\n\n"
+        editor.replace(range: NSRange(location: 0, length: 0), with: above)
+        let sign = (above as NSString).length + 4
+        editor.textView.setSelectedRange(NSRange(location: sign + 1, length: 0))
+        #expect(!offersKey(editor, "silva2020"))
+        editor.reparseSynchronously()
+        #expect(!offersKey(editor, "silva2020"))
+    }
+
+    @Test("Text that moves out of an old code range gets its list after the parse")
+    func staleCodeRangeAbove() {
+        let block = "```\ncode line\n```\n\n"
+        let editor = editor(block + "@")
+        editor.replace(range: NSRange(location: 0, length: (block as NSString).length), with: "")
+        editor.textView.setSelectedRange(NSRange(location: 1, length: 0))
+        #expect(!offersKey(editor, "silva2020"))
+        editor.reparseSynchronously()
+        #expect(offersKey(editor, "silva2020"))
+    }
+
+    @Test("No list while text is marked")
+    func markedText() {
+        let editor = editor("A claim @")
+        let textView = editor.textView
+        textView.setMarkedText("s", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: 9, length: 0))
+        #expect(textView.hasMarkedText())
+        #expect(!offersKey(editor, "silva2020"))
+    }
+
+    @Test("Return and Tab insert the key with its sign")
+    func accepted() {
+        for movement in [NSTextMovement.return, .tab] {
+            let editor = editor("A claim [@si")
+            let range = editor.textView.rangeForUserCompletion
+            let first = offers(editor)[0]
+            editor.textView.insertCompletion(first, forPartialWordRange: range, movement: movement.rawValue, isFinal: true)
+            #expect(editor.source == "A claim [@silva2020")
+        }
+    }
+
+    @Test("Browsing, Escape and a typed letter leave the text as it is")
+    func notAccepted() {
+        let editor = editor("A claim @")
+        let range = editor.textView.rangeForUserCompletion
+        let first = offers(editor)[0]
+        editor.textView.insertCompletion(first, forPartialWordRange: range, movement: NSTextMovement.down.rawValue, isFinal: false)
+        #expect(editor.source == "A claim @")
+        editor.textView.insertCompletion(first, forPartialWordRange: range, movement: 0, isFinal: true)
+        #expect(editor.source == "A claim @")
+        _ = offers(editor)
+        editor.textView.insertCompletion("@", forPartialWordRange: range, movement: NSTextMovement.cancel.rawValue, isFinal: true)
+        #expect(editor.source == "A claim @")
+    }
+
+    @Test("Text with no list keeps the system's insertion")
+    func systemWords() {
+        let editor = editor("A wo")
+        let range = editor.textView.rangeForUserCompletion
+        _ = offers(editor)
+        editor.textView.insertCompletion("word", forPartialWordRange: range, movement: NSTextMovement.return.rawValue, isFinal: true)
+        #expect(editor.source == "A word")
+    }
+
+    @Test("A typed sign arms the list for the next parse")
+    func armed() {
+        let editor = editor(Self.bibliography + "A claim ")
+        type("@", in: editor)
+        #expect(editor.isCompletionArmed)
+    }
+
+    /// A window that gives the editor the focus, with a parse in place and
+    /// a list on its way.
+    private func preparedEditor() -> (EditorController, NSWindow) {
+        let editor = editor(Self.bibliography + "A claim ")
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = editor.textView
+        window.makeFirstResponder(editor.textView)
+        type("@", in: editor)
+        editor.reparseSynchronously()
+        return (editor, window)
+    }
+
+    @Test("New keys drop the rows of a list that has not opened")
+    func preparedRowsGoWithNewKeys() {
+        let (editor, window) = preparedEditor()
+        defer { window.close() }
+        #expect(editor.hasPreparedRows)
+        editor.setCitations([], keys: editor.citationKeys, reportedSource: editor.source)
+        #expect(!editor.hasPreparedRows)
+    }
+
+    @Test("Clear drops the rows of a list that has not opened")
+    func preparedRowsGoWithClear() {
+        let (editor, window) = preparedEditor()
+        defer { window.close() }
+        #expect(editor.hasPreparedRows)
+        editor.clearCitations()
+        #expect(!editor.hasPreparedRows)
+    }
+
+    @Test("An edit before the list opens drops its rows")
+    func preparedRowsGoWithAnEdit() {
+        let (editor, window) = preparedEditor()
+        defer { window.close() }
+        #expect(editor.hasPreparedRows)
+        editor.replace(range: NSRange(location: 0, length: 0), with: "x")
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+        #expect(!editor.hasPreparedRows)
+    }
+
+    @Test("A sign from code does not arm the list")
+    func programmaticSign() {
+        let replaced = editor("A claim ")
+        replaced.replace(range: NSRange(location: 8, length: 0), with: "@")
+        #expect(!replaced.isCompletionArmed)
+
+        let inserted = editor("A claim ")
+        inserted.textView.insertText("@", replacementRange: inserted.textView.selectedRange())
+        #expect(!inserted.isCompletionArmed)
+    }
+
+    @Test("A pasted sign, an email and a marked sign do not arm the list")
+    func notArmed() {
+        let pasted = editor("A claim ")
+        type("@silva", in: pasted)
+        #expect(!pasted.isCompletionArmed)
+
+        let email = editor("ana")
+        type("@", in: email)
+        #expect(!email.isCompletionArmed)
+
+        let marked = editor("A claim ")
+        marked.textView.setMarkedText("@", selectedRange: NSRange(location: 1, length: 0), replacementRange: NSRange(location: 8, length: 0))
+        #expect(!marked.isCompletionArmed)
+    }
+
+    @Test("A document with no library never arms the list")
+    func noLibraryNoArm() {
+        let editor = editor("A claim ", keys: [])
+        type("@", in: editor)
+        #expect(!editor.isCompletionArmed)
+    }
+
+    @Test("A letter after the sign arms the list again, but a space does not")
+    func narrowing() {
+        let editor = editor("A claim @")
+        type("s", in: editor)
+        #expect(editor.isCompletionArmed)
+
+        let spaced = self.editor("A claim @")
+        type(" ", in: spaced)
+        #expect(!spaced.isCompletionArmed)
+    }
+
+    @Test("Escape holds the list back until the next sign")
+    func dismissed() {
+        let editor = editor("A claim @")
+        let range = editor.textView.rangeForUserCompletion
+        _ = offers(editor)
+        editor.textView.insertCompletion("@", forPartialWordRange: range, movement: NSTextMovement.cancel.rawValue, isFinal: true)
+        type("s", in: editor)
+        #expect(!editor.isCompletionArmed)
+        type(" ", in: editor)
+        type("[", in: editor)
+        type("@", in: editor)
+        #expect(editor.isCompletionArmed)
+    }
+
+    @Test("Smart typography still works beside the list")
+    func smartTypography() {
+        let editor = editor("A claim @si ")
+        let textView = editor.textView
+        textView.insertText("\"", replacementRange: textView.selectedRange())
+        #expect(editor.source == "A claim @si \u{201C}")
+    }
+
+    @Test("List continuation still works after a key")
+    func listContinuation() {
+        let editor = editor("- see [@si")
+        let range = editor.textView.rangeForUserCompletion
+        let first = offers(editor)[0]
+        editor.textView.insertCompletion(first, forPartialWordRange: range, movement: NSTextMovement.return.rawValue, isFinal: true)
+        #expect(editor.handleNewline())
+        #expect(editor.source == "- see [@silva2020\n- ")
+    }
+}
+
+@Suite("Text change")
+struct TextChangeTests {
+    private let change = TextChange(range: NSRange(location: 10, length: 2), newLength: 5)
+
+    @Test("A range before the change stays")
+    func before() {
+        #expect(change.map(NSRange(location: 2, length: 8)) == NSRange(location: 2, length: 8))
+    }
+
+    @Test("A range after the change moves by the difference")
+    func after() {
+        #expect(change.map(NSRange(location: 12, length: 4)) == NSRange(location: 15, length: 4))
+    }
+
+    @Test("A range that the change touches is dropped")
+    func touched() {
+        #expect(change.map(NSRange(location: 9, length: 2)) == nil)
+        #expect(change.map(NSRange(location: 11, length: 3)) == nil)
+        #expect(change.map(NSRange(location: 8, length: 8)) == nil)
+    }
+
+    @Test("An insertion at either end of a range leaves it whole")
+    func insertionAtTheEnds() {
+        let insertion = TextChange(range: NSRange(location: 5, length: 0), newLength: 1)
+        #expect(insertion.map(NSRange(location: 5, length: 3)) == NSRange(location: 6, length: 3))
+        #expect(insertion.map(NSRange(location: 2, length: 3)) == NSRange(location: 2, length: 3))
+    }
+
+    @Test("An insertion in a range drops it")
+    func insertionInside() {
+        let insertion = TextChange(range: NSRange(location: 5, length: 0), newLength: 1)
+        #expect(insertion.map(NSRange(location: 4, length: 3)) == nil)
+    }
+
+    @Test("Two texts give the one change between them")
+    func between() throws {
+        let change = try #require(TextChange.between("abcdef", "abXYef"))
+        #expect(change == TextChange(range: NSRange(location: 2, length: 2), newLength: 2))
+        #expect(change.replacement(in: "abXYef") == "XY")
+        #expect(TextChange.between("same", "same") == nil)
+    }
+
+    @Test("Texts that are equal only after normalisation are different texts")
+    func normalisation() throws {
+        let change = try #require(TextChange.between("caf\u{E9}", "cafe\u{301}"))
+        #expect(change == TextChange(range: NSRange(location: 3, length: 1), newLength: 2))
+    }
+
+    @Test("A repeated letter does not count twice")
+    func overlap() throws {
+        let change = try #require(TextChange.between("aa", "aaa"))
+        #expect(change == TextChange(range: NSRange(location: 2, length: 0), newLength: 1))
+    }
+
+    @Test("The change does not cut a pair of surrogates")
+    func surrogates() throws {
+        let change = try #require(TextChange.between("x\u{1F600}y", "x\u{1F601}y"))
+        #expect(change == TextChange(range: NSRange(location: 1, length: 2), newLength: 2))
+        #expect(change.replacement(in: "x\u{1F601}y") == "\u{1F601}")
+    }
+}
+
+@MainActor
+@Suite("Citation marks")
+struct CitationMarkTests {
+    nonisolated private static let text = "Claim [@known] and [@gone] end.\n"
+    private static let known = NSRange(location: 6, length: 8)
+    private static let gone = NSRange(location: 19, length: 7)
+
+    private func editor(_ text: String = text) -> EditorController {
+        let editor = EditorController()
+        editor.setText(text)
+        editor.reparseSynchronously()
+        return editor
+    }
+
+    private let marks = [
+        CitationMark(range: known, isUnknown: false),
+        CitationMark(range: gone, isUnknown: true),
+    ]
+
+    private func squiggles(_ editor: EditorController) -> [NSRange] {
+        editor.textView.decorations(for: "citations").map(\.range)
+    }
+
+    @Test("An unknown key gets a squiggle in the notes colour")
+    func unknownKey() throws {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        #expect(editor.citationRanges == [Self.known, Self.gone])
+        let decoration = try #require(editor.textView.decorations(for: "citations").first)
+        #expect(squiggles(editor) == [Self.gone])
+        guard case .squiggle = decoration.style else {
+            Issue.record("not a squiggle")
+            return
+        }
+    }
+
+    @Test("The text storage of a new text view has no delegate to chain to")
+    func storageDelegate() {
+        #expect(EditorTextView(usingTextLayoutManager: true).textStorage?.delegate == nil)
+        let editor = editor()
+        #expect(editor.textView.textStorage?.delegate === editor)
+    }
+
+    @Test("Marks never advance the revision")
+    func revision() {
+        let editor = editor()
+        let revision = editor.revision
+        let generation = editor.editGeneration
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.clearCitations()
+        #expect(editor.revision == revision)
+        #expect(editor.editGeneration == generation)
+    }
+
+    @Test("Marks do not change the text storage")
+    func storage() throws {
+        let editor = editor()
+        let storage = try #require(editor.textView.textStorage)
+        let before = try #require(storage.copy() as? NSAttributedString)
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        #expect(storage.isEqual(to: before))
+    }
+
+    @Test("A report for an older text moves its marks to the new text")
+    func lateReport() {
+        let editor = editor("New. " + Self.text)
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        #expect(squiggles(editor) == [NSRange(location: 24, length: 7)])
+        #expect(editor.citationRanges.first == NSRange(location: 11, length: 8))
+    }
+
+    @Test("A report for an older text drops the marks that the edit touched")
+    func lateReportTouched() {
+        let changed = Self.text.replacingOccurrences(of: "[@gone]", with: "[@goner]")
+        let editor = editor(changed)
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        #expect(squiggles(editor).isEmpty)
+        #expect(editor.citationRanges == [Self.known])
+    }
+
+    @Test("Marks follow an edit before them, and stay for an edit after them")
+    func follow() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 0, length: 0), with: "Yes. ")
+        #expect(squiggles(editor) == [NSRange(location: 24, length: 7)])
+        editor.replace(range: NSRange(location: 35, length: 0), with: " Tail")
+        #expect(squiggles(editor) == [NSRange(location: 24, length: 7)])
+    }
+
+    @Test("An edit in a mark drops it, and the others stay")
+    func dropTouched() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 22, length: 1), with: "x")
+        #expect(squiggles(editor).isEmpty)
+        #expect(editor.citationRanges == [Self.known])
+    }
+
+    @Test("A new report puts a dropped mark back")
+    func newReport() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 22, length: 1), with: "x")
+        let source = editor.source
+        editor.setCitations(marks, keys: [], reportedSource: source)
+        #expect(squiggles(editor) == [Self.gone])
+    }
+
+    @Test("Attribute changes do not move the marks")
+    func attributes() throws {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        let storage = try #require(editor.textView.textStorage)
+        storage.addAttribute(.foregroundColor, value: NSColor.red, range: NSRange(location: 0, length: 5))
+        #expect(squiggles(editor) == [Self.gone])
+    }
+
+    @Test("A new text drops the marks, and the same text keeps them")
+    func setText() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.setText(Self.text)
+        #expect(squiggles(editor) == [Self.gone])
+        editor.setText("Other.\n")
+        #expect(editor.citationRanges.isEmpty)
+        #expect(squiggles(editor).isEmpty)
+    }
+
+    @Test("Clear removes the marks and the keys")
+    func clear() {
+        let editor = editor()
+        let key = CitationCompletion(key: "a", authors: "", year: "", title: "")
+        editor.setCitations(marks, keys: [key], reportedSource: Self.text)
+        editor.clearCitations()
+        #expect(editor.citationRanges.isEmpty)
+        #expect(editor.citationKeys.isEmpty)
+        #expect(squiggles(editor).isEmpty)
     }
 }

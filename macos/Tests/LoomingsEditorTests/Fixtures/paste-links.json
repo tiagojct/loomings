@@ -1,0 +1,21 @@
+[
+  { "name": "a URL over a word makes a link", "selected": "Ishmael", "pasted": "https://example.org/a", "before": "Call me ", "link": "[Ishmael](https://example.org/a)" },
+  { "name": "words and mailto", "selected": "write to me", "pasted": "mailto:a@example.org", "before": "", "link": "[write to me](mailto:a@example.org)" },
+  { "name": "the scheme ignores case and the paste is trimmed", "selected": "site", "pasted": " HTTPS://Example.org\n", "before": "", "link": "[site](HTTPS://Example.org)" },
+  { "name": "spaces around the selection stay outside the label", "selected": " word ", "pasted": "https://example.org", "before": "a", "link": " [word](https://example.org) " },
+  { "name": "parentheses in the URL take angle brackets", "selected": "wiki", "pasted": "https://example.org/a_(b)", "before": "", "link": "[wiki](<https://example.org/a_(b)>)" },
+  { "name": "accents stay in the label", "selected": "ciência", "pasted": "https://example.org", "before": "", "link": "[ciência](https://example.org)" },
+  { "name": "text that is not a URL pastes as text", "selected": "word", "pasted": "other words", "before": "", "link": null },
+  { "name": "a URL with text after it pastes as text", "selected": "word", "pasted": "https://example.org and more", "before": "", "link": null },
+  { "name": "a scheme outside the safe list pastes as text", "selected": "word", "pasted": "javascript:alert(1)", "before": "", "link": null },
+  { "name": "angle brackets in the URL paste as text", "selected": "word", "pasted": "https://example.org/<a>", "before": "", "link": null },
+  { "name": "a URL over a URL replaces it", "selected": "https://old.example.org", "pasted": "https://example.org", "before": "see ", "link": null },
+  { "name": "a selection of spaces is replaced", "selected": "   ", "pasted": "https://example.org", "before": "", "link": null },
+  { "name": "a selection of two lines is replaced", "selected": "one\ntwo", "pasted": "https://example.org", "before": "", "link": null },
+  { "name": "square brackets in the selection are replaced", "selected": "[a](b)", "pasted": "https://example.org", "before": "", "link": null },
+  { "name": "the url placeholder of Insert Link is replaced", "selected": "url", "pasted": "https://example.org", "before": "[word](", "link": null },
+  { "name": "a reference definition is replaced", "selected": "old", "pasted": "https://example.org", "before": "[id]: ", "link": null },
+  { "name": "an autolink is replaced", "selected": "old", "pasted": "https://example.org", "before": "<", "link": null },
+  { "name": "inline code is replaced", "selected": "word", "pasted": "https://example.org", "before": "use `", "link": null },
+  { "name": "text after closed inline code makes a link", "selected": "word", "pasted": "https://example.org", "before": "use `a` then ", "link": "[word](https://example.org)" }
+]
