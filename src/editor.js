@@ -28,7 +28,7 @@ import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles, cssVars } from './palettes.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
-  saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml, downloadMarkdown,
+  saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml, downloadMarkdown, downloadDocx, loadImageForDocx,
   addRecent, getRecents, openRecent,
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
@@ -1338,6 +1338,36 @@ ${rendered}
   }
 }
 
+// Word export. The same HTML as the HTML export, so citations and the
+// reference list match. A diagram is drawn with the light palette on white.
+async function exportDocx() {
+  const lp = roles(themeFamily, 'light');
+  const title = currentFile ? displayName(currentFile) : 'Untitled';
+  const text = getText();
+  try {
+    flashStatus('Preparing Word file');
+    const report = await citations.flush(text);
+    const partial = citationsLeftLiteral(text, report);
+    const meta = documentMeta(text);
+    const html = await renderDiagramsInHtml(citedHtml(text, report, renderMarkdown));
+    const pele = `--pele-bg:#fff;--pele-fg:${lp.fg};--pele-muted:${lp.fgDim};--pele-line:${lp.fgDim};--pele-surface:${lp.bgElev};--pele-surface-alt:${lp.bgDeep};--pele-border:${lp.border};--pele-accent:${lp.accent};${peleSeriesCss(lp, '#fff')}`;
+    const { htmlToDocx } = await import('./docx.js');
+    const blob = await htmlToDocx(html, {
+      title: meta.title,
+      lang: meta.lang,
+      paper: paperFor(navigator.language),
+      loadImage: (source) => loadImageForDocx('svg' in source
+        ? { svg: source.svg.replace('<svg', `<svg style="${pele}"`) }
+        : source),
+    });
+    const name = title + '.docx';
+    await downloadDocx(blob, name);
+    flashStatus('Exported ' + name + (partial ? '; citations were not ready' : ''));
+  } catch (err) {
+    flashStatus('Export failed: ' + (err?.message || err));
+  }
+}
+
 async function confirmDiscard(prompt) {
   if (!session.isDirty()) return true;
   const message = prompt + '\n\nUnsaved changes will be lost.';
@@ -2599,6 +2629,7 @@ el('tb-save')?.addEventListener('click', handleSave);
 attachMenu(el('tb-export'), el('export-menu'), {
   onPick: (item) => {
     if (item.dataset.action === 'html')  exportHtml();
+    if (item.dataset.action === 'docx')  exportDocx();
     if (item.dataset.action === 'print') printPreview();
     if (item.dataset.action === 'share') copyShareLink();
     if (item.dataset.action === 'qr')    showQrCode();

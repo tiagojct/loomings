@@ -257,6 +257,57 @@ export async function downloadHtml(content, suggestedName) {
   return suggestedName;
 }
 
+export async function downloadDocx(blob, suggestedName) {
+  downloadBlob(blob, suggestedName, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+  return suggestedName;
+}
+
+/**
+ * Loads an image for the DOCX export and returns it as PNG bytes with its size
+ * in pixels. An SVG source (a rendered diagram) is drawn at twice its size.
+ * Null when the image cannot load, or when the browser taints the canvas (an
+ * image from another origin without CORS).
+ *
+ * @param {{src: string} | {svg: string}} source
+ * @returns {Promise<{data: Uint8Array, type: 'png', width: number, height: number}|null>}
+ */
+export async function loadImageForDocx(source) {
+  let url = '';
+  let revoke = false;
+  try {
+    if ('svg' in source) {
+      let markup = source.svg;
+      if (!/<svg[^>]*\sxmlns=/.test(markup)) markup = markup.replace('<svg', '<svg xmlns="http://www.w3.org/2000/svg"');
+      url = URL.createObjectURL(new Blob([markup], { type: 'image/svg+xml' }));
+      revoke = true;
+    } else {
+      url = source.src;
+    }
+    const img = new Image();
+    img.decoding = 'async';
+    img.src = url;
+    await img.decode();
+    const scale = 'svg' in source ? 2 : 1;
+    const width = img.naturalWidth || 300;
+    const height = img.naturalHeight || 150;
+    const canvas = document.createElement('canvas');
+    canvas.width = width * scale;
+    canvas.height = height * scale;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const png = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!png) return null;
+    return { data: new Uint8Array(await png.arrayBuffer()), type: 'png', width, height };
+  } catch (_) {
+    return null;
+  } finally {
+    if (revoke) URL.revokeObjectURL(url);
+  }
+}
+
 export async function downloadMarkdown(content, suggestedName) {
   downloadBlob(content, suggestedName, 'text/markdown');
   return suggestedName;

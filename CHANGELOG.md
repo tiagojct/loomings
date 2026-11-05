@@ -8,6 +8,11 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Web app
 
+- Export to Word. Export > Word file (.docx) writes the document with its
+  citations and reference list. Paragraphs use the Word styles Title, Heading 1
+  to 6, Quote, Bibliography, Source Code and Hyperlink, so a Word template
+  restyles the file. Lists, tables, code, links, images and diagrams carry
+  over. The converter (`src/docx.js`) loads on demand. PDF stays Print / PDF.
 - Citations. A `bibliography:` or `references:` key in the frontmatter turns
   Pandoc citations into formatted citations and a reference list in the
   preview, in print and in the HTML export. `csl:` sets the style and `lang:`
