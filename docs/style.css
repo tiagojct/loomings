@@ -240,6 +240,26 @@ main {
   font-family: var(--sans);
 }
 
+.get-mac {
+  margin: 0.9rem 0 0;
+  font-family: var(--sans);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.get-mac > a {
+  display: inline-block;
+  margin-right: 0.6rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--raised);
+  color: inherit;
+  font-weight: 600;
+  text-decoration: none;
+}
+.get-mac > a:hover,
+.get-mac > a:focus-visible { border-color: currentColor; }
+.get-mac span a { color: inherit; }
 .claims span,
 .stamps span {
   display: inline-block;

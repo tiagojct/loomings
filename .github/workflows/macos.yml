@@ -5,10 +5,14 @@ name: macOS
 on:
   push:
     branches: [main, macos]
+    tags: ["v*"]
     paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "package-lock.json", "scripts/export-native-resources.mjs", "vite.citations.config.js", ".github/workflows/macos.yml"]
   pull_request:
     paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "package-lock.json", "scripts/export-native-resources.mjs", "vite.citations.config.js", ".github/workflows/macos.yml"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   test-and-build:
@@ -28,3 +32,20 @@ jobs:
       # Includes the Swift/Node share-link interop tests, which need node.
       - run: swift test --package-path macos
       - run: ./macos/scripts/build-app.sh
+      # A version tag also publishes the app: a zip with a fixed name, so that
+      # /releases/latest/download/Loomings-mac-arm64.zip never changes.
+      - name: Zip the app
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: ditto -c -k --keepParent macos/dist/Loomings.app Loomings-mac-arm64.zip
+      - name: Attach it to the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="Native macOS app for Apple Silicon, macOS 15 or later. Ad-hoc signed, not notarised: unzip, move Loomings.app to Applications, then right-click it and choose Open the first time (or run xattr -cr /Applications/Loomings.app). Changes: https://github.com/${GITHUB_REPOSITORY}/blob/${TAG}/CHANGELOG.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" Loomings-mac-arm64.zip --clobber
+          else
+            gh release create "$TAG" Loomings-mac-arm64.zip --title "Loomings ${TAG#v}" --notes "$NOTES"
+          fi

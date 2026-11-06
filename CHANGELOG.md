@@ -6,6 +6,17 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## [2.6.2] — 2026-11-06
+
+### Added
+
+- The landing page has a Download for Mac button. A version tag now builds the
+  macOS app and attaches `Loomings-mac-arm64.zip` to the GitHub release.
+
+### Changed
+
+- The CodeMirror theme builders moved to `src/cm-theme.js`.
+
 ## [2.6.1] — 2026-11-06
 
 ### Fixed
