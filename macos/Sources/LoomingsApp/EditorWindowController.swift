@@ -1584,7 +1584,7 @@ final class EditorWindowController: NSWindowController,
         previewTextView.applyTheme(previewTheme(resolved))
         referencesView.apply(palette: resolved, textSize: isProjectorMode ? ProjectorMode.referencesTextSize : 13)
         sidebar.apply(palette: resolved)
-        outerSplit.themedDividerColor = resolved?.colors.borderColor
+        outerSplit.themedDividerColor = resolved?.colors.borderColor.withAlphaComponent(0.45)
         markupOverlay.applyPalette(resolved)
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor

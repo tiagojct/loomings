@@ -34,7 +34,9 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     private var ink = NSColor.labelColor
     private var dimInk = NSColor.secondaryLabelColor
     private var ground = NSColor.textBackgroundColor
-    private var textSize: CGFloat = 13
+    private var textSize: CGFloat = 14
+    private var selectionFill = NSColor.selectedContentBackgroundColor.withAlphaComponent(0.25)
+    private var wash = NSColor.textBackgroundColor
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -80,8 +82,11 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         outline.addTableColumn(column)
         outline.outlineTableColumn = column
         outline.headerView = nil
-        outline.rowSizeStyle = .small
-        outline.indentationPerLevel = 12
+        outline.rowSizeStyle = .custom
+        outline.rowHeight = 28
+        outline.intercellSpacing = NSSize(width: 0, height: 1)
+        outline.selectionHighlightStyle = .none
+        outline.indentationPerLevel = 14
         outline.floatsGroupRows = false
         outline.dataSource = self
         outline.delegate = self
@@ -102,7 +107,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
         for view in [title, upButton, chooseButton, rule, scroll, emptyLabel] { addSubview(view) }
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
             title.centerYAnchor.constraint(equalTo: chooseButton.centerYAnchor),
             title.trailingAnchor.constraint(lessThanOrEqualTo: upButton.leadingAnchor, constant: -4),
             upButton.trailingAnchor.constraint(equalTo: chooseButton.leadingAnchor),
@@ -110,13 +115,13 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
             upButton.widthAnchor.constraint(equalToConstant: 24),
             upButton.heightAnchor.constraint(equalToConstant: 24),
             chooseButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
-            chooseButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            chooseButton.topAnchor.constraint(equalTo: topAnchor, constant: 14),
             chooseButton.widthAnchor.constraint(equalToConstant: 24),
             chooseButton.heightAnchor.constraint(equalToConstant: 24),
-            rule.topAnchor.constraint(equalTo: chooseButton.bottomAnchor, constant: 6),
+            rule.topAnchor.constraint(equalTo: chooseButton.bottomAnchor, constant: 8),
             rule.leadingAnchor.constraint(equalTo: leadingAnchor),
             rule.trailingAnchor.constraint(equalTo: trailingAnchor),
-            rule.heightAnchor.constraint(equalToConstant: 1),
+            rule.heightAnchor.constraint(equalToConstant: 0),
             scroll.topAnchor.constraint(equalTo: rule.bottomAnchor),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -204,15 +209,18 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         }
     }
 
+    /// The folder name, set small and spaced like the labels on the Tryworks
+    /// pages, with a quiet chevron that says it opens a menu.
     private func setTitle(_ text: String) {
-        let result = NSMutableAttributedString(string: text, attributes: [
-            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
-            .foregroundColor: ink,
+        let result = NSMutableAttributedString(string: text.uppercased(), attributes: [
+            .font: NSFont.systemFont(ofSize: 10.5, weight: .semibold),
+            .foregroundColor: dimInk,
+            .kern: 0.9,
         ])
         if let chevron = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
-            .withSymbolConfiguration(.init(pointSize: 8, weight: .semibold)) {
+            .withSymbolConfiguration(.init(pointSize: 7, weight: .bold)) {
             let attachment = NSTextAttachment()
-            attachment.image = chevron.tinted(dimInk)
+            attachment.image = chevron.tinted(dimInk.withAlphaComponent(0.7))
             result.append(NSAttributedString(string: "  "))
             result.append(NSAttributedString(attachment: attachment))
         }
@@ -301,16 +309,39 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         guard let node = item as? Node else { return nil }
         let id = NSUserInterfaceItemIdentifier("cell")
         let cell = outlineView.makeView(withIdentifier: id, owner: self) as? NSTableCellView ?? makeCell(id)
-        cell.textField?.stringValue = node.entry.name
-        cell.textField?.font = .systemFont(ofSize: textSize)
+        cell.textField?.stringValue = Self.shownName(of: node.entry)
+        cell.textField?.font = Self.nameFont(size: textSize)
         cell.textField?.textColor = node.entry.isFolder ? dimInk : ink
-        cell.imageView?.image = NSImage(
-            systemSymbolName: node.entry.isFolder ? "folder" : "doc.text",
-            accessibilityDescription: nil
-        )
+        // Folders get a quiet glyph; files are text, and line up with the names.
+        cell.imageView?.image = node.entry.isFolder
+            ? NSImage(systemSymbolName: "folder", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: 12, weight: .light))
+            : nil
         cell.imageView?.contentTintColor = dimInk
         cell.setAccessibilityLabel(node.entry.isFolder ? "\(node.entry.name), folder" : node.entry.name)
         return cell
+    }
+
+    /// Source Serif 4, the face of the preview, so the list reads like a table
+    /// of contents. The system font stands in if it is not registered.
+    private static func nameFont(size: CGFloat) -> NSFont {
+        NSFont(name: "SourceSerif4-Regular", size: size) ?? .systemFont(ofSize: size)
+    }
+
+    /// `poem.md` shows as `poem`. A `.txt` keeps its extension, because it is
+    /// the sign that the file is not Markdown.
+    static func shownName(of entry: FolderEntry) -> String {
+        guard !entry.isFolder else { return entry.name }
+        switch entry.url.pathExtension.lowercased() {
+        case "md", "markdown", "mdown": return entry.url.deletingPathExtension().lastPathComponent
+        default: return entry.name
+        }
+    }
+
+    func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
+        let row = SidebarRowView()
+        row.fill = selectionFill
+        return row
     }
 
     private func makeCell(_ id: NSUserInterfaceItemIdentifier) -> NSTableCellView {
@@ -340,7 +371,14 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     func apply(palette: ResolvedPalette?) {
         appearance = palette.map { NSAppearance(named: $0.isDark ? .darkAqua : .aqua) } ?? nil
-        ground = palette?.colors.background ?? .textBackgroundColor
+        // Halfway between the editor ground and the theme's deep ground: the
+        // sidebar sits apart from the page without a line.
+        if let colors = palette?.colors {
+            ground = colors.background.blended(withFraction: 0.5, of: colors.backgroundDeep) ?? colors.backgroundDeep
+        } else {
+            ground = .underPageBackgroundColor
+        }
+        selectionFill = (palette?.colors.selectionColor ?? .selectedContentBackgroundColor).withAlphaComponent(0.55)
         ink = palette?.colors.text ?? .labelColor
         dimInk = palette?.colors.textDim ?? .secondaryLabelColor
         outline.backgroundColor = ground
@@ -350,7 +388,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         upButton.contentTintColor = dimInk
         emptyLabel.textColor = dimInk
         chooseButton.contentTintColor = dimInk
-        rule.fillColor = palette?.colors.borderColor ?? .separatorColor
+        rule.fillColor = .clear
         wantsLayer = true
         layer?.backgroundColor = ground.cgColor
         outline.reloadData()
@@ -385,5 +423,22 @@ private extension NSImage {
         }
         copy.isTemplate = false
         return copy
+    }
+}
+
+/// A selected row is a soft rounded field in the theme's selection colour,
+/// not the system's grey bar.
+private final class SidebarRowView: NSTableRowView {
+    var fill = NSColor.selectedContentBackgroundColor.withAlphaComponent(0.25)
+
+    override func drawSelection(in dirtyRect: NSRect) {
+        guard isSelected else { return }
+        fill.setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 5, yRadius: 5).fill()
+    }
+
+    override var isEmphasized: Bool {
+        get { false }
+        set {}
     }
 }
