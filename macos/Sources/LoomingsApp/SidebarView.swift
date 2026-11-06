@@ -13,13 +13,16 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         init(_ entry: FolderEntry) { self.entry = entry }
     }
 
-    static let minimumWidth: CGFloat = 160
-    static let defaultWidth: CGFloat = 220
+    /// The card floats this far from the window's left, top and bottom edges.
+    static let margin: CGFloat = 10
+    static let width: CGFloat = 244
+    private static let radius: CGFloat = 10
 
     var onOpen: ((URL) -> Void)?
     var onChooseFolder: (() -> Void)?
     /// A folder picked from the path menu, or the parent button.
     var onNavigate: ((URL) -> Void)?
+    var onEscape: (() -> Void)?
 
     private(set) var folder: URL?
     private var roots: [Node] = []
@@ -27,14 +30,14 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     private let title = NSTextField(labelWithString: "")
     private let upButton = NSButton()
     private let chooseButton = NSButton()
-    private let outline = NSOutlineView()
+    private let outline = SidebarOutline()
     private let scroll = NSScrollView()
     private let emptyLabel = NSTextField(wrappingLabelWithString: "")
     private let rule = NSBox()
     private var ink = NSColor.labelColor
     private var dimInk = NSColor.secondaryLabelColor
     private var ground = NSColor.textBackgroundColor
-    private var textSize: CGFloat = 14
+    private var textSize: CGFloat = 12
     private var selectionFill = NSColor.selectedContentBackgroundColor.withAlphaComponent(0.25)
     private var wash = NSColor.textBackgroundColor
 
@@ -48,6 +51,14 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     private func build() {
         setAccessibilityLabel("Files")
+        wantsLayer = true
+        layer?.cornerRadius = Self.radius
+        layer?.borderWidth = 0.5
+        layer?.shadowOpacity = 0.14
+        layer?.shadowRadius = 14
+        layer?.shadowOffset = CGSize(width: 0, height: -3)
+        layer?.masksToBounds = false
+        outline.onEscape = { [weak self] in self?.onEscape?() }
         title.lineBreakMode = .byTruncatingMiddle
         title.toolTip = "Choose a folder from the path"
         title.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(showPath(_:))))
@@ -83,7 +94,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         outline.outlineTableColumn = column
         outline.headerView = nil
         outline.rowSizeStyle = .custom
-        outline.rowHeight = 28
+        outline.rowHeight = 26
         outline.intercellSpacing = NSSize(width: 0, height: 1)
         outline.selectionHighlightStyle = .none
         outline.indentationPerLevel = 14
@@ -97,7 +108,10 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
-        scroll.drawsBackground = true
+        scroll.drawsBackground = false
+        scroll.wantsLayer = true
+        scroll.layer?.cornerRadius = Self.radius
+        scroll.layer?.masksToBounds = true
         scroll.autohidesScrollers = true
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
@@ -125,12 +139,47 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
             scroll.topAnchor.constraint(equalTo: rule.bottomAnchor),
             scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
+            scroll.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -6),
             emptyLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             emptyLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 16),
             emptyLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
         ])
         showFolder(nil)
+    }
+
+    // MARK: Size
+
+    private static let headerHeight: CGFloat = 52
+
+    /// The card is as tall as its list, up to the room the window gives it
+    /// (the window caps it with a bottom constraint).
+    override var intrinsicContentSize: NSSize {
+        let rows = folder == nil || roots.isEmpty ? 3 : outline.numberOfRows
+        let list = CGFloat(rows) * (outline.rowHeight + outline.intercellSpacing.height)
+        return NSSize(width: Self.width, height: max(120, Self.headerHeight + list + 14))
+    }
+
+    func outlineViewItemDidExpand(_ notification: Notification) { invalidateIntrinsicContentSize() }
+    func outlineViewItemDidCollapse(_ notification: Notification) { invalidateIntrinsicContentSize() }
+
+    // MARK: Showing
+
+    /// Fades the card in or out. The editor does not move.
+    func setShown(_ show: Bool, animated: Bool) {
+        if show { isHidden = false }
+        guard animated else {
+            alphaValue = show ? 1 : 0
+            isHidden = !show
+            return
+        }
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.16
+            animator().alphaValue = show ? 1 : 0
+        }, completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                if !show, self?.alphaValue == 0 { self?.isHidden = true }
+            }
+        })
     }
 
     // MARK: Folder
@@ -153,6 +202,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         let empty = folder == nil || roots.isEmpty
         scroll.isHidden = empty
         emptyLabel.isHidden = !empty
+        invalidateIntrinsicContentSize()
         emptyLabel.stringValue = folder == nil
             ? "No folder yet. Choose one to list its Markdown files here."
             : "No Markdown files in this folder."
@@ -213,7 +263,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     /// pages, with a quiet chevron that says it opens a menu.
     private func setTitle(_ text: String) {
         let result = NSMutableAttributedString(string: text.uppercased(), attributes: [
-            .font: NSFont.systemFont(ofSize: 10.5, weight: .semibold),
+            .font: NSFont.monospacedSystemFont(ofSize: 10, weight: .semibold),
             .foregroundColor: dimInk,
             .kern: 0.9,
         ])
@@ -322,10 +372,10 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         return cell
     }
 
-    /// Source Serif 4, the face of the preview, so the list reads like a table
-    /// of contents. The system font stands in if it is not registered.
+    /// JetBrains Mono, the face of the editor. The system's mono stands in if
+    /// it is not registered.
     private static func nameFont(size: CGFloat) -> NSFont {
-        NSFont(name: "SourceSerif4-Regular", size: size) ?? .systemFont(ofSize: size)
+        NSFont(name: "JetBrainsMono-Regular", size: size) ?? .monospacedSystemFont(ofSize: size, weight: .regular)
     }
 
     /// `poem.md` shows as `poem`. A `.txt` keeps its extension, because it is
@@ -389,8 +439,9 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         emptyLabel.textColor = dimInk
         chooseButton.contentTintColor = dimInk
         rule.fillColor = .clear
-        wantsLayer = true
         layer?.backgroundColor = ground.cgColor
+        layer?.borderColor = (palette?.colors.borderColor ?? .separatorColor).withAlphaComponent(0.7).cgColor
+        layer?.shadowColor = ((palette?.isDark ?? false) ? NSColor.black : NSColor(white: 0.1, alpha: 1)).cgColor
         outline.reloadData()
     }
 
@@ -434,11 +485,20 @@ private final class SidebarRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard isSelected else { return }
         fill.setFill()
-        NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1), xRadius: 5, yRadius: 5).fill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 6, dy: 1), xRadius: 6, yRadius: 6).fill()
     }
 
     override var isEmphasized: Bool {
         get { false }
         set {}
+    }
+}
+
+/// The outline view, with Escape to put the sidebar away.
+private final class SidebarOutline: NSOutlineView {
+    var onEscape: (() -> Void)?
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { onEscape?() } else { super.keyDown(with: event) }
     }
 }

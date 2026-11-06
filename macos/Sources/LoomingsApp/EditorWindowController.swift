@@ -39,10 +39,11 @@ final class EditorWindowController: NSWindowController,
     /// The room above the preview and the library.
     private var columnTop: NSLayoutConstraint!
     private let splitView = ThemedSplitView()
-    /// The file sidebar and the editor with its right column. The sidebar is
-    /// hidden unless the feature is on and shown for this window.
-    private let outerSplit = ThemedSplitView()
+    /// The file sidebar: a card that floats over the editor's left edge. It
+    /// takes no room from the editor. Hidden unless the feature is on and the
+    /// window shows it.
     private let sidebar = SidebarView()
+    private var sidebarOn = false
     /// A window of its own folder. Nil until the writer chooses one here.
     private var sidebarFolderOverride: URL?
     private var sidebarShown = EditorPreferences.sidebarVisible
@@ -126,6 +127,11 @@ final class EditorWindowController: NSWindowController,
         sidebar.onOpen = { [weak self] url in self?.openFromSidebar(url) }
         sidebar.onChooseFolder = { [weak self] in self?.chooseSidebarFolder() }
         sidebar.onNavigate = { [weak self] url in self?.setSidebarFolder(url) }
+        sidebar.onEscape = { [weak self] in
+            guard let self, self.sidebarShown else { return }
+            self.toggleSidebar(nil)
+            self.window?.makeFirstResponder(self.editor.textView)
+        }
         featuresObserver = NotificationCenter.default.addObserver(
             forName: .loomingsFeaturesChanged, object: nil, queue: .main
         ) { [weak self] _ in
@@ -228,10 +234,7 @@ final class EditorWindowController: NSWindowController,
         splitView.isVertical = true
         splitView.dividerStyle = .thin
         splitView.delegate = self
-        outerSplit.isVertical = true
-        outerSplit.dividerStyle = .thin
-        outerSplit.delegate = self
-        outerSplit.translatesAutoresizingMaskIntoConstraints = false
+        splitView.translatesAutoresizingMaskIntoConstraints = false
         rightColumn.translatesAutoresizingMaskIntoConstraints = false
         referencesView.translatesAutoresizingMaskIntoConstraints = false
         columnTabs.translatesAutoresizingMaskIntoConstraints = false
@@ -265,22 +268,31 @@ final class EditorWindowController: NSWindowController,
 
         statusBar.translatesAutoresizingMaskIntoConstraints = false
         // Hidden before the first layout, as the right column is.
-        sidebar.isHidden = true
-        outerSplit.addArrangedSubview(sidebar)
-        outerSplit.addArrangedSubview(splitView)
-        containerView.addSubview(outerSplit)
+        containerView.addSubview(splitView)
         containerView.addSubview(statusBar)
 
         statusHeightConstraint = statusBar.heightAnchor.constraint(equalToConstant: 24)
         NSLayoutConstraint.activate([
-            outerSplit.topAnchor.constraint(equalTo: containerView.topAnchor),
-            outerSplit.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            outerSplit.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            statusBar.topAnchor.constraint(equalTo: outerSplit.bottomAnchor),
+            splitView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            splitView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            splitView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            statusBar.topAnchor.constraint(equalTo: splitView.bottomAnchor),
             statusBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
             statusHeightConstraint,
+        ])
+
+        // The floating sidebar sits above the split view.
+        sidebar.isHidden = true
+        sidebar.alphaValue = 0
+        sidebar.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(sidebar)
+        NSLayoutConstraint.activate([
+            sidebar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: SidebarView.margin),
+            sidebar.topAnchor.constraint(equalTo: containerView.topAnchor, constant: SidebarView.margin),
+            sidebar.bottomAnchor.constraint(lessThanOrEqualTo: statusBar.topAnchor, constant: -SidebarView.margin),
+            sidebar.widthAnchor.constraint(equalToConstant: SidebarView.width),
         ])
 
         window.contentView = containerView
@@ -1222,29 +1234,9 @@ final class EditorWindowController: NSWindowController,
 
     /// Dragging the divider resizes both panes; lay both columns out again.
     func splitViewDidResizeSubviews(_ notification: Notification) {
-        if (notification.object as? NSSplitView) === outerSplit {
-            guard window != nil else { return }
-            applyColumnWidth()
-            if viewMode != .write { layoutPreview() }
-            return
-        }
         guard window != nil, viewMode == .split else { return }
         applyColumnWidth()
         layoutPreview()
-    }
-
-    /// The sidebar keeps its width when the window resizes, and cannot take the
-    /// editor's room.
-    func splitView(_ splitView: NSSplitView, shouldAdjustSizeOfSubview view: NSView) -> Bool {
-        splitView !== outerSplit || view !== sidebar
-    }
-
-    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        splitView === outerSplit ? max(proposedMinimumPosition, SidebarView.minimumWidth) : proposedMinimumPosition
-    }
-
-    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
-        splitView === outerSplit ? min(proposedMaximumPosition, splitView.bounds.width * 0.4) : proposedMaximumPosition
     }
 
     // MARK: - File sidebar
@@ -1256,7 +1248,7 @@ final class EditorWindowController: NSWindowController,
         applySidebar()
     }
 
-    var isSidebarVisibleForTesting: Bool { !sidebar.isHidden }
+    var isSidebarVisibleForTesting: Bool { sidebarOn }
     var sidebarRowsForTesting: [String] { sidebar.rowNamesForTesting }
     var sidebarSelectionForTesting: String? { sidebar.selectedNameForTesting }
     var sidebarFolderForTesting: URL? { sidebar.folder }
@@ -1272,7 +1264,8 @@ final class EditorWindowController: NSWindowController,
             ?? EditorPreferences.sidebarFolder
     }
 
-    /// Shows or hides the sidebar, and lists the folder when it shows.
+    /// Shows or hides the sidebar, and lists the folder when it shows. The card
+    /// fades in and out; the editor does not move.
     func applySidebar() {
         let show = EditorPreferences.sidebarEnabled && sidebarShown
         // A file opened from another window's sidebar lists the folder that
@@ -1280,35 +1273,22 @@ final class EditorWindowController: NSWindowController,
         if sidebarFolderOverride == nil, let handed = SidebarHandoff.take(for: loomingsDocument?.fileURL) {
             sidebarFolderOverride = EditorPreferences.sidebarSharedFolder ? nil : handed
         }
+        syncFilesToolbarItem()
         if show {
-            if sidebar.folder != sidebarFolderToShow || sidebar.isHidden {
+            if sidebar.folder != sidebarFolderToShow || !sidebarOn {
                 sidebar.showFolder(sidebarFolderToShow)
             }
             sidebar.select(url: loomingsDocument?.fileURL)
         }
-        let wasHidden = sidebar.isHidden
-        sidebar.isHidden = !show
-        outerSplit.adjustSubviews()
-        if show, wasHidden {
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
-                self.outerSplit.setPosition(SidebarView.defaultWidth, ofDividerAt: 0)
-                self.finishSidebarLayout()
-            }
-        } else {
-            finishSidebarLayout()
+        if show != sidebarOn {
+            sidebarOn = show
+            sidebar.setShown(show, animated: window?.isVisible == true)
         }
-    }
-
-    private func finishSidebarLayout() {
-        outerSplit.layoutSubtreeIfNeeded()
-        applyColumnWidth()
-        if viewMode != .write { layoutPreview() }
     }
 
     /// The window's own list, listed again: files come and go outside the app.
     func refreshSidebar() {
-        guard !sidebar.isHidden else { return }
+        guard sidebarOn else { return }
         sidebar.reload()
         sidebar.select(url: loomingsDocument?.fileURL)
     }
@@ -1416,12 +1396,6 @@ final class EditorWindowController: NSWindowController,
         applyRightColumn()
         modeSwitch?.selectedIndex = viewMode.rawValue
         splitView.adjustSubviews()
-        // The divider goes to the middle now, as well as after the layout
-        // below. The split view sits inside the sidebar's split view, and the
-        // column would start with no width until a later pass.
-        if viewMode == .split, splitView.bounds.width > 0 {
-            splitView.setPosition((splitView.bounds.width / 2).rounded(), ofDividerAt: 0)
-        }
 
         if showPreview {
             refreshPreview()
@@ -1584,7 +1558,6 @@ final class EditorWindowController: NSWindowController,
         previewTextView.applyTheme(previewTheme(resolved))
         referencesView.apply(palette: resolved, textSize: isProjectorMode ? ProjectorMode.referencesTextSize : 13)
         sidebar.apply(palette: resolved)
-        outerSplit.themedDividerColor = resolved?.colors.borderColor.withAlphaComponent(0.45)
         markupOverlay.applyPalette(resolved)
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
@@ -1999,6 +1972,7 @@ final class EditorWindowController: NSWindowController,
         static let outline = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.outline")
         static let theme = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.theme")
         static let share = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.share")
+        static let files = NSToolbarItem.Identifier("eu.tiagojacinto.loomings.files")
     }
 
     private var modeSwitch: ModeSwitch?
@@ -2040,6 +2014,10 @@ final class EditorWindowController: NSWindowController,
             item.label = "View"
             item.view = control
 
+        case ToolbarItem.files:
+            item.label = "Files"
+            item.view = makeTool(symbol: "sidebar.left", label: "Show or Hide Files", action: #selector(toggleSidebar(_:)))
+
         case ToolbarItem.outline:
             item.label = "Outline"
             item.view = makeTool(symbol: "list.bullet.indent", label: "Go to Heading", action: #selector(showOutlineMenu(_:)))
@@ -2059,6 +2037,17 @@ final class EditorWindowController: NSWindowController,
         }
 
         return item
+    }
+
+    /// The Files button is in the title bar only while the feature is on.
+    private func syncFilesToolbarItem() {
+        guard let toolbar = window?.toolbar else { return }
+        let index = toolbar.items.firstIndex { $0.itemIdentifier == ToolbarItem.files }
+        if EditorPreferences.sidebarEnabled, index == nil {
+            toolbar.insertItem(withItemIdentifier: ToolbarItem.files, at: 0)
+        } else if !EditorPreferences.sidebarEnabled, let index {
+            toolbar.removeItem(at: index)
+        }
     }
 
     private func makeTool(symbol: String, label: String, action: Selector) -> ToolbarIconButton {

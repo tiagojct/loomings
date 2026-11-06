@@ -182,9 +182,11 @@ release numbers.
   `PreviewImageLoader` (local files and data URIs only). Tests unzip the file
   with `/usr/bin/unzip`.
 - File sidebar and Settings: `FolderListing` (`LoomingsDocuments`, tested) lists
-  one folder; `SidebarView` shows it as a lazy tree; `EditorWindowController`
-  nests the existing split view in an `outerSplit` with the sidebar, hidden
-  unless `EditorPreferences.sidebarEnabled` and the window's `sidebarShown`.
+  one folder; `SidebarView` shows it as a lazy tree in a card that floats over
+  the editor's left edge (it takes no room and moves nothing; JetBrains Mono,
+  as tall as its list). `EditorWindowController` shows it only when
+  `EditorPreferences.sidebarEnabled` and the window's `sidebarShown`; the
+  Files button in the title bar, View > Show Sidebar and Escape toggle it.
   `SettingsWindowController` writes `referencesEnabled`, `sidebarEnabled` and
   `sidebarSharedFolder`, then posts `.loomingsFeaturesChanged`; windows and the
   References menu follow it. `CitationController.applies` is the one gate for

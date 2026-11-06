@@ -8,8 +8,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added (native macOS app)
 
-- A file sidebar: the Markdown and text files of a folder, beside the editor.
-  View > Show Sidebar (Control-Command-S). Off by default.
+- A floating file sidebar: the Markdown and text files of a folder, on a card
+  over the editor's left edge. A Files button in the title bar, View > Show
+  Sidebar (Control-Command-S) and Escape show and hide it. Off by default.
 - Settings (Command-comma) with two switches: References and the file sidebar.
   With References off, the menu and tab are gone and `[@key]` stays as typed.
   The sidebar folder is one for each window (default) or one for all windows.
