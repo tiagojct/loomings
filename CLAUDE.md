@@ -181,6 +181,14 @@ release numbers.
   `src/docx.js`; a rule change goes in both. Images go through
   `PreviewImageLoader` (local files and data URIs only). Tests unzip the file
   with `/usr/bin/unzip`.
+- File sidebar and Settings: `FolderListing` (`LoomingsDocuments`, tested) lists
+  one folder; `SidebarView` shows it as a lazy tree; `EditorWindowController`
+  nests the existing split view in an `outerSplit` with the sidebar, hidden
+  unless `EditorPreferences.sidebarEnabled` and the window's `sidebarShown`.
+  `SettingsWindowController` writes `referencesEnabled`, `sidebarEnabled` and
+  `sidebarSharedFolder`, then posts `.loomingsFeaturesChanged`; windows and the
+  References menu follow it. `CitationController.applies` is the one gate for
+  References: off means no engine, no marks, the text as typed.
 - `Sources/LoomingsBench` — Stage 1 measurements (parse, insert call,
   app-owned handler, snapshot, visible-region styling, footprint) over
   10 KB–10 MB corpora.

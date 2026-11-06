@@ -425,6 +425,100 @@ enum SelfTest {
         shelfDocument.close()
         try? FileManager.default.removeItem(at: shelfRoot)
 
+        // 12b. Features: the file sidebar and References follow Settings.
+        let savedFeatures = (
+            EditorPreferences.sidebarEnabled, EditorPreferences.sidebarVisible,
+            EditorPreferences.sidebarSharedFolder, EditorPreferences.sidebarFolder,
+            EditorPreferences.referencesEnabled
+        )
+        let folderRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("loomings-sidebar-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(
+            at: folderRoot.appendingPathComponent("sub", isDirectory: true), withIntermediateDirectories: true)
+        for name in ["a.md", "b.txt", "photo.png", "sub/c.md"] {
+            try? "x".write(to: folderRoot.appendingPathComponent(name), atomically: true, encoding: .utf8)
+        }
+        EditorPreferences.sidebarEnabled = false
+        EditorPreferences.sidebarVisible = true
+        EditorPreferences.sidebarSharedFolder = false
+        let featureDocument = LoomingsDocument()
+        featureDocument.notesRecentDocuments = false
+        NSDocumentController.shared.addDocument(featureDocument)
+        featureDocument.makeWindowControllers()
+        if let feature = featureDocument.windowControllers.first as? EditorWindowController {
+            check(!feature.isSidebarVisibleForTesting, "the sidebar is off by default")
+            EditorPreferences.sidebarEnabled = true
+            NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+            check(feature.isSidebarVisibleForTesting, "the sidebar shows when the feature turns on")
+            feature.setSidebarFolder(folderRoot)
+            check(
+                feature.sidebarRowsForTesting == ["sub", "a.md", "b.txt"],
+                "the sidebar lists folders first, then Markdown and text files"
+            )
+            feature.toggleSidebar(nil)
+            check(!feature.isSidebarVisibleForTesting, "Show Sidebar hides it")
+            feature.toggleSidebar(nil)
+            check(feature.isSidebarVisibleForTesting, "Show Sidebar shows it again")
+            EditorPreferences.sidebarEnabled = false
+            NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+            check(!feature.isSidebarVisibleForTesting, "turning the feature off hides the sidebar")
+            check(!feature.validateMenuItem(NSMenuItem(
+                title: "Show Sidebar", action: #selector(EditorWindowController.toggleSidebar(_:)), keyEquivalent: ""
+            )), "Show Sidebar is disabled when the feature is off")
+
+            // One folder for each window, or one for all.
+            EditorPreferences.sidebarEnabled = true
+            let otherDocument = LoomingsDocument()
+            otherDocument.notesRecentDocuments = false
+            NSDocumentController.shared.addDocument(otherDocument)
+            otherDocument.makeWindowControllers()
+            if let other = otherDocument.windowControllers.first as? EditorWindowController {
+                NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+                let sub = folderRoot.appendingPathComponent("sub", isDirectory: true)
+                other.setSidebarFolder(sub)
+                check(feature.sidebarFolderForTesting?.lastPathComponent != "sub", "a window's folder stays its own")
+                check(other.sidebarRowsForTesting == ["c.md"], "the other window lists its own folder")
+                EditorPreferences.sidebarSharedFolder = true
+                other.setSidebarFolder(folderRoot)
+                check(
+                    feature.sidebarFolderForTesting == other.sidebarFolderForTesting
+                        && feature.sidebarFolderForTesting?.lastPathComponent == folderRoot.lastPathComponent,
+                    "a shared folder is one folder for every window"
+                )
+                otherDocument.updateChangeCount(.changeCleared)
+                otherDocument.close()
+            } else {
+                check(false, "could not create the second window")
+            }
+
+            // References off: citations stay as typed, and nothing runs.
+            EditorPreferences.referencesEnabled = true
+            feature.editor.setText("---\nreferences: []\n---\n\nSee [@a].\n")
+            feature.updateCitations()
+            check(feature.citations.isActive, "References on: a document with a key starts the engine")
+            EditorPreferences.referencesEnabled = false
+            NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+            check(!feature.citations.isActive, "References off: the engine stops")
+            check(
+                feature.citations.previewText(for: feature.editor.source) == .render(feature.editor.source),
+                "References off: the preview shows the text as typed"
+            )
+            check(!feature.validateMenuItem(NSMenuItem(
+                title: "Show References", action: #selector(EditorWindowController.toggleReferences(_:)), keyEquivalent: ""
+            )), "Show References is disabled when the feature is off")
+        } else {
+            check(false, "could not create the feature window")
+        }
+        let settings = SettingsWindowController.shared
+        settings.sync()
+        check(settings.window?.title == "Settings", "the Settings window exists")
+        featureDocument.updateChangeCount(.changeCleared)
+        featureDocument.close()
+        try? FileManager.default.removeItem(at: folderRoot)
+        (EditorPreferences.sidebarEnabled, EditorPreferences.sidebarVisible,
+         EditorPreferences.sidebarSharedFolder, EditorPreferences.sidebarFolder,
+         EditorPreferences.referencesEnabled) = savedFeatures
+
         // 13a-1. The learner's checker finds a mistake, fixes it, and undo
         // brings the mistake back.
         editor.setText("Intro.\n\n#Title\n")

@@ -14,6 +14,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var outlineMenu: NSMenu?
     private var compareMenu: NSMenu?
     private var referencesMenu: NSMenu?
+    private var referencesMenuItem: NSMenuItem?
+    private var featuresObserver: NSObjectProtocol?
     private var citationStyleMenu: NSMenu?
     private var citationLanguageMenu: NSMenu?
     private var learnItems: [LearnItem] = []
@@ -83,7 +85,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
 
     // MARK: - Menu
 
+    @objc private func showSettings(_ sender: Any?) {
+        SettingsWindowController.shared.show()
+    }
+
+    /// The References menu follows its switch in Settings.
+    private func observeFeatures() {
+        featuresObserver = NotificationCenter.default.addObserver(
+            forName: .loomingsFeaturesChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.referencesMenuItem?.isHidden = !EditorPreferences.referencesEnabled
+            }
+        }
+    }
+
     private func buildMenu() {
+        observeFeatures()
         let mainMenu = makeMainMenu()
         NSApp.windowsMenu = mainMenu.items.last?.submenu
         NSApp.mainMenu = mainMenu
@@ -111,6 +129,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let referencesMenuItem = NSMenuItem()
         mainMenu.addItem(referencesMenuItem)
         referencesMenuItem.submenu = makeReferencesMenu()
+        referencesMenuItem.isHidden = !EditorPreferences.referencesEnabled
+        self.referencesMenuItem = referencesMenuItem
 
         let themeMenuItem = NSMenuItem()
         mainMenu.addItem(themeMenuItem)
@@ -141,6 +161,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         )
         aboutItem.target = self
         menu.addItem(aboutItem)
+        menu.addItem(.separator())
+        let settingsItem = NSMenuItem(
+            title: "Settings…",
+            action: #selector(showSettings(_:)),
+            keyEquivalent: ","
+        )
+        settingsItem.target = self
+        menu.addItem(settingsItem)
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Hide Loomings",
@@ -690,6 +718,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         )
         previewMode.keyEquivalentModifierMask = [.command, .shift]
         menu.addItem(previewMode)
+        menu.addItem(.separator())
+
+        let sidebarItem = NSMenuItem(
+            title: "Show Sidebar",
+            action: #selector(EditorWindowController.toggleSidebar(_:)),
+            keyEquivalent: "s"
+        )
+        sidebarItem.keyEquivalentModifierMask = [.command, .control]
+        menu.addItem(sidebarItem)
         menu.addItem(.separator())
 
         let outline = NSMenu(title: "Go to Heading")

@@ -73,10 +73,15 @@ final class CitationController {
         worker = CitationWorker(makeEngine: { engine })
     }
 
+    /// The References feature is on and the text has citation keys.
+    private static func applies(to source: String) -> Bool {
+        EditorPreferences.referencesEnabled && CitationGate.applies(to: source)
+    }
+
     /// Asks for a report of `source` after a pause. Text with no citation keys
     /// costs only the gate.
     func update(source: String, documentURL: URL?, allowPaths: Bool = true) {
-        guard CitationGate.applies(to: source) else {
+        guard Self.applies(to: source) else {
             forget()
             return
         }
@@ -142,7 +147,7 @@ final class CitationController {
     }
 
     func previewText(for source: String) -> PreviewText {
-        guard CitationGate.applies(to: source) else { return .render(source) }
+        guard Self.applies(to: source) else { return .render(source) }
         if let report = report(for: source) { return .render(report.markdownSource) }
         return latest == nil ? .render(source) : .keepLast
     }
@@ -156,7 +161,7 @@ final class CitationController {
         allowPaths: Bool = true,
         completion: @escaping (ExportText) -> Void
     ) {
-        guard CitationGate.applies(to: source) else {
+        guard Self.applies(to: source) else {
             completion(ExportText(markdown: source, status: nil))
             return
         }
@@ -201,7 +206,7 @@ final class CitationController {
         limit: TimeInterval? = nil,
         completion: @escaping (ShareText) -> Void
     ) {
-        guard CitationGate.applies(to: source) else {
+        guard Self.applies(to: source) else {
             completion(ShareText(source: source, failure: nil, styleNote: nil))
             return
         }

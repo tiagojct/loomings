@@ -39,6 +39,14 @@ final class EditorWindowController: NSWindowController,
     /// The room above the preview and the library.
     private var columnTop: NSLayoutConstraint!
     private let splitView = ThemedSplitView()
+    /// The file sidebar and the editor with its right column. The sidebar is
+    /// hidden unless the feature is on and shown for this window.
+    private let outerSplit = ThemedSplitView()
+    private let sidebar = SidebarView()
+    /// A window of its own folder. Nil until the writer chooses one here.
+    private var sidebarFolderOverride: URL?
+    private var sidebarShown = EditorPreferences.sidebarVisible
+    private var featuresObserver: NSObjectProtocol?
     private let statusBar = StatusBarView()
     private var statusHeightConstraint: NSLayoutConstraint!
     private var lineRuler: LineNumberRulerView!
@@ -115,10 +123,19 @@ final class EditorWindowController: NSWindowController,
             self.window?.makeFirstResponder(textView)
         }
 
+        sidebar.onOpen = { [weak self] url in self?.openFromSidebar(url) }
+        sidebar.onChooseFolder = { [weak self] in self?.chooseSidebarFolder() }
+        featuresObserver = NotificationCenter.default.addObserver(
+            forName: .loomingsFeaturesChanged, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.featuresChanged() }
+        }
+
         document.editor = editor
         editor.setText(document.pendingText)
         applyPreferences()
         applyViewMode()
+        applySidebar()
     }
 
     @available(*, unavailable)
@@ -210,7 +227,10 @@ final class EditorWindowController: NSWindowController,
         splitView.isVertical = true
         splitView.dividerStyle = .thin
         splitView.delegate = self
-        splitView.translatesAutoresizingMaskIntoConstraints = false
+        outerSplit.isVertical = true
+        outerSplit.dividerStyle = .thin
+        outerSplit.delegate = self
+        outerSplit.translatesAutoresizingMaskIntoConstraints = false
         rightColumn.translatesAutoresizingMaskIntoConstraints = false
         referencesView.translatesAutoresizingMaskIntoConstraints = false
         columnTabs.translatesAutoresizingMaskIntoConstraints = false
@@ -243,15 +263,19 @@ final class EditorWindowController: NSWindowController,
         splitView.addArrangedSubview(rightColumn)
 
         statusBar.translatesAutoresizingMaskIntoConstraints = false
-        containerView.addSubview(splitView)
+        // Hidden before the first layout, as the right column is.
+        sidebar.isHidden = true
+        outerSplit.addArrangedSubview(sidebar)
+        outerSplit.addArrangedSubview(splitView)
+        containerView.addSubview(outerSplit)
         containerView.addSubview(statusBar)
 
         statusHeightConstraint = statusBar.heightAnchor.constraint(equalToConstant: 24)
         NSLayoutConstraint.activate([
-            splitView.topAnchor.constraint(equalTo: containerView.topAnchor),
-            splitView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
-            splitView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
-            statusBar.topAnchor.constraint(equalTo: splitView.bottomAnchor),
+            outerSplit.topAnchor.constraint(equalTo: containerView.topAnchor),
+            outerSplit.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            outerSplit.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            statusBar.topAnchor.constraint(equalTo: outerSplit.bottomAnchor),
             statusBar.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             statusBar.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
             statusBar.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
@@ -552,13 +576,14 @@ final class EditorWindowController: NSWindowController,
 
     /// Only Split has the control: Preview always shows the preview.
     private var showsColumnTabs: Bool {
-        viewMode == .split && (askedForReferences || citations.isActive)
+        viewMode == .split && EditorPreferences.referencesEnabled && (askedForReferences || citations.isActive)
     }
 
     private var isLibraryShown: Bool { showsColumnTabs && columnTab == .references }
 
     /// Show References goes to Split with the library. In Split it switches.
     @objc func toggleReferences(_ sender: Any?) {
+        guard EditorPreferences.referencesEnabled else { return }
         askedForReferences = true
         if viewMode == .split {
             selectColumn(isLibraryShown ? .preview : .references)
@@ -1054,7 +1079,13 @@ final class EditorWindowController: NSWindowController,
     let history = HistoryRecorder()
     private var replayController: ReplayWindowController?
 
+    func windowDidBecomeKey(_ notification: Notification) {
+        refreshSidebar()
+    }
+
     func windowWillClose(_ notification: Notification) {
+        if let featuresObserver { NotificationCenter.default.removeObserver(featuresObserver) }
+        featuresObserver = nil
         history.flush()
         citations.close()
         replayController?.close()
@@ -1190,9 +1221,130 @@ final class EditorWindowController: NSWindowController,
 
     /// Dragging the divider resizes both panes; lay both columns out again.
     func splitViewDidResizeSubviews(_ notification: Notification) {
+        if (notification.object as? NSSplitView) === outerSplit {
+            guard window != nil else { return }
+            applyColumnWidth()
+            if viewMode != .write { layoutPreview() }
+            return
+        }
         guard window != nil, viewMode == .split else { return }
         applyColumnWidth()
         layoutPreview()
+    }
+
+    /// The sidebar keeps its width when the window resizes, and cannot take the
+    /// editor's room.
+    func splitView(_ splitView: NSSplitView, shouldAdjustSizeOfSubview view: NSView) -> Bool {
+        splitView !== outerSplit || view !== sidebar
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposedMinimumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+        splitView === outerSplit ? max(proposedMinimumPosition, SidebarView.minimumWidth) : proposedMinimumPosition
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposedMaximumPosition: CGFloat, ofSubviewAt dividerIndex: Int) -> CGFloat {
+        splitView === outerSplit ? min(proposedMaximumPosition, splitView.bounds.width * 0.4) : proposedMaximumPosition
+    }
+
+    // MARK: - File sidebar
+
+    @objc func toggleSidebar(_ sender: Any?) {
+        guard EditorPreferences.sidebarEnabled else { return }
+        sidebarShown.toggle()
+        EditorPreferences.sidebarVisible = sidebarShown
+        applySidebar()
+    }
+
+    var isSidebarVisibleForTesting: Bool { !sidebar.isHidden }
+    var sidebarRowsForTesting: [String] { sidebar.rowNamesForTesting }
+    var sidebarSelectionForTesting: String? { sidebar.selectedNameForTesting }
+    var sidebarFolderForTesting: URL? { sidebar.folder }
+    func clickSidebarRowForTesting(named name: String) { sidebar.clickRowForTesting(named: name) }
+
+    /// The folder this window lists. A shared folder is one setting. Otherwise
+    /// the window's own choice, then the folder of its file, then the last one
+    /// chosen anywhere.
+    private var sidebarFolderToShow: URL? {
+        if EditorPreferences.sidebarSharedFolder { return EditorPreferences.sidebarFolder }
+        return sidebarFolderOverride
+            ?? loomingsDocument?.fileURL?.deletingLastPathComponent()
+            ?? EditorPreferences.sidebarFolder
+    }
+
+    /// Shows or hides the sidebar, and lists the folder when it shows.
+    func applySidebar() {
+        let show = EditorPreferences.sidebarEnabled && sidebarShown
+        if show {
+            if sidebar.folder != sidebarFolderToShow || sidebar.isHidden {
+                sidebar.showFolder(sidebarFolderToShow)
+            }
+            sidebar.select(url: loomingsDocument?.fileURL)
+        }
+        let wasHidden = sidebar.isHidden
+        sidebar.isHidden = !show
+        outerSplit.adjustSubviews()
+        if show, wasHidden {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                self.outerSplit.setPosition(SidebarView.defaultWidth, ofDividerAt: 0)
+                self.finishSidebarLayout()
+            }
+        } else {
+            finishSidebarLayout()
+        }
+    }
+
+    private func finishSidebarLayout() {
+        outerSplit.layoutSubtreeIfNeeded()
+        applyColumnWidth()
+        if viewMode != .write { layoutPreview() }
+    }
+
+    /// The window's own list, listed again: files come and go outside the app.
+    func refreshSidebar() {
+        guard !sidebar.isHidden else { return }
+        sidebar.reload()
+        sidebar.select(url: loomingsDocument?.fileURL)
+    }
+
+    /// Settings changed: References and the sidebar follow at once.
+    private func featuresChanged() {
+        applySidebar()
+        updateCitations()
+        applyRightColumn()
+        if viewMode != .write { refreshPreview() }
+    }
+
+    private func openFromSidebar(_ url: URL) {
+        if url.standardizedFileURL == loomingsDocument?.fileURL?.standardizedFileURL { return }
+        NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
+            if let error { NSApp.presentError(error) }
+        }
+    }
+
+    private func chooseSidebarFolder() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose a folder to list in the sidebar."
+        panel.directoryURL = sidebar.folder ?? EditorPreferences.sidebarFolder
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let url = panel.url, let self else { return }
+            self.setSidebarFolder(url)
+        }
+    }
+
+    func setSidebarFolder(_ url: URL) {
+        EditorPreferences.sidebarFolder = url
+        sidebarFolderOverride = EditorPreferences.sidebarSharedFolder ? nil : url
+        if EditorPreferences.sidebarSharedFolder {
+            NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+        } else {
+            applySidebar()
+        }
     }
 
     // MARK: - Paired lines
@@ -1257,6 +1409,12 @@ final class EditorWindowController: NSWindowController,
         applyRightColumn()
         modeSwitch?.selectedIndex = viewMode.rawValue
         splitView.adjustSubviews()
+        // The divider goes to the middle now, as well as after the layout
+        // below. The split view sits inside the sidebar's split view, and the
+        // column would start with no width until a later pass.
+        if viewMode == .split, splitView.bounds.width > 0 {
+            splitView.setPosition((splitView.bounds.width / 2).rounded(), ofDividerAt: 0)
+        }
 
         if showPreview {
             refreshPreview()
@@ -1418,6 +1576,8 @@ final class EditorWindowController: NSWindowController,
         editor.applyPalette(resolved)
         previewTextView.applyTheme(previewTheme(resolved))
         referencesView.apply(palette: resolved, textSize: isProjectorMode ? ProjectorMode.referencesTextSize : 13)
+        sidebar.apply(palette: resolved)
+        outerSplit.themedDividerColor = resolved?.colors.borderColor
         markupOverlay.applyPalette(resolved)
         lineRuler?.applyPalette(resolved)
         scrollView.backgroundColor = resolved?.colors.background ?? .textBackgroundColor
@@ -1803,6 +1963,10 @@ final class EditorWindowController: NSWindowController,
             return window?.attachedSheet == nil
         case #selector(toggleReferences(_:)):
             menuItem.state = isLibraryShown ? .on : .off
+            return EditorPreferences.referencesEnabled
+        case #selector(toggleSidebar(_:)):
+            menuItem.state = sidebarShown && EditorPreferences.sidebarEnabled ? .on : .off
+            return EditorPreferences.sidebarEnabled
         default:
             return true
         }

@@ -12,6 +12,7 @@ import PDFKit
 /// `-LoomingsSnapshotProjector YES` turns on projector mode with a sample caption;
 /// `-LoomingsSnapshotCompareWith <file>` also writes compare.png;
 /// `-LoomingsSnapshotReferences YES` also writes references.png, Split with the library.
+/// `-LoomingsSnapshotSidebar <folder>` also writes sidebar.png, Split with the file sidebar on that folder.
 /// The input file is the base for relative images and bibliographies. The
 /// document stays untitled, so nothing writes to that file.
 /// Writes write.png, split.png and preview.png, then exits.
@@ -67,6 +68,15 @@ enum Snapshot {
             controller.toggleReferences(nil)
             settle(1.2)
             write(window, to: output.appendingPathComponent("references.png"))
+        }
+
+        if let folder = UserDefaults.standard.string(forKey: "LoomingsSnapshotSidebar") {
+            EditorPreferences.sidebarEnabled = true
+            EditorPreferences.sidebarVisible = true
+            controller.setSidebarFolder(URL(fileURLWithPath: folder, isDirectory: true))
+            NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+            settle(1.2)
+            write(window, to: output.appendingPathComponent("sidebar.png"))
         }
 
         // Compare With, against another file.

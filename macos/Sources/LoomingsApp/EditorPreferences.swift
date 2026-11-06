@@ -119,6 +119,46 @@ enum EditorPreferences {
         set { defaults.set(newValue, forKey: key("wordGoal")) }
     }
 
+    // MARK: Features
+
+    /// The References menu, the References tab and the citation engine. On by
+    /// default. Off: a document with `[@key]` shows the text as typed.
+    static var referencesEnabled: Bool {
+        get {
+            if defaults.object(forKey: key("referencesEnabled")) == nil { return true }
+            return defaults.bool(forKey: key("referencesEnabled"))
+        }
+        set { defaults.set(newValue, forKey: key("referencesEnabled")) }
+    }
+
+    /// The file sidebar. Off by default.
+    static var sidebarEnabled: Bool {
+        get { defaults.bool(forKey: key("sidebarEnabled")) }
+        set { defaults.set(newValue, forKey: key("sidebarEnabled")) }
+    }
+
+    /// The sidebar shows in new windows. A window can differ.
+    static var sidebarVisible: Bool {
+        get {
+            if defaults.object(forKey: key("sidebarVisible")) == nil { return true }
+            return defaults.bool(forKey: key("sidebarVisible"))
+        }
+        set { defaults.set(newValue, forKey: key("sidebarVisible")) }
+    }
+
+    /// One folder for every window (true), or one for each window (false).
+    static var sidebarSharedFolder: Bool {
+        get { defaults.bool(forKey: key("sidebarSharedFolder")) }
+        set { defaults.set(newValue, forKey: key("sidebarSharedFolder")) }
+    }
+
+    /// The folder of the shared sidebar, and the starting folder of a window
+    /// that has no document file.
+    static var sidebarFolder: URL? {
+        get { defaults.string(forKey: key("sidebarFolder")).map { URL(fileURLWithPath: $0, isDirectory: true) } }
+        set { defaults.set(newValue?.path, forKey: key("sidebarFolder")) }
+    }
+
     static func nextFontSize(after current: CGFloat, delta: CGFloat) -> CGFloat {
         min(maximumFontSize, max(minimumFontSize, current + delta))
     }
@@ -133,4 +173,9 @@ enum EditorPreferences {
         guard let index = wordGoals.firstIndex(of: goal) else { return 250 }
         return wordGoals[(index + 1) % wordGoals.count]
     }
+}
+
+extension Notification.Name {
+    /// A feature switch or the sidebar's folder rule changed in Settings.
+    static let loomingsFeaturesChanged = Notification.Name("eu.tiagojacinto.loomings.featuresChanged")
 }
