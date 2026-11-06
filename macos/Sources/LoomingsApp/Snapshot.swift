@@ -72,9 +72,9 @@ enum Snapshot {
 
         if let folder = UserDefaults.standard.string(forKey: "LoomingsSnapshotSidebar") {
             EditorPreferences.sidebarEnabled = true
-            EditorPreferences.sidebarVisible = true
             controller.setSidebarFolder(URL(fileURLWithPath: folder, isDirectory: true))
             NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+            if !controller.isSidebarVisibleForTesting { controller.toggleSidebar(nil) }
             settle(1.2)
             write(window, to: output.appendingPathComponent("sidebar.png"))
         }

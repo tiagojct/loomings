@@ -162,6 +162,11 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
         didSet { textView.onOptionClick = onOptionClick }
     }
 
+    /// Called when the writer clicks in the text.
+    public var onTextClick: (() -> Void)? {
+        didSet { textView.onClick = onTextClick }
+    }
+
     /// Replaces `range` as an undoable edit, like typing would. Returns false
     /// when the range is outside the text or the edit is refused.
     @discardableResult

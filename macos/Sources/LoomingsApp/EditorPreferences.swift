@@ -137,12 +137,10 @@ enum EditorPreferences {
         set { defaults.set(newValue, forKey: key("sidebarEnabled")) }
     }
 
-    /// The sidebar shows in new windows. A window can differ.
+    /// The sidebar is a quick switcher: new windows start with it hidden. This
+    /// key is for tests and snapshots; the window toggle does not write it.
     static var sidebarVisible: Bool {
-        get {
-            if defaults.object(forKey: key("sidebarVisible")) == nil { return true }
-            return defaults.bool(forKey: key("sidebarVisible"))
-        }
+        get { defaults.bool(forKey: key("sidebarVisible")) }
         set { defaults.set(newValue, forKey: key("sidebarVisible")) }
     }
 

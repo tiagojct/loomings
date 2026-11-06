@@ -309,7 +309,9 @@ final class EditorWindowController: NSWindowController,
             // Notes rest while the writer types and come back with the parse.
             self.editor.textView.setDecorations([], for: "notes")
             self.schedulePreviewUpdate()
+            self.hideSidebarForWriting()
         }
+        editor.onTextClick = { [weak self] in self?.hideSidebarForWriting() }
         editor.onAnalysis = { [weak self] _ in
             guard let self else { return }
             self.applyTeachingReport()
@@ -1244,7 +1246,14 @@ final class EditorWindowController: NSWindowController,
     @objc func toggleSidebar(_ sender: Any?) {
         guard EditorPreferences.sidebarEnabled else { return }
         sidebarShown.toggle()
-        EditorPreferences.sidebarVisible = sidebarShown
+        applySidebar()
+    }
+
+    /// The sidebar is a quick switcher, not a pane: it steps aside when the
+    /// writer clicks into the text, types, or opens a file.
+    func hideSidebarForWriting() {
+        guard sidebarShown else { return }
+        sidebarShown = false
         applySidebar()
     }
 
@@ -1307,6 +1316,7 @@ final class EditorWindowController: NSWindowController,
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
             if let error { NSApp.presentError(error) }
         }
+        hideSidebarForWriting()
     }
 
     private func chooseSidebarFolder() {

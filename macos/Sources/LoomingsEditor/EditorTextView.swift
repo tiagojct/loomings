@@ -25,6 +25,7 @@ public final class EditorTextView: NSTextView {
     /// Option-click asks what is under the pointer instead of placing the
     /// caret (an option-drag still makes a rectangular selection).
     var onOptionClick: ((Int) -> Void)?
+    var onClick: (() -> Void)?
     /// Takes the pasted text and returns true if it used it.
     var onPaste: ((String) -> Bool)?
 
@@ -102,6 +103,7 @@ public final class EditorTextView: NSTextView {
                 return
             }
         }
+        onClick?()
         super.mouseDown(with: event)
     }
 

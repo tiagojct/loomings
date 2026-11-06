@@ -93,8 +93,6 @@ final class SettingsWindowController: NSWindowController {
         EditorPreferences.sidebarEnabled = sidebar.state == .on
         if sender === shared { EditorPreferences.sidebarSharedFolder = true }
         if sender === perWindow { EditorPreferences.sidebarSharedFolder = false }
-        // Turning the sidebar on shows it, so the switch has a visible effect.
-        if sender === sidebar, sidebar.state == .on { EditorPreferences.sidebarVisible = true }
         sync()
         NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
     }

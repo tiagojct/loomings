@@ -459,6 +459,10 @@ enum SelfTest {
             check(!feature.isSidebarVisibleForTesting, "Show Sidebar hides it")
             feature.toggleSidebar(nil)
             check(feature.isSidebarVisibleForTesting, "Show Sidebar shows it again")
+            feature.hideSidebarForWriting()
+            check(!feature.isSidebarVisibleForTesting, "the sidebar steps aside for writing")
+            feature.toggleSidebar(nil)
+            check(feature.isSidebarVisibleForTesting, "Show Sidebar brings it back after writing")
             EditorPreferences.sidebarEnabled = false
             NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
             check(!feature.isSidebarVisibleForTesting, "turning the feature off hides the sidebar")
