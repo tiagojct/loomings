@@ -6,6 +6,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## [2.6.0] — 2026-11-05
+
+This section also holds the changes of 2.5.0, which were never listed apart.
+
 ### Web app
 
 - Export to Word. Export > Word file (.docx) writes the document with its

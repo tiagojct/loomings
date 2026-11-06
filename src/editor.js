@@ -38,7 +38,8 @@ import {
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { openModal } from './modal.js';
-import { hasDiagrams, renderDiagrams, renderDiagramsInHtml, peleSeriesCss } from './mermaid.js';
+import { hasDiagrams, renderDiagrams, renderDiagramsInHtml } from './mermaid.js';
+import { exportHtmlPage, diagramCss, withDiagramStyle } from './export.js';
 import {
   createCitationDocument, citedHtml, citationsLeftLiteral, documentMeta, documentUsesCitations,
 } from './citations/document.js';
@@ -1284,52 +1285,7 @@ async function exportHtml() {
   const report = await citations.flush(text);
   const partial = citationsLeftLiteral(text, report);
   const rendered = await renderDiagramsInHtml(citedHtml(text, report, renderMarkdown));
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(title)}</title>
-<style>
-  body { max-width: 680px; margin: 0 auto; padding: 48px 24px;
-         font-family: Georgia, 'Times New Roman', serif; font-size: 17px; line-height: 1.8;
-         background: ${p.bg}; color: ${p.fg}; }
-  h1, h2, h3, h4, h5, h6 { color: ${p.heading}; line-height: 1.3; }
-  a { color: ${p.accent}; }
-  em { color: ${p.emphasis}; }
-  code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.9em;
-         background: ${p.bgDeep}; color: ${p.code}; padding: 2px 6px; border-radius: 3px; }
-  pre { background: ${p.bgDeep}; border: 1px solid ${p.border}; padding: 16px;
-        border-radius: 4px; overflow-x: auto; }
-  pre code { background: none; padding: 0; color: ${p.fgDim}; }
-  blockquote { border-left: 3px solid ${p.accent}; padding-left: 16px;
-               color: ${p.fgDim}; margin-left: 0; font-style: italic; }
-  hr { border: none; border-top: 1px solid ${p.border}; margin: 2em 0; }
-  img { max-width: 100%; }
-  pre.mermaid { background: none; border: 0; padding: 0; text-align: center; }
-  pre.mermaid svg { max-width: 100%; height: auto; }
-  pre.mermaid-error p { margin: 0.75em 0 0; color: ${p.fgDim}; font-size: 0.9em; }
-  .cite-missing { color: ${p.fgDim}; }
-  .references { margin-top: 2.5em; }
-  .csl-entry { margin-bottom: 0.6em; overflow-wrap: anywhere; }
-  .csl-left-margin { float: left; width: 2.75em; }
-  .csl-right-inline { margin-left: 2.75em; }
-  .pele { --pele-bg: ${p.bg}; --pele-fg: ${p.fg}; --pele-muted: ${p.fgDim}; --pele-line: ${p.fgDim};
-          --pele-surface: ${p.bgElev}; --pele-surface-alt: ${p.bgDeep}; --pele-border: ${p.border};
-          --pele-accent: ${p.accent}; ${peleSeriesCss(p, p.bg)} }
-  @media print { body { background: #fff; color: #000; }
-    .cite-missing { color: ${lp.fgDim}; }
-    .csl-entry { break-inside: avoid; }
-    /* --pele-bg is the paper colour (#fff) of the body rule above. */
-    .pele { --pele-bg: #fff; --pele-fg: ${lp.fg}; --pele-muted: ${lp.fgDim}; --pele-line: ${lp.fgDim}; --pele-surface: ${lp.bgElev};
-            --pele-surface-alt: ${lp.bgDeep}; --pele-border: ${lp.border}; --pele-accent: ${lp.accent}; ${peleSeriesCss(lp, '#fff')} } }
-</style>
-</head>
-<body>
-${rendered}
-</body>
-</html>
-`;
+  const html = exportHtmlPage({ title, body: rendered, p, lp });
   try {
     const path = await downloadHtml(html, title + '.html');
     if (path) flashStatus('Exported ' + basename(path) + (partial ? '; citations were not ready' : ''));
@@ -1348,16 +1304,16 @@ async function exportDocx() {
     flashStatus('Preparing Word file');
     const report = await citations.flush(text);
     const partial = citationsLeftLiteral(text, report);
-    const meta = documentMeta(text);
     const html = await renderDiagramsInHtml(citedHtml(text, report, renderMarkdown));
-    const pele = `--pele-bg:#fff;--pele-fg:${lp.fg};--pele-muted:${lp.fgDim};--pele-line:${lp.fgDim};--pele-surface:${lp.bgElev};--pele-surface-alt:${lp.bgDeep};--pele-border:${lp.border};--pele-accent:${lp.accent};${peleSeriesCss(lp, '#fff')}`;
-    const { htmlToDocx } = await import('./docx.js');
+    const css = diagramCss(lp);
+    const { htmlToDocx, documentFields } = await import('./docx.js');
+    const fields = documentFields(text);
     const blob = await htmlToDocx(html, {
-      title: meta.title,
-      lang: meta.lang,
+      title: fields.title,
+      lang: fields.lang,
       paper: paperFor(navigator.language),
       loadImage: (source) => loadImageForDocx('svg' in source
-        ? { svg: source.svg.replace('<svg', `<svg style="${pele}"`) }
+        ? { svg: withDiagramStyle(source.svg, css) }
         : source),
     });
     const name = title + '.docx';

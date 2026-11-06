@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { Window } from 'happy-dom';
 import JSZip from 'jszip';
-import { htmlToDocx } from './docx.js';
+import { htmlToDocx, documentFields } from './docx.js';
 import { renderMarkdown } from './markdown.js';
 
 const parse = (html) => new new Window().DOMParser().parseFromString(html, 'text/html');
@@ -86,5 +87,41 @@ describe('htmlToDocx', () => {
     const { styles, doc } = await files('<p>Olá</p>', { lang: 'pt-PT', paper: 'letter' });
     expect(styles).toContain('pt-PT');
     expect(doc).toContain('w:w="12240"');
+  });
+});
+
+// The contract with macos/Sources/LoomingsDocx: both suites read this file.
+describe('docx contract', () => {
+  const contract = JSON.parse(readFileSync(new URL('../macos/Tests/LoomingsDocxTests/Fixtures/docx-contract.json', import.meta.url), 'utf8'));
+  const count = (text, needle) => text.split(needle).length - 1;
+
+  it('defines every style id', async () => {
+    const { styles } = await files('<p>x</p>');
+    for (const id of contract.styleIds) expect(styles, id).toContain(`w:styleId="${id}"`);
+  });
+
+  for (const c of contract.cases) {
+    it(c.name, async () => {
+      const { doc } = await files(renderMarkdown(c.markdown), { title: documentFields(c.markdown).title });
+      for (const [id, n] of Object.entries(c.paragraphStyles ?? {})) {
+        expect(count(doc, `<w:pStyle w:val="${id}"/>`), id).toBe(n);
+      }
+      if ('numIds' in c) expect(new Set([...doc.matchAll(/<w:numId w:val="(\d+)"/g)].map((m) => m[1])).size).toBe(c.numIds);
+      if ('tables' in c) expect(count(doc, '<w:tbl>')).toBe(c.tables);
+      if ('hyperlinks' in c) expect(count(doc, '<w:hyperlink ')).toBe(c.hyperlinks);
+      if ('bold' in c) expect(count(doc, '<w:b/>')).toBe(c.bold);
+      if ('italic' in c) expect(count(doc, '<w:i/>')).toBe(c.italic);
+      if ('strike' in c) expect(count(doc, '<w:strike/>')).toBe(c.strike);
+    });
+  }
+});
+
+describe('documentFields', () => {
+  it('reads title and lang, not the reference section title', () => {
+    const src = '---\ntitle: "My paper" # note\nlang: pt-PT\nreference-section-title: Bibliografia\n---\n\ntext\n';
+    expect(documentFields(src)).toEqual({ title: 'My paper', lang: 'pt-PT' });
+    expect(documentFields('---\nreference-section-title: Refs\n---\n')).toEqual({ title: null, lang: null });
+    expect(documentFields('no frontmatter\n---\ntitle: x\n---')).toEqual({ title: null, lang: null });
+    expect(documentFields('---\ntitle: unclosed\n')).toEqual({ title: null, lang: null });
   });
 });

@@ -30,6 +30,39 @@ const HEADINGS = ['HEADING_1', 'HEADING_2', 'HEADING_3', 'HEADING_4', 'HEADING_5
 const BODY_FONT = 'Georgia';
 const CODE_FONT = 'Consolas';
 
+/**
+ * The `title:` and `lang:` of the frontmatter. The frontmatter is a first line
+ * of exactly `---` and a closing line of exactly `---` within fifty lines, as
+ * everywhere else. Not `reference-section-title`: that is the title of the
+ * reference list.
+ *
+ * @param {string} source
+ * @returns {{title: string|null, lang: string|null}}
+ */
+export function documentFields(source) {
+  const lines = source.split(/\r\n?|\n/);
+  /** @type {{title: string|null, lang: string|null}} */
+  const fields = { title: null, lang: null };
+  if (lines[0] !== '---') return fields;
+  let end = -1;
+  for (let n = 1; n < Math.min(lines.length, 50); n++) {
+    if (lines[n] === '---') { end = n; break; }
+  }
+  if (end < 0) return fields;
+  for (const key of /** @type {const} */ (['title', 'lang'])) {
+    for (let n = 1; n < end; n++) {
+      if (!lines[n].startsWith(key + ':')) continue;
+      let value = lines[n].slice(key.length + 1).trim();
+      const hash = value.indexOf(' #');
+      if (hash >= 0) value = value.slice(0, hash).trim();
+      if (value.length >= 2 && (value[0] === '"' || value[0] === "'") && value[value.length - 1] === value[0]) value = value.slice(1, -1);
+      if (value) fields[key] = value;
+      break;
+    }
+  }
+  return fields;
+}
+
 /** The tag name in lower case. @param {Node} node */
 const tag = (node) => (node.nodeType === 1 ? /** @type {Element} */ (node).tagName.toLowerCase() : '');
 
@@ -62,15 +95,20 @@ export async function htmlToDocx(html, options = {}) {
   const numberingConfig = [];
   let listCount = 0;
 
-  /** @param {boolean} ordered */
+  /** @type {string|null} */
+  let bulletReference = null;
+
+  /** Each numbered list gets its own definition, so it starts at 1. All bullet lists share one. @param {boolean} ordered */
   function newList(ordered) {
+    if (!ordered && bulletReference) return bulletReference;
     const reference = `${ordered ? 'ol' : 'ul'}-${++listCount}`;
+    if (!ordered) bulletReference = reference;
     const levels = [];
-    for (let level = 0; level < 6; level++) {
+    for (let level = 0; level < 9; level++) {
       levels.push({
         level,
         format: ordered ? LevelFormat.DECIMAL : LevelFormat.BULLET,
-        text: ordered ? `%${level + 1}.` : ['•', '◦', '▪'][level % 3],
+        text: ordered ? `%${level + 1}.` : ['\u2022', '\u25e6', '\u25aa'][level % 3],
         alignment: AlignmentType.LEFT,
         style: { paragraph: { indent: { left: 720 * (level + 1), hanging: 360 } } },
       });
@@ -303,16 +341,14 @@ export async function htmlToDocx(html, options = {}) {
   async function list(el, ctx) {
     const ordered = tag(el) === 'ol';
     const level = ctx.list ? ctx.list.level + 1 : 0;
-    // A nested list continues the numbering definition of its parent only if
-    // it is the same kind; a new definition keeps each numbered list at 1.
-    const reference = ordered || !ctx.list || ctx.list.reference.startsWith('ol-') ? newList(ordered) : ctx.list.reference;
+    const reference = newList(ordered);
     /** @type {any[]} */
     const out = [];
     for (const item of Array.from(el.children)) {
       if (tag(item) !== 'li') continue;
       out.push(...(await blocks(Array.from(item.childNodes), {
         style: ctx.style,
-        list: { reference, level: Math.min(level, 5) },
+        list: { reference, level: Math.min(level, 8) },
         used: { value: false },
       })));
     }

@@ -153,3 +153,64 @@ private func export(_ markdown: String, bibliography: String = "") throws -> Pac
         #expect(package.unzip(["-t"]).status == 0)
     }
 }
+
+/// The contract with src/docx.js: both test suites read docx-contract.json.
+@Suite struct DocxContractTests {
+    private struct Contract: Decodable {
+        struct Case: Decodable {
+            let name: String
+            let markdown: String
+            let paragraphStyles: [String: Int]?
+            let numIds: Int?
+            let tables: Int?
+            let hyperlinks: Int?
+            let bold: Int?
+            let italic: Int?
+            let strike: Int?
+        }
+        let styleIds: [String]
+        let cases: [Case]
+    }
+
+    private static func load() throws -> Contract {
+        let url = try #require(Bundle.module.url(forResource: "docx-contract", withExtension: "json", subdirectory: "Fixtures"))
+        return try JSONDecoder().decode(Contract.self, from: Data(contentsOf: url))
+    }
+
+    private func count(_ text: String, _ needle: String) -> Int {
+        text.components(separatedBy: needle).count - 1
+    }
+
+    @Test func definesEveryStyleId() throws {
+        let contract = try Self.load()
+        let package = try export("x\n")
+        defer { package.remove() }
+        let styles = package.part("word/styles.xml")
+        for id in contract.styleIds {
+            #expect(styles.contains("w:styleId=\"\(id)\""), "\(id)")
+        }
+    }
+
+    @Test func casesMatchTheWebExport() throws {
+        let contract = try Self.load()
+        for item in contract.cases {
+            let package = try export(item.markdown)
+            defer { package.remove() }
+            let document = package.part("word/document.xml")
+            for (id, n) in item.paragraphStyles ?? [:] {
+                #expect(count(document, "<w:pStyle w:val=\"\(id)\"/>") == n, "\(item.name): \(id)")
+            }
+            if let n = item.numIds {
+                let regex = try NSRegularExpression(pattern: "<w:numId w:val=\"(\\d+)\"")
+                let ns = document as NSString
+                let ids = Set(regex.matches(in: document, range: NSRange(location: 0, length: ns.length)).map { ns.substring(with: $0.range(at: 1)) })
+                #expect(ids.count == n, "\(item.name): numIds")
+            }
+            if let n = item.tables { #expect(count(document, "<w:tbl>") == n, "\(item.name): tables") }
+            if let n = item.hyperlinks { #expect(count(document, "<w:hyperlink ") == n, "\(item.name): hyperlinks") }
+            if let n = item.bold { #expect(count(document, "<w:b/>") == n, "\(item.name): bold") }
+            if let n = item.italic { #expect(count(document, "<w:i/>") == n, "\(item.name): italic") }
+            if let n = item.strike { #expect(count(document, "<w:strike/>") == n, "\(item.name): strike") }
+        }
+    }
+}

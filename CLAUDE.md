@@ -187,7 +187,7 @@ release numbers.
 
 ```sh
 ./macos/scripts/build-app.sh            # build macos/dist/Loomings.app
-caffeinate -i macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test   # a Mac that sleeps stalls the run, and its waits time out
+caffeinate -di macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test   # -d: a sleeping display hides the completion popup, and about 16 key-event checks fail; a sleeping Mac stalls the run
 swift test --package-path macos         # Swift Testing; CLT has no XCTest
 swift run -c release --package-path macos LoomingsBench
 

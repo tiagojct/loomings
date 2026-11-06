@@ -1,0 +1,93 @@
+{
+  "note": "The contract between src/docx.js and macos/Sources/LoomingsDocx. Both test suites read this file. A rule change goes here first. 'paragraphStyles' counts <w:pStyle> uses; 'numIds' counts distinct list definitions in use; 'tables', 'hyperlinks', 'bold', 'italic' and 'strike' count the tags.",
+  "styleIds": [
+    "Title",
+    "Heading1",
+    "Heading2",
+    "Heading3",
+    "Heading4",
+    "Heading5",
+    "Heading6",
+    "Quote",
+    "Bibliography",
+    "SourceCode",
+    "Hyperlink"
+  ],
+  "cases": [
+    {
+      "name": "headings",
+      "markdown": "# One\n\n## Two\n\n###### Six\n\nText.\n",
+      "paragraphStyles": {
+        "Heading1": 1,
+        "Heading2": 1,
+        "Heading6": 1
+      }
+    },
+    {
+      "name": "quote and code",
+      "markdown": "> first\n>\n> second\n\n```\nline 1\nline 2\n\nline 4\n```\n",
+      "paragraphStyles": {
+        "Quote": 2,
+        "SourceCode": 4
+      }
+    },
+    {
+      "name": "bullet lists share one definition",
+      "markdown": "- a\n- b\n  - c\n\ntext\n\n- d\n",
+      "numIds": 1
+    },
+    {
+      "name": "numbered lists restart",
+      "markdown": "1. a\n2. b\n\ntext\n\n1. c\n\n- x\n",
+      "numIds": 3
+    },
+    {
+      "name": "links",
+      "markdown": "[web](https://example.org) [mail](mailto:a@b.pt) [local](#top) [bad](javascript:alert(1))\n",
+      "hyperlinks": 2
+    },
+    {
+      "name": "marks",
+      "markdown": "**bold** *italic* ~~gone~~ `code`\n",
+      "bold": 1,
+      "italic": 1,
+      "strike": 1
+    },
+    {
+      "name": "table",
+      "markdown": "| a | b |\n|---|--:|\n| 1 | 2 |\n",
+      "tables": 1
+    },
+    {
+      "name": "frontmatter title",
+      "markdown": "---\ntitle: My paper\nlang: pt-PT\n---\n\n# Intro\n",
+      "paragraphStyles": {
+        "Title": 1,
+        "Heading1": 1
+      }
+    },
+    {
+      "name": "frontmatter title repeated by the first heading",
+      "markdown": "---\ntitle: My paper\n---\n\n# My paper\n",
+      "paragraphStyles": {
+        "Title": 0,
+        "Heading1": 1
+      }
+    },
+    {
+      "name": "reference section title is not the document title",
+      "markdown": "---\nreference-section-title: Bibliografia\n---\n\n# Intro\n",
+      "paragraphStyles": {
+        "Title": 0,
+        "Heading1": 1
+      }
+    },
+    {
+      "name": "quoted title with a comment",
+      "markdown": "---\ntitle: \"My paper\" # note\n---\n\ntext\n",
+      "paragraphStyles": {
+        "Title": 1
+      }
+    }
+  ]
+}

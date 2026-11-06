@@ -77,7 +77,8 @@ let package = Package(
         ),
         .testTarget(
             name: "LoomingsDocxTests",
-            dependencies: ["LoomingsDocx"]
+            dependencies: ["LoomingsDocx"],
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "LoomingsMarkdownTests",
