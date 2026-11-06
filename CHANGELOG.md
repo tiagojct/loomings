@@ -6,6 +6,15 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## [2.6.4] — 2026-11-06
+
+### Changed
+
+- The icons follow Tryworks: the pale sheet and the L in Tryworks blue. New
+  `favicon.svg` for the app and the landing page; the PNG icons are redrawn
+  (`scripts/build-web-icons.swift`). The Mac icon keeps the standard Dock size
+  (830 of 1024 px) and gets the fine edge and keyline of a Tryworks plate.
+
 ## [2.6.3] — 2026-11-06
 
 ### Changed

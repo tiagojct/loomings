@@ -243,7 +243,8 @@ Stage 2 decisions worth preserving:
 - The native icon is separate from the web/social icons. Run
   `swift macos/scripts/build-icon.swift` to redraw the Adamastor-style padded
   squircle (830/1024 optical), cream keyline and flat L into
-  `macos/Resources/AppIcon.icns`; `build-app.sh` copies that. Do not feed
+  `macos/Resources/AppIcon.icns`; `build-app.sh` copies that. The web icons
+  come from `scripts/build-web-icons.swift` (Tryworks sheet and blue L). Do not feed
   `icons/rendered` or the Icon Composer export to the native bundle: they are
   full-bleed and glassy.
 - Share links with citations: `CitationController.shareText` runs

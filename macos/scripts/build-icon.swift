@@ -1,8 +1,9 @@
 import AppKit
 import Foundation
 
-// Rebuild the native app icon in the Adamastor style: a padded squircle
-// (about 81% optical size), a thin cream keyline, and the flat Loomings L.
+// Rebuild the native app icon in the Tryworks style: a padded squircle
+// (about 81% optical size, the size of other macOS icons), the pale sheet
+// with a fine engraved edge and keyline, and the Loomings L in Tryworks blue.
 // The web and social icons are separate assets and are not touched.
 
 let root = URL(fileURLWithPath: #filePath)
@@ -14,8 +15,13 @@ let masterURL = root.appendingPathComponent("icons/native/icon_1024.png")
 let resourceIcon = root.appendingPathComponent("macos/Resources/AppIcon.icns")
 let referenceURL = root.appendingPathComponent("macos/Resources/AppIcon-1024.png")
 
-guard let lMark = NSImage(contentsOf: lURL) else {
+// The source file is cream; the icon draws the L in Tryworks blue.
+guard var lSource = try? String(contentsOf: lURL, encoding: .utf8) else {
     fatalError("Missing Loomings mark: \(lURL.path)")
+}
+lSource = lSource.replacingOccurrences(of: "#F7F3EE", with: "#2C5D87")
+guard let lMark = NSImage(data: Data(lSource.utf8)) else {
+    fatalError("Unreadable Loomings mark: \(lURL.path)")
 }
 
 let canvas: CGFloat = 1024
@@ -28,8 +34,10 @@ let contentRect = NSRect(
     height: contentSide
 )
 
-let navy = NSColor(srgbRed: 13 / 255, green: 47 / 255, blue: 66 / 255, alpha: 1)
-let cream = NSColor(srgbRed: 247 / 255, green: 243 / 255, blue: 238 / 255, alpha: 1)
+// Tryworks tokens (vendor/tryworks-design/css/tokens.css).
+let sheet = NSColor(srgbRed: 0xF4 / 255, green: 0xF5 / 255, blue: 0xF1 / 255, alpha: 1) // --raised
+let blue = NSColor(srgbRed: 0x2C / 255, green: 0x5D / 255, blue: 0x87 / 255, alpha: 1) // --accent
+let edge = NSColor(srgbRed: 0x7D / 255, green: 0x87 / 255, blue: 0x8E / 255, alpha: 1) // --rule-strong
 
 func signedPow(_ value: CGFloat, _ exponent: CGFloat) -> CGFloat {
     let magnitude = pow(abs(value), exponent)
@@ -91,18 +99,26 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     NSColor.clear.setFill()
     NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-    navy.setFill()
+    sheet.setFill()
     squircle(in: rect).fill()
 
-    // A thin cream keyline, inset from the squircle edge, as on Adamastor.
-    let keylineInset = 14 * scale
+    // The plate mark: a fine engraved edge on the squircle, so the pale
+    // sheet holds its shape on a light Dock or desktop. The stroke is drawn
+    // inside the bounds, so the optical size does not change.
+    let outline = squircle(in: rect.insetBy(dx: 1.5 * scale, dy: 1.5 * scale))
+    outline.lineWidth = 3 * scale
+    edge.withAlphaComponent(0.7).setStroke()
+    outline.stroke()
+
+    // A thin blue keyline, inset from the edge.
+    let keylineInset = 22 * scale
     let keylineRect = rect.insetBy(dx: keylineInset, dy: keylineInset)
     let keyline = squircle(in: keylineRect)
     keyline.lineWidth = 2.2 * scale
-    cream.withAlphaComponent(0.55).setStroke()
+    blue.withAlphaComponent(0.5).setStroke()
     keyline.stroke()
 
-    // The L mark is flat cream, scaled with the optical content.
+    // The L mark is flat Tryworks blue, scaled with the optical content.
     lMark.draw(
         in: rect,
         from: .zero,
@@ -126,7 +142,7 @@ try FileManager.default.createDirectory(
 )
 try master.representation(using: .png, properties: [:])!.write(to: referenceURL)
 
-// Optical bounds must match Adamastor's Dock sizing.
+// Optical bounds must match the Dock sizing of other macOS icons.
 var minX = 1024, maxX = 0, minY = 1024, maxY = 0
 for y in 0..<1024 {
     for x in 0..<1024 where (master.colorAt(x: x, y: y)?.alphaComponent ?? 0) >= 0.5 {
