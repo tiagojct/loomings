@@ -11,11 +11,13 @@ at the root, the app at `/app`) deployed via Docker/nginx at
 loomings.tiagojacinto.eu (VPS: /opt/vps/apps/loomings, Caddy + Cloudflare Tunnel). The Tauri
 desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 
-- `src/editor.js` (~1700 lines) — the editor: CodeMirror setup, in-place
+- `src/editor.js` (~2600 lines) — the editor: CodeMirror setup, in-place
   Markdown rendering (`makeHighlight`/`makeTheme` from a palette), view
   modes and scroll sync, preview, menus, share links, lessons, documents,
   keyboard shortcuts, boot sequence. Imports browser APIs only through
   `browser.js`.
+- `src/cm-theme.js` — `makeHighlight` and `makeTheme`: the CodeMirror colours from a palette. Pure.
+- `src/export.js` — the HTML export page, `diagramCss`, `withDiagramStyle`. Pure.
 - `src/session.js` — the document session: dirty flag, scratch debounce,
   draft write ordering, document generation, save serialisation, and the
   containment of every storage failure. Headless; `editor.js` injects the
