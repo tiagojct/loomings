@@ -6,6 +6,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## [2.6.3] — 2026-11-06
+
+### Changed
+
+- Landing page: the arrow under the source pane points up at the marks, and the
+  Download for Mac button sits under Open Loomings.
+
 ## [2.6.2] — 2026-11-06
 
 ### Added
