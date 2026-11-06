@@ -15,6 +15,25 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   With References off, the menu and tab are gone and `[@key]` stays as typed.
   The sidebar folder is one for each window (default) or one for all windows.
 
+## [2.6.5] — 2026-11-06
+
+### Added
+
+- Tryworks, the design of the author's sites, as an eleventh colour family
+  (The sheet, Night plate), in the web app, the Mac app and the landing page.
+
+### Changed
+
+- The sidebar in the Mac app is a quick switcher: new windows start with it
+  hidden, and it hides on a click in the text, on typing and after opening a
+  file. Turning the feature on in Settings no longer opens it.
+- The Mac icon is a Tryworks blue squircle with a pale L.
+
+### Fixed
+
+- A Wide column in a narrow window left only a small margin, so the text did
+  not look centred. The column now takes at most 82% of the width (Mac app).
+
 ## [2.6.4] — 2026-11-06
 
 ### Changed

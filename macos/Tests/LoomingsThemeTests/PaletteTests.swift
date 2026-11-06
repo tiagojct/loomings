@@ -18,10 +18,10 @@ struct PaletteTests {
         return library
     }
 
-    @Test("All ten families and both modes are exported")
+    @Test("All eleven families and both modes are exported")
     func families() throws {
         let library = try library()
-        #expect(library.familyOrder.count == 10)
+        #expect(library.familyOrder.count == 11)
         #expect(Set(library.familyOrder) == Set(library.families.keys))
         #expect(library.defaultFamily == "pequod")
         for family in library.familyOrder {

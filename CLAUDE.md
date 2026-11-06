@@ -30,7 +30,7 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   focus restore). `src/html.js` — `escapeHtml`, safe in attribute context.
 - `src/fonts.css` — the self-hosted `@font-face` rules; files and licences
   live in `public/fonts/`.
-- `src/palettes.js` — the ten Ensigns colour families. The only place a colour
+- `src/palettes.js` — the ten Ensigns colour families and Tryworks. The only place a colour
   lives; `editor.js` writes them onto `<html>` as CSS variables and
   `style.css` reads those (it keeps only a Pequod pre-script fallback).
 - `src/share.js` — document ⇄ URL fragment. Pure, tested. A share link always
@@ -240,7 +240,7 @@ Stage 2 decisions worth preserving:
   separate surface; do not move syntax rendering into it.
 - The Theme menu applies the selected Ensigns family to editor syntax,
   preview, line numbers and HTML export; native controls follow
-  `NSApp.appearance`. The ten palettes are generated from `src/palettes.js`:
+  `NSApp.appearance`. The eleven palettes are generated from `src/palettes.js`:
   `node scripts/export-native-resources.mjs`. Do not hand-edit
   `macos/Resources/palettes.json`.
 - Editor base text colour lives in the text storage (uniform foreground),
@@ -391,7 +391,7 @@ browser pane.
 - **`base` is `/app/`** in `vite.config.js`, and must match `nginx.conf`'s
   `/app` mount, the manifest's `scope`/`start_url`, and the service
   worker's `BASE`. Change them together.
-- **Colours only in `palettes.js`, and only from Ensigns.** The ten families
+- **Colours only in `palettes.js`, and only from Ensigns, plus Tryworks (the site design, `vendor/tryworks-design`).** The ten families
   are Ensigns roles (ensigns.tiagojacinto.eu) mapped once: bg, bgElev,
   bgDeep, fg, fgDim, fgGhost, accent, accentLight (the link role),
   accentDim, border, selection, onAccent. Add a family there (dark + light,

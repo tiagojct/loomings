@@ -111,7 +111,7 @@ loomings/
     index.html          # app shell: toolbar, panes, menus, cheatsheet, dialogs
     editor.js           # the editor: CodeMirror setup, views, sync, menus, boot
     browser.js          # file I/O, IndexedDB documents/scratch/recents, PWA hooks
-    palettes.js         # the ten Ensigns families (single source of colour)
+    palettes.js         # the ten Ensigns families and Tryworks (single source of colour)
     share.js            # document ⇄ URL fragment (deflate + base64url)
     lessons.js          # index of lessons/*.md
     sw-template.js      # service worker, filled in at build time
@@ -140,7 +140,7 @@ gives back an app icon and offline use.
 `macos/` is a native version of the editor for Apple Silicon, macOS 15 or
 later (AppKit and Swift; the web app is unchanged). It is a personal build:
 ad-hoc signed, not notarised, no automatic updates. It reads the same share
-links and uses the same ten palettes and lessons.
+links and uses the same eleven palettes and lessons.
 
 ```sh
 swift test --package-path macos                      # unit tests

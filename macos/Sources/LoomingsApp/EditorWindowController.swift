@@ -1630,7 +1630,9 @@ final class EditorWindowController: NSWindowController,
         let full = scrollView.frame.width - scroller
         guard full > 0 else { return }
 
-        let maximum = effectiveColumnWidth.maxWidth
+        // The column never takes more than 82% of the width, so a Wide column
+        // in a narrow window still leaves a visible margin on both sides.
+        let maximum = min(effectiveColumnWidth.maxWidth, (full * 0.82).rounded(.down))
         let inset: CGFloat
         let containerWidth: CGFloat
         if rulers {

@@ -576,6 +576,12 @@ main {
 .binding[href="/app/?theme=pequod"] .half.light { background: #eae1d7; }
 .binding[href="/app/?theme=pequod"] .modes { color: #0d2f42; }
 
+.binding[href="/app/?theme=tryworks"] .half.dark { background: #12171c; }
+.binding[href="/app/?theme=tryworks"] .top { color: #dce1de; }
+.binding[href="/app/?theme=tryworks"] .line { color: #86b4da; }
+.binding[href="/app/?theme=tryworks"] .half.light { background: #e9ece6; }
+.binding[href="/app/?theme=tryworks"] .modes { color: #16202a; }
+
 .binding[href="/app/?theme=goney"] .half.dark { background: #10161c; }
 .binding[href="/app/?theme=goney"] .top { color: #e8eef2; }
 .binding[href="/app/?theme=goney"] .line { color: #3d97ff; }

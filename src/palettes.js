@@ -1,7 +1,7 @@
 // ========================================
 // Loomings — colour palettes
 // Ten families from Ensigns (ensigns.tiagojacinto.eu), the author's colour
-// system: each named for a ship in Moby-Dick, each with a light and a dark
+// system, plus Tryworks, the design of the author's sites. The Ensigns families are each named for a ship in Moby-Dick, each with a light and a dark
 // mode, each tested for one place of use. Every value here is an Ensigns
 // role, mapped once:
 //
@@ -366,9 +366,47 @@ export const PALETTES = {
       onAccent:     '#ffffff',
     },
   },
+
+  // Not an Ensigns family: the Tryworks design of the author's sites
+  // (vendor/tryworks-design, css/tokens.css), the sheet, copperplate ink and
+  // one blue. Mapped like the others: bg <- --bg, bgElev <- --raised,
+  // bgDeep <- --surface, fg <- --text, fgDim <- --muted, fgGhost <- --faint,
+  // accent <- --accent, border <- --rule, selection <- --accent-soft.
+  tryworks: {
+    label: 'Tryworks',
+    modes: { dark: 'Night plate', light: 'The sheet' },
+    dark: {
+      bg:           '#12171c',
+      bgElev:       '#192128',
+      bgDeep:       '#0d1115',
+      fg:           '#dce1de',
+      fgDim:        '#a6b0b3',
+      fgGhost:      '#8d989d',
+      accent:       '#86b4da',
+      accentLight:  '#86b4da',
+      accentDim:    '#8d989d',
+      border:       '#2c363f',
+      selection:    '#27333e',
+      onAccent:     '#12171c',
+    },
+    light: {
+      bg:           '#e9ece6',
+      bgElev:       '#f4f5f1',
+      bgDeep:       '#dfe3dc',
+      fg:           '#16202a',
+      fgDim:        '#44505b',
+      fgGhost:      '#5d6870',
+      accent:       '#2c5d87',
+      accentLight:  '#2c5d87',
+      accentDim:    '#5d6870',
+      border:       '#c6ccc6',
+      selection:    '#c7d2d5',
+      onAccent:     '#f4f5f1',
+    },
+  },
 };
 
-export const FAMILY_ORDER = ['pequod', 'goney', 'townho', 'jeroboam', 'jungfrau', 'rosebud', 'enderby', 'bachelor', 'rachel', 'delight'];
+export const FAMILY_ORDER = ['pequod', 'tryworks', 'goney', 'townho', 'jeroboam', 'jungfrau', 'rosebud', 'enderby', 'bachelor', 'rachel', 'delight'];
 export const DEFAULT_FAMILY = 'pequod';
 
 // A mode's colours plus the resolved ink roles.

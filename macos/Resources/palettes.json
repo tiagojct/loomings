@@ -2,6 +2,7 @@
   "defaultFamily": "pequod",
   "familyOrder": [
     "pequod",
+    "tryworks",
     "goney",
     "townho",
     "jeroboam",
@@ -54,6 +55,49 @@
         "emphasis": "#0d2f42",
         "code": "#335260",
         "marker": "#163f54"
+      }
+    },
+    "tryworks": {
+      "label": "Tryworks",
+      "modes": {
+        "dark": "Night plate",
+        "light": "The sheet"
+      },
+      "dark": {
+        "bg": "#12171c",
+        "bgElev": "#192128",
+        "bgDeep": "#0d1115",
+        "fg": "#dce1de",
+        "fgDim": "#a6b0b3",
+        "fgGhost": "#8d989d",
+        "accent": "#86b4da",
+        "accentLight": "#86b4da",
+        "accentDim": "#8d989d",
+        "border": "#2c363f",
+        "selection": "#27333e",
+        "onAccent": "#12171c",
+        "heading": "#dce1de",
+        "emphasis": "#dce1de",
+        "code": "#a6b0b3",
+        "marker": "#86b4da"
+      },
+      "light": {
+        "bg": "#e9ece6",
+        "bgElev": "#f4f5f1",
+        "bgDeep": "#dfe3dc",
+        "fg": "#16202a",
+        "fgDim": "#44505b",
+        "fgGhost": "#5d6870",
+        "accent": "#2c5d87",
+        "accentLight": "#2c5d87",
+        "accentDim": "#5d6870",
+        "border": "#c6ccc6",
+        "selection": "#c7d2d5",
+        "onAccent": "#f4f5f1",
+        "heading": "#16202a",
+        "emphasis": "#16202a",
+        "code": "#44505b",
+        "marker": "#2c5d87"
       }
     },
     "goney": {
