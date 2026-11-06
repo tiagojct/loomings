@@ -6,6 +6,26 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
 
+## [2.6.1] — 2026-11-06
+
+### Fixed
+
+- Word export took the title of the reference list (`reference-section-title:`)
+  as the document title. It now reads `title:`.
+- Word export: all bullet lists share one list definition, and nested lists
+  go nine levels deep.
+- A diagram whose SVG already had a `style` attribute could fail to draw in the
+  Word file.
+- Dependencies: markdown-it 14.3.3 and linkify-it fix two quadratic-time
+  problems in text from a share link. Vite, Vitest, docx and the CodeMirror
+  packages are current. `npm audit` shows no vulnerability.
+
+### Changed
+
+- The HTML export page moved from `editor.js` to `src/export.js`, with tests.
+  The page is byte for byte the same.
+- The Word export has one contract fixture, read by the web and the Mac tests.
+
 ## [2.6.0] — 2026-11-05
 
 This section also holds the changes of 2.5.0, which were never listed apart.
