@@ -18,11 +18,14 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     var onOpen: ((URL) -> Void)?
     var onChooseFolder: (() -> Void)?
+    /// A folder picked from the path menu, or the parent button.
+    var onNavigate: ((URL) -> Void)?
 
     private(set) var folder: URL?
     private var roots: [Node] = []
 
     private let title = NSTextField(labelWithString: "")
+    private let upButton = NSButton()
     private let chooseButton = NSButton()
     private let outline = NSOutlineView()
     private let scroll = NSScrollView()
@@ -43,10 +46,22 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     private func build() {
         setAccessibilityLabel("Files")
-        title.font = .systemFont(ofSize: 11, weight: .semibold)
         title.lineBreakMode = .byTruncatingMiddle
+        title.toolTip = "Choose a folder from the path"
+        title.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(showPath(_:))))
+        title.setAccessibilityRole(.button)
+        title.setAccessibilityLabel("Folder path")
         title.translatesAutoresizingMaskIntoConstraints = false
         title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        title.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        upButton.bezelStyle = .accessoryBarAction
+        upButton.isBordered = false
+        upButton.image = NSImage(systemSymbolName: "arrow.up", accessibilityDescription: "Parent Folder")
+        upButton.toolTip = "Parent Folder"
+        upButton.target = self
+        upButton.action = #selector(goUp(_:))
+        upButton.translatesAutoresizingMaskIntoConstraints = false
 
         chooseButton.bezelStyle = .accessoryBarAction
         chooseButton.isBordered = false
@@ -72,6 +87,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         outline.delegate = self
         outline.target = self
         outline.action = #selector(clicked(_:))
+        outline.doubleAction = #selector(doubleClicked(_:))
         outline.setAccessibilityLabel("Files")
 
         scroll.documentView = outline
@@ -84,11 +100,15 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         emptyLabel.font = .systemFont(ofSize: 12)
         emptyLabel.translatesAutoresizingMaskIntoConstraints = false
 
-        for view in [title, chooseButton, rule, scroll, emptyLabel] { addSubview(view) }
+        for view in [title, upButton, chooseButton, rule, scroll, emptyLabel] { addSubview(view) }
         NSLayoutConstraint.activate([
-            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            title.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
             title.centerYAnchor.constraint(equalTo: chooseButton.centerYAnchor),
-            chooseButton.leadingAnchor.constraint(greaterThanOrEqualTo: title.trailingAnchor, constant: 6),
+            title.trailingAnchor.constraint(lessThanOrEqualTo: upButton.leadingAnchor, constant: -4),
+            upButton.trailingAnchor.constraint(equalTo: chooseButton.leadingAnchor),
+            upButton.centerYAnchor.constraint(equalTo: chooseButton.centerYAnchor),
+            upButton.widthAnchor.constraint(equalToConstant: 24),
+            upButton.heightAnchor.constraint(equalToConstant: 24),
             chooseButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
             chooseButton.topAnchor.constraint(equalTo: topAnchor, constant: 8),
             chooseButton.widthAnchor.constraint(equalToConstant: 24),
@@ -113,8 +133,9 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     /// Shows `url`, or the empty state for nil. Keeps nothing of the old tree.
     func showFolder(_ url: URL?) {
         folder = url
-        title.stringValue = url?.lastPathComponent ?? "Files"
+        setTitle(url?.lastPathComponent ?? "Files")
         title.toolTip = url?.path
+        upButton.isEnabled = url.map { $0.pathComponents.count > 1 } ?? false
         reload()
     }
 
@@ -183,9 +204,72 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         }
     }
 
+    private func setTitle(_ text: String) {
+        let result = NSMutableAttributedString(string: text, attributes: [
+            .font: NSFont.systemFont(ofSize: 12, weight: .semibold),
+            .foregroundColor: ink,
+        ])
+        if let chevron = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: nil)?
+            .withSymbolConfiguration(.init(pointSize: 8, weight: .semibold)) {
+            let attachment = NSTextAttachment()
+            attachment.image = chevron.tinted(dimInk)
+            result.append(NSAttributedString(string: "  "))
+            result.append(NSAttributedString(attachment: attachment))
+        }
+        title.attributedStringValue = result
+    }
+
     // MARK: Actions
 
+    /// The folders above this one, nearest first, to the top of the disk.
+    private var ancestors: [URL] {
+        guard var url = folder?.standardizedFileURL else { return [] }
+        var list: [URL] = []
+        while url.pathComponents.count > 1 {
+            url = url.deletingLastPathComponent()
+            list.append(url)
+        }
+        return list
+    }
+
+    @objc private func goUp(_ sender: Any?) {
+        if let parent = ancestors.first { onNavigate?(parent) }
+    }
+
+    @objc private func showPath(_ sender: Any?) {
+        let menu = NSMenu()
+        if let folder {
+            let current = NSMenuItem(title: folder.lastPathComponent, action: nil, keyEquivalent: "")
+            current.state = .on
+            menu.addItem(current)
+        }
+        for url in ancestors {
+            let name = url.pathComponents.count == 1 ? (FileManager.default.displayName(atPath: url.path)) : url.lastPathComponent
+            let item = NSMenuItem(title: name, action: #selector(pickAncestor(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = url
+            item.image = NSImage(systemSymbolName: "folder", accessibilityDescription: nil)
+            menu.addItem(item)
+        }
+        if !menu.items.isEmpty { menu.addItem(.separator()) }
+        let choose = NSMenuItem(title: "Choose Folder…", action: #selector(chooseFolder(_:)), keyEquivalent: "")
+        choose.target = self
+        menu.addItem(choose)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: title.bounds.height + 2), in: title)
+    }
+
+    @objc private func pickAncestor(_ sender: NSMenuItem) {
+        if let url = sender.representedObject as? URL { onNavigate?(url) }
+    }
+
     @objc private func chooseFolder(_ sender: Any?) { onChooseFolder?() }
+
+    /// A double click on a folder makes it the folder of the sidebar.
+    @objc private func doubleClicked(_ sender: Any?) {
+        let row = outline.clickedRow
+        guard row >= 0, let node = outline.item(atRow: row) as? Node, node.entry.isFolder else { return }
+        onNavigate?(node.entry.url)
+    }
 
     @objc private func clicked(_ sender: Any?) {
         let row = outline.clickedRow
@@ -262,7 +346,8 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         outline.backgroundColor = ground
         scroll.backgroundColor = ground
         scroll.scrollerKnobStyle = palette.map { $0.isDark ? .light : .dark } ?? .default
-        title.textColor = dimInk
+        setTitle(folder?.lastPathComponent ?? "Files")
+        upButton.contentTintColor = dimInk
         emptyLabel.textColor = dimInk
         chooseButton.contentTintColor = dimInk
         rule.fillColor = palette?.colors.borderColor ?? .separatorColor
@@ -286,5 +371,19 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
             if node.entry.isFolder { outline.expandItem(node) } else { onOpen?(node.entry.url) }
             return
         }
+    }
+}
+
+private extension NSImage {
+    /// The symbol drawn in one colour, for text attachments (they do not tint).
+    func tinted(_ color: NSColor) -> NSImage {
+        let copy = NSImage(size: size, flipped: false) { rect in
+            self.draw(in: rect)
+            color.set()
+            rect.fill(using: .sourceAtop)
+            return true
+        }
+        copy.isTemplate = false
+        return copy
     }
 }

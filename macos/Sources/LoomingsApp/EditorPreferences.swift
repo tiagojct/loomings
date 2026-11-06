@@ -179,3 +179,19 @@ extension Notification.Name {
     /// A feature switch or the sidebar's folder rule changed in Settings.
     static let loomingsFeaturesChanged = Notification.Name("eu.tiagojacinto.loomings.featuresChanged")
 }
+
+/// The folder a sidebar was showing when it opened a file, so that the window
+/// of that file starts on the same folder and the writer can keep browsing.
+enum SidebarHandoff {
+    private static var folders: [URL: URL] = [:]
+
+    static func remember(folder: URL?, for file: URL) {
+        guard let folder else { return }
+        folders[file.standardizedFileURL] = folder
+    }
+
+    static func take(for file: URL?) -> URL? {
+        guard let file else { return nil }
+        return folders.removeValue(forKey: file.standardizedFileURL)
+    }
+}

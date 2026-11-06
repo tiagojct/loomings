@@ -125,6 +125,7 @@ final class EditorWindowController: NSWindowController,
 
         sidebar.onOpen = { [weak self] url in self?.openFromSidebar(url) }
         sidebar.onChooseFolder = { [weak self] in self?.chooseSidebarFolder() }
+        sidebar.onNavigate = { [weak self] url in self?.setSidebarFolder(url) }
         featuresObserver = NotificationCenter.default.addObserver(
             forName: .loomingsFeaturesChanged, object: nil, queue: .main
         ) { [weak self] _ in
@@ -1274,6 +1275,11 @@ final class EditorWindowController: NSWindowController,
     /// Shows or hides the sidebar, and lists the folder when it shows.
     func applySidebar() {
         let show = EditorPreferences.sidebarEnabled && sidebarShown
+        // A file opened from another window's sidebar lists the folder that
+        // window was browsing, not the folder of the file.
+        if sidebarFolderOverride == nil, let handed = SidebarHandoff.take(for: loomingsDocument?.fileURL) {
+            sidebarFolderOverride = EditorPreferences.sidebarSharedFolder ? nil : handed
+        }
         if show {
             if sidebar.folder != sidebarFolderToShow || sidebar.isHidden {
                 sidebar.showFolder(sidebarFolderToShow)
@@ -1317,6 +1323,7 @@ final class EditorWindowController: NSWindowController,
 
     private func openFromSidebar(_ url: URL) {
         if url.standardizedFileURL == loomingsDocument?.fileURL?.standardizedFileURL { return }
+        SidebarHandoff.remember(folder: sidebar.folder, for: url)
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, error in
             if let error { NSApp.presentError(error) }
         }

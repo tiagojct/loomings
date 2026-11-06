@@ -491,6 +491,16 @@ enum SelfTest {
                 check(false, "could not create the second window")
             }
 
+            // A file opened from the sidebar keeps the folder being browsed.
+            let handed = folderRoot.appendingPathComponent("sub/c.md")
+            SidebarHandoff.remember(folder: folderRoot, for: handed)
+            check(SidebarHandoff.take(for: handed) == folderRoot, "the new window gets the folder of the sidebar")
+            check(SidebarHandoff.take(for: handed) == nil, "the handed folder is used once")
+            EditorPreferences.sidebarSharedFolder = false
+            feature.setSidebarFolder(folderRoot.appendingPathComponent("sub", isDirectory: true))
+            feature.setSidebarFolder(folderRoot)
+            check(feature.sidebarFolderForTesting?.lastPathComponent == folderRoot.lastPathComponent, "the sidebar can go back up to a parent folder")
+
             // References off: citations stay as typed, and nothing runs.
             EditorPreferences.referencesEnabled = true
             feature.editor.setText("---\nreferences: []\n---\n\nSee [@a].\n")
