@@ -2,27 +2,18 @@ import AppKit
 import Foundation
 
 // Rebuild the native app icon in the Tryworks style: a padded squircle
-// (about 81% optical size, the size of other macOS icons) in Tryworks blue,
-// with a fine darker edge, a pale keyline and the Loomings L in the pale sheet.
+// (about 81% optical size, the size of other macOS icons): a dark ground lit
+// from above, a fine light edge and a woven Markdown hash in a Tryworks blue
+// gradient with a soft glow.
 // The web and social icons are separate assets and are not touched.
 
 let root = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent() // scripts
     .deletingLastPathComponent() // macos
     .deletingLastPathComponent() // repository
-let lURL = root.appendingPathComponent("icons/loomings.icon/Assets/loomings-L.svg")
 let masterURL = root.appendingPathComponent("icons/native/icon_1024.png")
 let resourceIcon = root.appendingPathComponent("macos/Resources/AppIcon.icns")
 let referenceURL = root.appendingPathComponent("macos/Resources/AppIcon-1024.png")
-
-// The source file is cream; the icon draws the L in the pale sheet.
-guard var lSource = try? String(contentsOf: lURL, encoding: .utf8) else {
-    fatalError("Missing Loomings mark: \(lURL.path)")
-}
-lSource = lSource.replacingOccurrences(of: "#F7F3EE", with: "#F4F5F1")
-guard let lMark = NSImage(data: Data(lSource.utf8)) else {
-    fatalError("Unreadable Loomings mark: \(lURL.path)")
-}
 
 let canvas: CGFloat = 1024
 let opticalScale: CGFloat = 0.81
@@ -99,32 +90,95 @@ func drawIcon(size: CGFloat) -> NSBitmapImageRep {
     NSColor.clear.setFill()
     NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-    blue.setFill()
-    squircle(in: rect).fill()
 
-    // A fine deeper edge on the squircle, so the blue holds its shape on a
-    // dark Dock or desktop too. The stroke is drawn
-    // inside the bounds, so the optical size does not change.
+    // A dark ground, lit from above, so the lit L stands out (the way a
+    // glossy dark icon does). Tryworks night: --term-bg and --bg.
+    let ground = squircle(in: rect)
+    NSGradient(colors: [
+        NSColor(srgbRed: 0x1E / 255, green: 0x2A / 255, blue: 0x34 / 255, alpha: 1),
+        NSColor(srgbRed: 0x0B / 255, green: 0x0F / 255, blue: 0x13 / 255, alpha: 1),
+    ])!.draw(in: ground, angle: -90)
+
+    // A fine light edge, drawn inside the bounds, so the squircle holds its
+    // shape on a dark Dock too.
     let outline = squircle(in: rect.insetBy(dx: 1.5 * scale, dy: 1.5 * scale))
     outline.lineWidth = 3 * scale
-    edge.withAlphaComponent(0.9).setStroke()
+    NSColor.white.withAlphaComponent(0.12).setStroke()
     outline.stroke()
 
-    // A thin pale keyline, inset from the edge.
-    let keylineInset = 22 * scale
-    let keylineRect = rect.insetBy(dx: keylineInset, dy: keylineInset)
-    let keyline = squircle(in: keylineRect)
-    keyline.lineWidth = 2.2 * scale
-    sheet.withAlphaComponent(0.35).setStroke()
-    keyline.stroke()
+    // The mark: a Markdown hash woven like cloth on a loom. Two upright and
+    // two level bars, each passing over one bar and under the next, in a
+    // Tryworks blue gradient (light at the top left) with a soft glow.
+    let centre = NSPoint(x: rect.midX, y: rect.midY)
+    let half: CGFloat = 250 * scale      // half the length of a bar
+    let gap: CGFloat = 108 * scale       // bar axis to centre
+    let width: CGFloat = 86 * scale      // bar thickness
+    let halo: CGFloat = 9 * scale        // the dark seam where one bar crosses another
 
-    // The L mark is the flat pale sheet, scaled with the optical content.
-    lMark.draw(
-        in: rect,
-        from: .zero,
-        operation: .sourceOver,
-        fraction: 1
+    func bar(vertical: Bool, at offset: CGFloat) -> NSRect {
+        vertical
+            ? NSRect(x: centre.x + offset - width / 2, y: centre.y - half, width: width, height: half * 2)
+            : NSRect(x: centre.x - half, y: centre.y + offset - width / 2, width: half * 2, height: width)
+    }
+    func rounded(_ r: NSRect) -> NSBezierPath {
+        NSBezierPath(roundedRect: r, xRadius: width * 0.22, yRadius: width * 0.22)
+    }
+    let box = NSRect(x: centre.x - half, y: centre.y - half, width: half * 2, height: half * 2)
+    let gradient = NSGradient(colors: [
+        NSColor(srgbRed: 0xE4 / 255, green: 0xF0 / 255, blue: 0xFA / 255, alpha: 1), // light, top left
+        NSColor(srgbRed: 0x86 / 255, green: 0xB4 / 255, blue: 0xDA / 255, alpha: 1), // --term-acc
+        NSColor(srgbRed: 0x2C / 255, green: 0x5D / 255, blue: 0x87 / 255, alpha: 1), // --accent
+    ], atLocations: [0, 0.45, 1], colorSpace: .sRGB)!
+    func lit(_ path: NSBezierPath) {
+        NSGraphicsContext.saveGraphicsState()
+        path.addClip()
+        gradient.draw(in: box, angle: -55)
+        NSGraphicsContext.restoreGraphicsState()
+    }
+
+    let uprights = [-gap, gap].map { bar(vertical: true, at: $0) }
+    let levels = [gap, -gap].map { bar(vertical: false, at: $0) } // top, bottom
+
+    // The glow: the whole hash in blue, with a shadow.
+    context.cgContext.saveGState()
+    context.cgContext.setShadow(
+        offset: CGSize(width: 0, height: -10 * scale),
+        blur: 44 * scale,
+        color: blue.withAlphaComponent(0.75).cgColor
     )
+    blue.setFill()
+    for r in uprights + levels { rounded(r).fill() }
+    context.cgContext.restoreGState()
+
+    for r in uprights + levels { lit(rounded(r)) }
+
+    // The weave: at each crossing the "over" bar is drawn again across the
+    // other, with a seam of the ground colour cut into the bar below it.
+    let seam = NSColor(srgbRed: 0x10 / 255, green: 0x17 / 255, blue: 0x1D / 255, alpha: 1)
+    // (upright index, level index, level is over)
+    let crossings: [(Int, Int, Bool)] = [(0, 0, true), (1, 0, false), (0, 1, false), (1, 1, true)]
+    for (u, l, levelOver) in crossings {
+        let under = levelOver ? uprights[u] : levels[l]
+        let over = levelOver ? levels[l] : uprights[u]
+        let crossing = under.intersection(over)
+        // The over bar's piece across the under bar, a little longer each side.
+        let piece = levelOver
+            ? NSRect(x: under.minX - halo, y: over.minY, width: under.width + halo * 2, height: over.height)
+            : NSRect(x: over.minX, y: under.minY - halo, width: over.width, height: under.height + halo * 2)
+        _ = crossing
+        NSGraphicsContext.saveGraphicsState()
+        rounded(under).addClip()
+        seam.setFill()
+        let seamRect = levelOver
+            ? piece.insetBy(dx: 0, dy: -halo)
+            : piece.insetBy(dx: -halo, dy: 0)
+        NSBezierPath(rect: seamRect).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect: piece).addClip()
+        lit(rounded(over))
+        NSGraphicsContext.restoreGraphicsState()
+    }
 
     NSGraphicsContext.restoreGraphicsState()
     return bitmap
