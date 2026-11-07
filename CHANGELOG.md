@@ -27,7 +27,7 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The sidebar in the Mac app is a quick switcher: new windows start with it
   hidden, and it hides on a click in the text, on typing and after opening a
   file. Turning the feature on in Settings no longer opens it.
-- The Mac icon is a dark squircle with a woven Markdown hash in a lit Tryworks blue gradient.
+- The Mac icon is a dark squircle with a woven Markdown hash in a lit Tryworks blue gradient; the web icons and favicons use the same hash.
 
 ### Fixed
 
