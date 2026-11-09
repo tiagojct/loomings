@@ -1340,6 +1340,7 @@ final class EditorWindowController: NSWindowController,
 
     /// Settings changed: References and the sidebar follow at once.
     private func featuresChanged() {
+        applyToolbarVisibility()
         applySidebar()
         updateCitations()
         applyRightColumn()
@@ -2008,6 +2009,9 @@ final class EditorWindowController: NSWindowController,
         case #selector(toggleSidebar(_:)):
             menuItem.state = sidebarShown && EditorPreferences.sidebarEnabled ? .on : .off
             return EditorPreferences.sidebarEnabled
+        case #selector(toggleToolbar(_:)):
+            menuItem.title = EditorPreferences.toolbarHidden ? "Show Toolbar" : "Hide Toolbar"
+            return true
         default:
             return true
         }
@@ -2022,7 +2026,31 @@ final class EditorWindowController: NSWindowController,
         toolbar.centeredItemIdentifiers = [ToolbarItem.viewMode]
         window?.toolbar = toolbar
         window?.toolbarStyle = .unified
+        applyToolbarVisibility()
     }
+
+    /// View > Hide Toolbar: the window has no icons, only the traffic lights
+    /// and the title. The choice is kept for every window. The commands stay
+    /// on their menus and keys.
+    @objc func toggleToolbar(_ sender: Any?) {
+        EditorPreferences.toolbarHidden.toggle()
+        NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+    }
+
+    private func applyToolbarVisibility() {
+        window?.toolbar?.isVisible = !EditorPreferences.toolbarHidden
+    }
+
+    /// A toolbar button is in no window while the toolbar is hidden, so a menu
+    /// or a popover that points at it points at the status bar instead.
+    private func anchor(_ view: NSView?) -> NSView {
+        if let view, view.window != nil { return view }
+        return statusBar
+    }
+
+    var isToolbarVisibleForTesting: Bool { window?.toolbar?.isVisible ?? false }
+    var outlineAnchorIsInWindowForTesting: Bool { anchor(outlineButton).window != nil }
+    var shareAnchorIsInWindowForTesting: Bool { anchor(shareButton).window != nil }
 
     // MARK: - Toolbar
 
@@ -2139,7 +2167,7 @@ final class EditorWindowController: NSWindowController,
 
     /// View > Go to Heading: the same list as the toolbar tool.
     @objc func goToHeading(_ sender: Any?) {
-        popUpOutline(from: outlineButton ?? statusBar)
+        popUpOutline(from: anchor(outlineButton))
     }
 
     private func popUpOutline(from anchor: NSView) {
@@ -2276,7 +2304,7 @@ final class EditorWindowController: NSWindowController,
             rows.append(view)
         }
         rows.append(TeachingPopovers.label(content.caption, secondary: content.image == nil))
-        let anchor: NSView = shareButton ?? statusBar
+        let anchor = self.anchor(shareButton)
         TeachingPopovers.show(TeachingPopovers.column(rows), relativeTo: anchor.bounds, of: anchor, palette: ThemeManager.shared.resolved())
     }
 

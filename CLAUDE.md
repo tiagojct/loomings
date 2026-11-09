@@ -294,6 +294,10 @@ Stage 2 decisions worth preserving:
   or the argument `-Loomings.Native.sidebarVisible YES`, for tests and
   snapshots. A new window starts with the sidebar closed. The Files button
   sits just before Outline, with the other tools.
+- View > Hide Toolbar (`EditorPreferences.toolbarHidden`, stored) hides the
+  title-bar controls in every window. A toolbar button is in no window then:
+  menus and popovers that point at one go through `anchor(_:)`, which falls
+  back to the status bar.
 - Sidebar: `reloadIfChanged` (window activation) lists again only if the date
   of a listed folder changed; `reload` always lists. Read the date with
   `FileManager.attributesOfItem`, not `URL.resourceValues`: a URL keeps the

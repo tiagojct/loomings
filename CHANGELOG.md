@@ -25,6 +25,10 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `sidebarVisible` value (a test run had left one in the preferences) opened
   it; that value is now only a command-line argument or a value in memory.
 - The Files button is with the other tools, just before Outline.
+- View > Hide Toolbar (Option-Command-T): a window with no icons, only the
+  traffic lights and the title. The choice is kept for every window and the
+  next launch. The modes stay on Command-1, Command-\\ and Shift-Command-P,
+  and the other tools stay in the menus.
 
 ### Changed (native macOS app, title bar and keyboard)
 

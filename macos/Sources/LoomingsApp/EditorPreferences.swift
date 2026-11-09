@@ -143,6 +143,13 @@ enum EditorPreferences {
         set { defaults.set(newValue, forKey: key("printQRCode")) }
     }
 
+    /// The title-bar controls are hidden (View > Hide Toolbar). Off by default,
+    /// and kept: new windows and the next launch stay quiet.
+    static var toolbarHidden: Bool {
+        get { defaults.bool(forKey: key("toolbarHidden")) }
+        set { defaults.set(newValue, forKey: key("toolbarHidden")) }
+    }
+
     /// The file sidebar. Off by default.
     static var sidebarEnabled: Bool {
         get { defaults.bool(forKey: key("sidebarEnabled")) }

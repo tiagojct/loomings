@@ -765,6 +765,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         )
         sidebarItem.keyEquivalentModifierMask = [.command, .control]
         menu.addItem(sidebarItem)
+
+        let toolbarItem = NSMenuItem(
+            title: "Hide Toolbar",
+            action: #selector(EditorWindowController.toggleToolbar(_:)),
+            keyEquivalent: "t"
+        )
+        toolbarItem.keyEquivalentModifierMask = [.command, .option]
+        menu.addItem(toolbarItem)
         menu.addItem(.separator())
 
         let goToHeading = NSMenuItem(

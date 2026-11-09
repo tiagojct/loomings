@@ -544,6 +544,21 @@ enum SelfTest {
         } else {
             check(false, "could not create the feature window")
         }
+        // View > Hide Toolbar: no icons, kept, and nothing points at a button
+        // that is not in the window.
+        let toolbarWasHidden = EditorPreferences.toolbarHidden
+        EditorPreferences.toolbarHidden = false
+        controller.toggleToolbar(nil)
+        check(EditorPreferences.toolbarHidden && !controller.isToolbarVisibleForTesting, "Hide Toolbar hides the icons and keeps the choice")
+        let hideItem = NSMenuItem(title: "Hide Toolbar", action: #selector(EditorWindowController.toggleToolbar(_:)), keyEquivalent: "")
+        _ = controller.validateMenuItem(hideItem)
+        check(hideItem.title == "Show Toolbar", "the menu item then reads Show Toolbar")
+        check(controller.outlineAnchorIsInWindowForTesting && controller.shareAnchorIsInWindowForTesting, "menus and popovers point at the window, not at a hidden button")
+        controller.toggleToolbar(nil)
+        check(!EditorPreferences.toolbarHidden && controller.isToolbarVisibleForTesting, "Show Toolbar brings the icons back")
+        EditorPreferences.toolbarHidden = toolbarWasHidden
+        NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
+
         // The title-bar controls dim while the window is not the main window.
         controller.windowDidResignMain(Notification(name: NSWindow.didResignMainNotification))
         check(controller.chromeIsDimmedForTesting, "the title-bar controls dim in an inactive window")
