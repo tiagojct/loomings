@@ -172,7 +172,27 @@ private final class ModeSegment: NSButton {
         fatalError("ModeSegment is created in code")
     }
 
+    /// The pointer is over a segment that is not the selected one.
+    private(set) var hovering = false { didSet { if hovering != oldValue { needsDisplay = true } } }
+    private var tracking: NSTrackingArea?
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { hovering = true }
+    override func mouseExited(with event: NSEvent) { hovering = false }
+
     override func draw(_ dirtyRect: NSRect) {
+        let lifted = hovering && !isActive && isWindowActive
         if isActive {
             let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5)
             colors.raised.setFill()
@@ -180,10 +200,14 @@ private final class ModeSegment: NSButton {
             colors.border.withAlphaComponent(0.7).setStroke()
             shape.lineWidth = 1
             shape.stroke()
+        } else if lifted {
+            // Half way to the selected segment: it says the segment takes a click.
+            colors.raised.withAlphaComponent(0.5).setFill()
+            NSBezierPath(roundedRect: bounds.insetBy(dx: 0.5, dy: 0.5), xRadius: 5, yRadius: 5).fill()
         }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: labelFont,
-            .foregroundColor: (isActive ? colors.ink : colors.dimInk).withAlphaComponent(isWindowActive ? 1 : 0.5),
+            .foregroundColor: (isActive || lifted ? colors.ink : colors.dimInk).withAlphaComponent(isWindowActive ? 1 : 0.5),
         ]
         let size = (label as NSString).size(withAttributes: attributes)
         (label as NSString).draw(
@@ -222,7 +246,8 @@ final class ToolbarIconButton: NSButton {
         }
     }
 
-    init(symbol: String, label: String) {
+    /// - Parameter opensMenu: the tool shows a menu, and says so to VoiceOver.
+    init(symbol: String, label: String, opensMenu: Bool = false) {
         symbolName = symbol
         super.init(frame: NSRect(x: 0, y: 0, width: Self.side, height: Self.side))
         title = ""
@@ -231,6 +256,7 @@ final class ToolbarIconButton: NSButton {
         imageScaling = .scaleNone
         toolTip = label
         setAccessibilityLabel(label)
+        if opensMenu { setAccessibilityRole(.menuButton) }
         setSymbol(symbol)
     }
 

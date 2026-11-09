@@ -59,6 +59,12 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         layer?.shadowOffset = CGSize(width: 0, height: -3)
         layer?.masksToBounds = false
         outline.onEscape = { [weak self] in self?.onEscape?() }
+        outline.onActivate = { [weak self] in self?.activateSelection() }
+        outline.menuForRow = { [weak self] row in self?.contextMenu(forRow: row) }
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(displayOptionsChanged(_:)),
+            name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil
+        )
         title.lineBreakMode = .byTruncatingMiddle
         title.toolTip = "Choose a folder from the path"
         title.addGestureRecognizer(NSClickGestureRecognizer(target: self, action: #selector(showPath(_:))))
@@ -157,6 +163,15 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         let rows = folder == nil || roots.isEmpty ? 3 : outline.numberOfRows
         let list = CGFloat(rows) * (outline.rowHeight + outline.intercellSpacing.height)
         return NSSize(width: Self.width, height: max(120, Self.headerHeight + list + 14))
+    }
+
+    /// With a path the shadow is drawn from the shape, not from the pixels of
+    /// the card on each frame.
+    override func layout() {
+        super.layout()
+        layer?.shadowPath = CGPath(
+            roundedRect: bounds, cornerWidth: Self.radius, cornerHeight: Self.radius, transform: nil
+        )
     }
 
     func outlineViewItemDidExpand(_ notification: Notification) { invalidateIntrinsicContentSize() }
@@ -359,13 +374,77 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     }
 
     @objc private func clicked(_ sender: Any?) {
-        let row = outline.clickedRow
+        activate(row: outline.clickedRow)
+    }
+
+    /// A file opens. A folder opens or closes in the list.
+    private func activate(row: Int) {
         guard row >= 0, let node = outline.item(atRow: row) as? Node else { return }
         if node.entry.isFolder {
             if outline.isItemExpanded(node) { outline.collapseItem(node) } else { outline.expandItem(node) }
         } else {
             onOpen?(node.entry.url)
         }
+    }
+
+    // MARK: Keyboard
+
+    /// Gives the keys to the list: the arrows move, Return opens, Escape puts
+    /// the sidebar away. With no row marked, the first one is.
+    func focusList() {
+        guard !scroll.isHidden, outline.numberOfRows > 0 else { return }
+        if outline.selectedRow < 0 {
+            outline.selectRowIndexes([0], byExtendingSelection: false)
+        }
+        window?.makeFirstResponder(outline)
+    }
+
+    /// True while the list has the keys.
+    var hasKeyFocus: Bool { window?.firstResponder === outline }
+
+    private func activateSelection() { activate(row: outline.selectedRow) }
+
+    // MARK: Context menu
+
+    /// The menu of a row, or of the folder for a click below the rows.
+    private func contextMenu(forRow row: Int) -> NSMenu? {
+        let node = row >= 0 ? outline.item(atRow: row) as? Node : nil
+        guard let url = node?.entry.url ?? folder else { return nil }
+        let menu = NSMenu()
+        func add(_ title: String, _ action: Selector) {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
+            item.target = self
+            item.representedObject = url
+            menu.addItem(item)
+        }
+        if let node {
+            if node.entry.isFolder {
+                add("Show This Folder", #selector(pickAncestor(_:)))
+            } else {
+                add("Open", #selector(openFromMenu(_:)))
+            }
+        }
+        add("Reveal in Finder", #selector(revealInFinder(_:)))
+        add("Copy Path", #selector(copyPath(_:)))
+        if node == nil {
+            menu.addItem(.separator())
+            add("Choose Folder\u{2026}", #selector(chooseFolder(_:)))
+        }
+        return menu
+    }
+
+    @objc private func openFromMenu(_ sender: NSMenuItem) {
+        if let url = sender.representedObject as? URL { onOpen?(url) }
+    }
+
+    @objc private func revealInFinder(_ sender: NSMenuItem) {
+        if let url = sender.representedObject as? URL { NSWorkspace.shared.activateFileViewerSelecting([url]) }
+    }
+
+    @objc private func copyPath(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(url.path, forType: .string)
     }
 
     // MARK: Data
@@ -417,8 +496,11 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         }
     }
 
+    private static let rowIdentifier = NSUserInterfaceItemIdentifier("row")
+
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
-        let row = SidebarRowView()
+        let row = outlineView.makeView(withIdentifier: Self.rowIdentifier, owner: self) as? SidebarRowView ?? SidebarRowView()
+        row.identifier = Self.rowIdentifier
         row.fill = selectionFill
         return row
     }
@@ -448,7 +530,32 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     // MARK: Theme
 
+    private var palette: ResolvedPalette?
+
+    /// The card's edge, ground and shadow are layer colours: fixed values, so
+    /// they are set again when the appearance or the contrast setting changes.
+    private func applyLayerColors() {
+        effectiveAppearance.performAsCurrentDrawingAppearance {
+            let strong = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
+            layer?.backgroundColor = ground.cgColor
+            layer?.borderWidth = strong ? 1 : 0.5
+            layer?.borderColor = (palette?.colors.borderColor ?? .separatorColor)
+                .withAlphaComponent(strong ? 1 : 0.7).cgColor
+            layer?.shadowColor = ((palette?.isDark ?? false) ? NSColor.black : NSColor(white: 0.1, alpha: 1)).cgColor
+        }
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyLayerColors()
+    }
+
+    @objc private func displayOptionsChanged(_ notification: Notification) { applyLayerColors() }
+
+    var borderWidthForTesting: CGFloat { layer?.borderWidth ?? 0 }
+
     func apply(palette: ResolvedPalette?) {
+        self.palette = palette
         appearance = palette.map { NSAppearance(named: $0.isDark ? .darkAqua : .aqua) } ?? nil
         // Halfway between the editor ground and the theme's deep ground: the
         // sidebar sits apart from the page without a line.
@@ -468,9 +575,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         emptyLabel.textColor = dimInk
         chooseButton.contentTintColor = dimInk
         rule.fillColor = .clear
-        layer?.backgroundColor = ground.cgColor
-        layer?.borderColor = (palette?.colors.borderColor ?? .separatorColor).withAlphaComponent(0.7).cgColor
-        layer?.shadowColor = ((palette?.isDark ?? false) ? NSColor.black : NSColor(white: 0.1, alpha: 1)).cgColor
+        applyLayerColors()
         outline.reloadData()
     }
 
@@ -482,6 +587,31 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     var selectedNameForTesting: String? {
         (outline.item(atRow: outline.selectedRow) as? Node)?.entry.name
     }
+    /// The titles of the context menu of a row, or of the folder for nil.
+    func menuTitlesForTesting(rowNamed name: String?) -> [String] {
+        let row = name.flatMap { name in
+            (0..<outline.numberOfRows).first { (outline.item(atRow: $0) as? Node)?.entry.name == name }
+        } ?? -1
+        return contextMenu(forRow: row)?.items.map(\.title) ?? []
+    }
+    /// True if the marked row is painted in another colour than a plain row.
+    /// The pixel is at the right end of the row, away from the name.
+    var selectionIsPaintedForTesting: Bool {
+        let row = outline.selectedRow
+        guard row >= 0, let view = outline.rowView(atRow: row, makeIfNecessary: true) else { return false }
+        func paint() -> NSColor? {
+            guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return nil }
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            return bitmap.colorAt(x: bitmap.pixelsWide - 24, y: bitmap.pixelsHigh / 2)
+        }
+        let marked = paint()
+        view.isSelected = false
+        let plain = paint()
+        view.isSelected = true
+        return marked != nil && marked != plain
+    }
+    /// Return on the marked row.
+    func activateSelectionForTesting() { activateSelection() }
     func clickRowForTesting(named name: String) {
         for row in 0..<outline.numberOfRows where (outline.item(atRow: row) as? Node)?.entry.name == name {
             outline.selectRowIndexes([row], byExtendingSelection: false)
@@ -511,7 +641,11 @@ private extension NSImage {
 private final class SidebarRowView: NSTableRowView {
     var fill = NSColor.selectedContentBackgroundColor.withAlphaComponent(0.25)
 
-    override func drawSelection(in dirtyRect: NSRect) {
+    override var isSelected: Bool { didSet { if isSelected != oldValue { needsDisplay = true } } }
+
+    /// The mark is part of the background: with the highlight style `.none`,
+    /// AppKit does not call `drawSelection(in:)`.
+    override func drawBackground(in dirtyRect: NSRect) {
         guard isSelected else { return }
         fill.setFill()
         NSBezierPath(roundedRect: bounds.insetBy(dx: 6, dy: 1), xRadius: 6, yRadius: 6).fill()
@@ -523,11 +657,22 @@ private final class SidebarRowView: NSTableRowView {
     }
 }
 
-/// The outline view, with Escape to put the sidebar away.
+/// The outline view, with Return to open the marked row, Escape to put the
+/// sidebar away, and a menu for the row under a secondary click.
 private final class SidebarOutline: NSOutlineView {
     var onEscape: (() -> Void)?
+    var onActivate: (() -> Void)?
+    var menuForRow: ((Int) -> NSMenu?)?
 
     override func keyDown(with event: NSEvent) {
-        if event.keyCode == 53 { onEscape?() } else { super.keyDown(with: event) }
+        switch event.keyCode {
+        case 53: onEscape?()
+        case 36, 76: onActivate?()
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        menuForRow?(row(at: convert(event.locationInWindow, from: nil)))
     }
 }

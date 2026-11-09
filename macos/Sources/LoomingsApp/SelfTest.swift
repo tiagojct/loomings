@@ -526,6 +526,43 @@ enum SelfTest {
                 "a new file shows when the window becomes key: \(feature.sidebarRowsForTesting)"
             )
 
+            // The keys: from the menu the list takes them, and gives them back.
+            // A click on the Files button leaves them in the text.
+            let fromMenu = NSMenuItem(title: "Show Sidebar", action: nil, keyEquivalent: "")
+            let files = feature.sidebarForTesting
+            if feature.isSidebarVisibleForTesting { feature.toggleSidebar(nil) }
+            feature.window?.makeFirstResponder(feature.editor.textView)
+            feature.toggleSidebar(fromMenu)
+            check(
+                files.hasKeyFocus && feature.sidebarSelectionForTesting == "sub",
+                "Show Sidebar from the menu gives the keys to the list, on its first row: \(feature.sidebarSelectionForTesting ?? "none")"
+            )
+            check(files.selectionIsPaintedForTesting, "the marked row is painted")
+            files.activateSelectionForTesting()
+            check(feature.sidebarRowsForTesting.contains("c.md"), "Return opens the marked folder in the list")
+            files.activateSelectionForTesting()
+            check(!feature.sidebarRowsForTesting.contains("c.md"), "Return closes it again")
+            feature.toggleSidebar(fromMenu)
+            check(
+                !feature.isSidebarVisibleForTesting && feature.window?.firstResponder === feature.editor.textView,
+                "hiding the sidebar gives the keys back to the text"
+            )
+            feature.toggleSidebar(nil)
+            check(
+                feature.isSidebarVisibleForTesting && !files.hasKeyFocus,
+                "the Files button shows the sidebar and leaves the keys in the text"
+            )
+            check(files.menuTitlesForTesting(rowNamed: "a.md") == ["Open", "Reveal in Finder", "Copy Path"], "a file's menu: \(files.menuTitlesForTesting(rowNamed: "a.md"))")
+            check(files.menuTitlesForTesting(rowNamed: "sub") == ["Show This Folder", "Reveal in Finder", "Copy Path"], "a folder's menu: \(files.menuTitlesForTesting(rowNamed: "sub"))")
+            check(
+                files.menuTitlesForTesting(rowNamed: nil) == ["Reveal in Finder", "Copy Path", "", "Choose Folder\u{2026}"],
+                "the menu below the rows is the folder's: \(files.menuTitlesForTesting(rowNamed: nil))"
+            )
+            check(
+                files.borderWidthForTesting == (NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? 1 : 0.5),
+                "the card's edge follows Increase Contrast"
+            )
+
             // References off: citations stay as typed, and nothing runs.
             EditorPreferences.referencesEnabled = true
             feature.editor.setText("---\nreferences: []\n---\n\nSee [@a].\n")
@@ -576,6 +613,35 @@ enum SelfTest {
         check(controller.viewMode == .write, "the left arrow goes back to Write")
         controller.stepModeSwitchForTesting(-1)
         check(controller.viewMode == .write, "the left arrow stops at Write")
+
+        // The keys go to what the mode shows.
+        controller.setViewMode(.preview)
+        check(window.firstResponder === controller.previewTextViewForTesting, "Preview gives the keys to the page")
+        check(!controller.validateMenuItem(NSMenuItem(
+            title: "Bold", action: #selector(EditorWindowController.toggleBold(_:)), keyEquivalent: ""
+        )), "Bold is off while the page has the keys")
+        controller.setViewMode(.split)
+        check(window.firstResponder === editor.textView, "Split gives the keys back to the text")
+        controller.setViewMode(.write)
+        check(window.firstResponder === editor.textView, "Write keeps the keys in the text")
+
+        // The text's context menu starts with Format, above the system's items.
+        if let secondary = NSEvent.mouseEvent(
+            with: .rightMouseDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil, eventNumber: 0, clickCount: 1, pressure: 1
+        ) {
+            let system = NSMenu()
+            system.addItem(withTitle: "Cut", action: nil, keyEquivalent: "")
+            let menu = editor.textView(editor.textView, menu: system, for: secondary, at: 0)
+            check(
+                menu?.items.first?.submenu?.items.map(\.title) == ["Bold", "Italic", "Inline Code", "Link"]
+                    && menu?.items.dropFirst().first?.isSeparatorItem == true
+                    && menu?.items.last?.title == "Cut",
+                "the text's context menu has Format above the system's items: \(menu?.items.map(\.title) ?? [])"
+            )
+        } else {
+            check(false, "could not make a secondary click")
+        }
 
         check(window.tabbingMode == .automatic, "the tab setting of the system decides")
         check(window.isRestorable, "the window is restored after a restart")
@@ -2293,6 +2359,8 @@ enum SelfTest {
         check(view.rowsForTesting.first?.isMissing == true, "the first row is the missing key")
         check(view.rowsForTesting.last?.isCited == true, "the entry is marked as cited")
         check(view.rowsForTesting.last?.byline == "Silva, 2020", "the row has the authors and the year")
+        check(view.menuTitlesForTesting(key: "silva2020") == ["Insert Citation", "Copy Key"], "an entry's menu inserts it or copies its key")
+        check(view.menuTitlesForTesting(key: "nobody") == ["Copy Key"], "a missing key's menu only copies it")
 
         // The filter ignores accents.
         view.filterForTesting("LUNG")

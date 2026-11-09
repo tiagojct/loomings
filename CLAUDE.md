@@ -302,6 +302,19 @@ Stage 2 decisions worth preserving:
   of a listed folder changed; `reload` always lists. Read the date with
   `FileManager.attributesOfItem`, not `URL.resourceValues`: a URL keeps the
   values it read and answers with the old date.
+- Sidebar keys: `toggleSidebar` gives the keys to the list (`focusList`) only
+  when the sender is a menu item, so a click on the Files button leaves the
+  caret in the text. Hiding the sidebar while the list has the keys gives them
+  back to the editor.
+- `SidebarRowView` paints the mark in `drawBackground(in:)`. With
+  `selectionHighlightStyle = .none`, AppKit does not call `drawSelection(in:)`.
+- Context menus: `SidebarOutline` and `ReferencesTableView` override
+  `menu(for:)` and ask their owner for the menu of the row. The text's menu
+  comes from `EditorController.contextMenuItems`, which the window fills with
+  Format; the items go above the system's.
+- `applyViewMode` gives the keys to what the mode shows: the editor in Write,
+  the preview page in Preview. Split takes them back from the preview and
+  leaves them in the library.
 - Dynamic menus (Open Recent, Shelf, Go to Heading, Compare With) are filled in
   `menuNeedsUpdate`. `menuHasKeyEquivalent` returns false so AppKit does not
   call it for each key press; a delegated menu with its own key equivalent

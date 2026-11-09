@@ -62,6 +62,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         tableView.setAccessibilityLabel("Library")
         tableView.onActivate = { [weak self] in self?.insertSelection() }
         tableView.onCancel = { [weak self] in self?.onLeave?() }
+        tableView.menuForRow = { [weak self] row in self?.contextMenu(forRow: row) }
 
         tableScroll.documentView = tableView
         tableScroll.verticalScroller = ThemedScroller()
@@ -227,6 +228,35 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         onInsert?(row.key)
     }
 
+    /// The menu of a row. A key with no entry can be copied, not inserted.
+    private func contextMenu(forRow row: Int) -> NSMenu? {
+        guard rows.indices.contains(row) else { return nil }
+        let entry = rows[row]
+        let menu = NSMenu()
+        if !entry.isMissing {
+            tableView.selectRowIndexes([row], byExtendingSelection: false)
+            let insert = NSMenuItem(title: "Insert Citation", action: #selector(insertFromMenu(_:)), keyEquivalent: "")
+            insert.target = self
+            insert.representedObject = entry.key
+            menu.addItem(insert)
+        }
+        let copy = NSMenuItem(title: "Copy Key", action: #selector(copyKey(_:)), keyEquivalent: "")
+        copy.target = self
+        copy.representedObject = entry.key
+        menu.addItem(copy)
+        return menu
+    }
+
+    @objc private func insertFromMenu(_ sender: NSMenuItem) {
+        if let key = sender.representedObject as? String { onInsert?(key) }
+    }
+
+    @objc private func copyKey(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(key, forType: .string)
+    }
+
     /// The arrow keys move through the rows while the focus stays in the field.
     private func moveSelection(by step: Int) {
         var index = tableView.selectedRow < 0 ? (step > 0 ? -1 : rows.count) : tableView.selectedRow
@@ -333,6 +363,11 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
         filterChanged(nil)
     }
 
+    /// The titles of the context menu of the row with this key.
+    func menuTitlesForTesting(key: String) -> [String] {
+        rows.firstIndex { $0.key == key }.flatMap(contextMenu(forRow:))?.items.map(\.title) ?? []
+    }
+
     func selectForTesting(key: String?) {
         select(key: key)
     }
@@ -346,6 +381,7 @@ final class ReferencesView: NSView, NSSearchFieldDelegate, NSTableViewDataSource
 private final class ReferencesTableView: NSTableView {
     var onActivate: (() -> Void)?
     var onCancel: (() -> Void)?
+    var menuForRow: ((Int) -> NSMenu?)?
 
     override func keyDown(with event: NSEvent) {
         switch event.keyCode {
@@ -353,6 +389,10 @@ private final class ReferencesTableView: NSTableView {
         case 53: onCancel?()
         default: super.keyDown(with: event)
         }
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        menuForRow?(row(at: convert(event.locationInWindow, from: nil)))
     }
 }
 

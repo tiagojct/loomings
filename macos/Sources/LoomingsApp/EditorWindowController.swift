@@ -347,6 +347,7 @@ final class EditorWindowController: NSWindowController,
         citations.onReport = { [weak self] report in
             self?.apply(report)
         }
+        editor.contextMenuItems = { [weak self] in self.map { [$0.formatContextItem()] } ?? [] }
         referencesView.onInsert = { [weak self] key in
             self?.insertCitation(key: key)
         }
@@ -1281,8 +1282,17 @@ final class EditorWindowController: NSWindowController,
 
     @objc func toggleSidebar(_ sender: Any?) {
         guard EditorPreferences.sidebarEnabled else { return }
+        let hadKeys = sidebar.hasKeyFocus
         sidebarShown.toggle()
         applySidebar()
+        if sidebarShown, sender is NSMenuItem {
+            // From the menu or its key: the list takes the keys, so the arrows
+            // and Return choose a file. A click on the Files button leaves the
+            // caret in the text.
+            sidebar.focusList()
+        } else if !sidebarShown, hadKeys {
+            window?.makeFirstResponder(editor.textView)
+        }
     }
 
     /// The sidebar is a quick switcher, not a pane: it steps aside when the
@@ -1295,6 +1305,7 @@ final class EditorWindowController: NSWindowController,
 
     var isSidebarVisibleForTesting: Bool { sidebarOn }
     var sidebarRowsForTesting: [String] { sidebar.rowNamesForTesting }
+    var sidebarForTesting: SidebarView { sidebar }
     var sidebarSelectionForTesting: String? { sidebar.selectedNameForTesting }
     var sidebarFolderForTesting: URL? { sidebar.folder }
     func clickSidebarRowForTesting(named name: String) { sidebar.clickRowForTesting(named: name) }
@@ -1460,8 +1471,16 @@ final class EditorWindowController: NSWindowController,
                 self.layoutPreview()
             }
         }
-        if showEditor {
-            if viewMode == .write {
+        // The keys go to what the mode shows. Preview has no text to type in:
+        // its page takes them, for Space, Page Down and Copy. Split takes them
+        // back from the preview, and leaves them in the library.
+        switch viewMode {
+        case .write:
+            window?.makeFirstResponder(editor.textView)
+        case .preview:
+            window?.makeFirstResponder(previewTextView)
+        case .split:
+            if window?.firstResponder === previewTextView || window?.firstResponder === window {
                 window?.makeFirstResponder(editor.textView)
             }
         }
@@ -1922,6 +1941,24 @@ final class EditorWindowController: NSWindowController,
         editor.insertLink()
     }
 
+    /// Format, for the text's context menu: the commands of the Format menu,
+    /// sent to this window.
+    private func formatContextItem() -> NSMenuItem {
+        let format = NSMenu(title: "Format")
+        let commands: [(String, Selector)] = [
+            ("Bold", #selector(toggleBold(_:))),
+            ("Italic", #selector(toggleItalic(_:))),
+            ("Inline Code", #selector(toggleInlineCode(_:))),
+            ("Link", #selector(insertLink(_:))),
+        ]
+        for (title, action) in commands {
+            format.addItem(withTitle: title, action: action, keyEquivalent: "").target = self
+        }
+        let item = NSMenuItem(title: "Format", action: nil, keyEquivalent: "")
+        item.submenu = format
+        return item
+    }
+
     /// Calls `body` with the text for a share link. The main thread does not
     /// wait. A document with no citation keys gets its answer at once.
     private func withShareText(_ body: @escaping (CitationController.ShareText) -> Void) {
@@ -2110,17 +2147,17 @@ final class EditorWindowController: NSWindowController,
 
         case ToolbarItem.outline:
             item.label = "Outline"
-            let button = makeTool(symbol: "list.bullet.indent", label: "Go to Heading", action: #selector(showOutlineMenu(_:)))
+            let button = makeTool(symbol: "list.bullet.indent", label: "Go to Heading", action: #selector(showOutlineMenu(_:)), opensMenu: true)
             outlineButton = button
             item.view = button
 
         case ToolbarItem.theme:
             item.label = "Theme"
-            item.view = makeTool(symbol: "circle.lefthalf.filled", label: "Theme", action: #selector(showThemeMenu(_:)))
+            item.view = makeTool(symbol: "circle.lefthalf.filled", label: "Theme", action: #selector(showThemeMenu(_:)), opensMenu: true)
 
         case ToolbarItem.share:
             item.label = "Share"
-            let button = makeTool(symbol: "link", label: "Share", action: #selector(showShareMenu(_:)))
+            let button = makeTool(symbol: "link", label: "Share", action: #selector(showShareMenu(_:)), opensMenu: true)
             shareButton = button
             item.view = button
 
@@ -2144,8 +2181,8 @@ final class EditorWindowController: NSWindowController,
         }
     }
 
-    private func makeTool(symbol: String, label: String, action: Selector) -> ToolbarIconButton {
-        let button = ToolbarIconButton(symbol: symbol, label: label)
+    private func makeTool(symbol: String, label: String, action: Selector, opensMenu: Bool = false) -> ToolbarIconButton {
+        let button = ToolbarIconButton(symbol: symbol, label: label, opensMenu: opensMenu)
         button.target = self
         button.action = action
         button.applyPalette(ThemeManager.shared.resolved())

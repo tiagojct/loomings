@@ -64,6 +64,31 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and the "has a history" answer is kept until the history or the window
   changes.
 
+### Changed (native macOS app, keyboard and context menus)
+
+- View > Show Sidebar (and its key) gives the keys to the file list: the
+  arrows move, Return opens a file or opens and closes a folder, Escape puts
+  the sidebar away and the keys go back to the text. A click on the Files
+  button leaves the caret in the text, as before.
+- Secondary click in the sidebar: Open or Show This Folder, Reveal in Finder,
+  Copy Path; below the rows, the folder's own menu with Choose Folder….
+- Secondary click on a library row: Insert Citation and Copy Key. A key with
+  no entry has Copy Key only.
+- Secondary click in the text: Format (Bold, Italic, Inline Code, Link) above
+  the system's items.
+- Preview mode gives the keys to the page, so Space, Page Down and Copy work
+  at once. Split gives them back to the text.
+- The Write/Split/Preview switch shows a tint under the pointer. Go to
+  Heading, Theme and Share say to VoiceOver that they open a menu.
+- With Increase Contrast, the sidebar card has a full, 1 pt edge. Its colours
+  follow a change of appearance.
+
+### Fixed (native macOS app)
+
+- The sidebar did not paint the mark on the row of the open file: AppKit does
+  not call `drawSelection(in:)` when the highlight style is `.none`. The mark
+  is now part of the row's background, and the self-test reads its pixel.
+
 ### Fixed (web)
 
 - A file opened on Safari or Firefox is a copy. Autosave no longer downloads

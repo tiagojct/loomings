@@ -113,6 +113,9 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
     /// **text**", "Heading 2: ## "), for projector mode's overlay.
     public var onMarkupUsed: ((String) -> Void)?
 
+    /// Items for the top of the text's context menu, made new for each menu.
+    public var contextMenuItems: (() -> [NSMenuItem])?
+
     /// Marks the caret's line (projector mode).
     public var highlightsCurrentLine = false {
         didSet { updateCurrentLineMark() }
@@ -648,6 +651,16 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
         pendingCharacterEdit = true
         typedOneCharacter = self.textView.isTyping && replacementString.count == 1
         return true
+    }
+
+    /// The window's own items go above the system's (Cut, Copy, Spelling).
+    public func textView(_ view: NSTextView, menu: NSMenu, for event: NSEvent, at charIndex: Int) -> NSMenu? {
+        guard let items = contextMenuItems?(), !items.isEmpty else { return menu }
+        for (index, item) in items.enumerated() {
+            menu.insertItem(item, at: index)
+        }
+        menu.insertItem(.separator(), at: items.count)
+        return menu
     }
 
     public func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {

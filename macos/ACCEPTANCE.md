@@ -199,8 +199,14 @@ decodes it from the rendered page instead).
 - VoiceOver: app launched with VoiceOver on and quit cleanly; editor/preview labels and
   standard AppKit controls are present. Full VoiceOver traversal was not automated.
 - Keyboard navigation: menu shortcuts and mode switching exercised; dialogs are native.
+  The self-test checks that Show Sidebar from the menu gives the keys to the file list,
+  that Return opens and closes a folder, that Preview gives the keys to the page and
+  Split gives them back. The real key presses in the list were not automated.
+- Context menus (sidebar rows, library rows, the text): the self-test reads the items of
+  each menu. A real secondary click, Reveal in Finder and Copy Path were not automated.
 - Increased contrast: not toggled. Palette colours are fixed Ensigns values, as on the
-  web; native controls adapt through AppKit.
+  web; native controls adapt through AppKit. The sidebar card reads the setting for its
+  edge (1 pt, full colour); the self-test checks the width for the current setting only.
 - Reduced motion: no custom animations are added; full-screen/theme changes use system
   behaviour. Not exercised with the system setting on.
 - macOS 15.8 is the only available environment. A newer macOS and Intel are untested and
