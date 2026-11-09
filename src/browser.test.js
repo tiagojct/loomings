@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { Window } from 'happy-dom';
 import {
   idbSet, idbGet, idbDelete, _resetDbForTesting,
   putDocument, getDocument, listDocuments, deleteDocument,
   saveScratch, readScratch, clearScratch,
-  openHandle, saveFile, forgetFile,
+  openHandle, openFile, saveFile, forgetFile, hasFileHandle, downloadMarkdown,
   initDragDrop, listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
 } from './browser.js';
 
@@ -123,10 +123,90 @@ describe('browser storage adapter (IndexedDB)', () => {
     forgetFile();
     await expect(openHandle(halfOpen)).rejects.toThrow('unreadable');
 
-    // No handle adopted, so there is nothing to write in place: saveFile falls
-    // through to a download, which this node environment cannot do.
-    await expect(saveFile('notes.md', 'text')).rejects.toThrow();
+    // No handle adopted, so there is nothing to write in place: saveFile must
+    // say so rather than starting a download the writer did not ask for.
+    await expect(saveFile('notes.md', 'text')).rejects.toThrow(/no file handle/i);
     expect(writes).toBe(0);
+  });
+
+  it('does not leave content behind when the document index cannot be written', async () => {
+    const realPut = IDBObjectStore.prototype.put;
+    /** @type {IDBValidKey[]} */
+    const keys = [];
+    let calls = 0;
+    IDBObjectStore.prototype.put = function (value, key) {
+      calls++;
+      keys.push(key);
+      if (calls === 2) throw new Error('quota');
+      return realPut.call(this, value, key);
+    };
+    try {
+      await expect(putDocument({ id: null, title: 'Orphan', content: 'text' })).rejects.toThrow('quota');
+    } finally {
+      IDBObjectStore.prototype.put = realPut;
+    }
+    expect(keys).toHaveLength(2);
+    expect(await idbGet(keys[0])).toBeNull();
+  });
+
+  it('reports whether the open file has a writable handle', async () => {
+    forgetFile();
+    expect(hasFileHandle()).toBe(false);
+
+    await openHandle({
+      kind: 'file',
+      name: 'notes.md',
+      getFile: async () => ({ name: 'notes.md', text: async () => '# notes' }),
+    });
+    expect(hasFileHandle()).toBe(true);
+
+    forgetFile();
+    expect(hasFileHandle()).toBe(false);
+  });
+
+  it('resolves null when the fallback picker is cancelled and removes the input', async () => {
+    const win = new Window();
+    const previous = globalThis.document;
+    globalThis.document = win.document;
+    try {
+      const pending = openFile();
+      const input = win.document.querySelector('input[type="file"]');
+      expect(input).not.toBeNull();
+      input.dispatchEvent(new win.Event('cancel'));
+      await expect(pending).resolves.toBeNull();
+      expect(win.document.querySelector('input[type="file"]')).toBeNull();
+    } finally {
+      globalThis.document = previous;
+    }
+  });
+});
+
+describe('downloads', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps the blob URL alive past the click that starts the download', async () => {
+    const win = new Window();
+    const previous = globalThis.document;
+    globalThis.document = win.document;
+    vi.useFakeTimers();
+    const anchor = win.document.createElement('a');
+    vi.spyOn(anchor, 'click').mockImplementation(() => {});
+    vi.spyOn(win.document, 'createElement').mockReturnValue(anchor);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:loomings-test');
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    try {
+      await downloadMarkdown('# hi', 'notes.md');
+      expect(anchor.click).toHaveBeenCalled();
+      // Safari can cancel the download when the URL is revoked in the same turn.
+      expect(revoke).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(1000);
+      expect(revoke).toHaveBeenCalledWith('blob:loomings-test');
+    } finally {
+      globalThis.document = previous;
+    }
   });
 });
 

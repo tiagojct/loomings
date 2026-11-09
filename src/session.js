@@ -19,7 +19,7 @@ const messageOf = (err) => (err && /** @type {Error} */ (err).message) || String
 /**
  * @param {object} ports
  * @param {() => string} ports.content              text of the buffer right now
- * @param {() => {file: string|null, docId: string|null}} ports.target  where it lives
+ * @param {() => {file: string|null, docId: string|null, writable?: boolean}} ports.target  where it lives
  * @param {(text: string) => Promise<unknown>} ports.write   write to that home
  * @param {{saveScratch: (text: string, file: string|null) => Promise<unknown>, clearScratch: () => Promise<unknown>}} ports.storage
  * @param {() => void} [ports.onDirty]
@@ -65,7 +65,10 @@ export function createSession(ports) {
 
   function hasHome() {
     const home = target();
-    return Boolean(home && (home.file || home.docId));
+    // A file with no writable handle (Safari, Firefox: the fallback picker
+    // gives a name, not a handle) is a copy. It must not arm autosave, or
+    // every debounce would download a file.
+    return Boolean(home && ((home.file && home.writable !== false) || home.docId));
   }
 
   // Drafts are chained, never concurrent: two overlapping writes could land

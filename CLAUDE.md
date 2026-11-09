@@ -21,11 +21,21 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
 - `src/session.js` — the document session: dirty flag, scratch debounce,
   draft write ordering, document generation, save serialisation, and the
   containment of every storage failure. Headless; `editor.js` injects the
-  text, the home and the writes. 11 tests in `session.test.js`.
+  text, the home and the writes. A file with no writable handle is a copy: it
+  is not a save home, so autosave stays off, but its name still labels the
+  draft. 13 tests in `session.test.js`.
+- `src/save-route.js` — the one decision behind Save: write in place, pick a
+  file, or keep a browser document. Pure; `save-route.test.js` covers every
+  branch. A download is never a save: only Save As downloads, and only when
+  the writer asked for it.
+- `src/preferences.js` — the next font size and column width, including the
+  projector rule that they never move a stored preference. Pure.
 - `src/browser.js` — everything that touches the browser: File System
   Access API with picker/download fallback, IndexedDB (scratch, recents,
   documents), `document.title`, `window.confirm`, launch queue, service
-  worker registration.
+  worker registration. `saveFile` writes only through an adopted handle;
+  `hasFileHandle` tells the editor that a fallback-opened file is a copy.
+  `putDocument` writes the text and the index in one transaction.
 - `src/modal.js` — the dialog contract (inert background, Tab wrap, Escape,
   focus restore). `src/html.js` — `escapeHtml`, safe in attribute context.
 - `src/fonts.css` — the self-hosted `@font-face` rules; files and licences
@@ -37,6 +47,8 @@ desktop app (1.x) was retired; it lives on the `desktop-final` branch.
   carries the cited entries: `session.shareSource` adds one `references:` line
   (sanitised CSL JSON, only the fields that citeproc needs) to the shared text,
   and never to the writer's document. It parses and scans and does not format.
+  Both directions enforce the native limits: 4,000,000 bytes of payload and
+  8,000,000 decoded; decompression is streamed and aborted at the cap.
   `document.js` `shareSource` calls it after the sources are in, with the flush
   limit, and falls back to the plain text with a status. Every `shareUrl` caller
   in `editor.js` goes through it. An absent `.bib` gives no note when
@@ -383,6 +395,8 @@ npm run build      # dist/ — app at /app/, sw.js, manifest, icons, fonts
 npm run preview    # serves dist/ at http://127.0.0.1:4173/app/ (service worker active)
 ```
 
+Node 22.12 or later (the floor of Vitest 5's engines; `.nvmrc` names the line).
+
 `.claude/launch.json` has `loomings-dev` and `loomings-preview` for the
 browser pane.
 
@@ -402,10 +416,12 @@ browser pane.
   that is not an Ensigns role.
 - **The document's home is one of three:** a file handle (`currentFile`,
   handle kept in `browser.js`), a browser document (`currentDocId`,
-  IndexedDB), or nothing (untitled). `writeToHome` (`editor.js`) dispatches
-  on that; `handleSave` picks a home for untitled buffers (file picker where
-  the File System Access API exists, otherwise the browser). `loadFile`
-  resets both and calls `forgetFile()` for content with no file behind it.
+  IndexedDB), or nothing (untitled). A file opened through the fallback
+  picker has no handle: it is a copy, not a home, and its status says so.
+  `saveAction` (`src/save-route.js`) is the one Save branch; `writeToHome`
+  (`editor.js`) dispatches on the home, and `handleSave` picks one for
+  untitled buffers. `loadFile` resets both and calls `forgetFile()` for
+  content with no file behind it.
 - **Don't hand-roll save or scratch timing in `editor.js`.** It calls
   `session.markEdited()` / `saveNow()` / `discardScratch()` / `adopt()` /
   `repoint()` and the module owns the timers, the ordering and the error
@@ -429,8 +445,12 @@ browser pane.
   right-hand group carry `.tb-menu-right`.
 - **`history` is shadowed** in `editor.js` by CodeMirror's `history()`
   import. Use `window.history`.
-- **CSP is strict** (`nginx.conf`). The app makes no network requests
-  beyond its own origin; keep it that way.
+- **CSP is strict** (`nginx.conf`). The editor makes no network requests
+  except HTTPS images that a document names (lesson 3 teaches them); the
+  landing page also loads Umami. The headers live in
+  `nginx-security-headers.conf`; include that file in every location that
+  sets its own `add_header`, because nginx drops inherited headers at that
+  level. `src/nginx.test.js` enforces it.
 - **nginx never sees TLS.** Cloudflare and Caddy terminate it, so any
   absolute redirect nginx builds says `http://`. `absolute_redirect off`
   keeps redirects relative; link to `/app/` with the slash.

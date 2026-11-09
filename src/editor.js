@@ -25,10 +25,11 @@ import { countWords, readingTime } from './stats.js';
 import { escapeHtml } from './html.js';
 import { attachMenu, closeAllMenus, hasOpenMenus } from './menu.js';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles, cssVars } from './palettes.js';
+import { nextFontSize, nextWidth } from './preferences.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
   saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml, downloadMarkdown, downloadDocx, loadImageForDocx,
-  addRecent, getRecents, openRecent,
+  addRecent, getRecents, openRecent, hasFileHandle,
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
@@ -36,6 +37,7 @@ import {
 } from './browser.js';
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
+import { saveAction } from './save-route.js';
 import { openModal } from './modal.js';
 import { hasDiagrams, renderDiagrams, renderDiagramsInHtml } from './mermaid.js';
 import { makeHighlight, makeTheme } from './cm-theme.js';
@@ -93,15 +95,12 @@ let colWidth         = STORE.get('colWidth', 'normal');
 let editorFontSize   = STORE.getNum('fontSize', 15);
 let wordGoal         = STORE.getNum('wordGoal', 0);
 
-const WIDTHS   = ['wide', 'normal', 'narrow'];
 const VIEW_MODES = ['editor', 'split', 'preview'];
 let viewMode = STORE.get('viewMode', 'editor');
 if (!VIEW_MODES.includes(viewMode)) viewMode = 'editor';
 // Below this width two panes are unreadable, so split falls back to the
 // editor and the Split button hides (see effectiveViewMode / style.css).
 const narrowMq = window.matchMedia('(max-width: 760px)');
-const FONT_MIN = 11;
-const FONT_MAX = 24;
 
 // Projector mode overrides size and width without touching the stored
 // preferences; its apply step lives below, with the editor.
@@ -591,7 +590,9 @@ function applyFontSize() {
 }
 
 function changeFontSize(delta) {
-  editorFontSize = Math.min(FONT_MAX, Math.max(FONT_MIN, editorFontSize + delta));
+  const next = nextFontSize(editorFontSize, delta, projector.on);
+  if (next === null) { showCaption('Font size stays fixed in projector mode'); return; }
+  editorFontSize = next;
   STORE.set('fontSize', editorFontSize);
   applyFontSize();
   view.dispatch({
@@ -606,8 +607,9 @@ function changeFontSize(delta) {
 // ==========================
 
 function cycleWidth() {
-  const idx = WIDTHS.indexOf(colWidth);
-  colWidth = WIDTHS[(idx + 1) % WIDTHS.length];
+  const next = nextWidth(colWidth, projector.on);
+  if (next === null) { showCaption('Column width stays fixed in projector mode'); return; }
+  colWidth = next;
   STORE.set('colWidth', colWidth);
   applyWidth();
 }
@@ -1076,14 +1078,18 @@ function toggleStats() {
 // document in this browser. Untitled buffers have no home — Save goes
 // through handleSave, which picks one.
 async function writeToHome(text) {
-  if (currentFile) { await saveFile(currentFile, text); return; }
+  if (currentFile) {
+    if (!hasFileHandle()) throw new Error('Loomings: no file handle for this document');
+    await saveFile(currentFile, text);
+    return;
+  }
   if (currentDocId) { await putDocument({ id: currentDocId, title: docTitle(text), content: text }); return; }
   throw new Error('This document has no home yet');
 }
 
 const session = createSession({
   content: getText,
-  target: () => ({ file: currentFile, docId: currentDocId }),
+  target: () => ({ file: currentFile, docId: currentDocId, writable: hasFileHandle() }),
   write: writeToHome,
   storage: { saveScratch, clearScratch },
   onDirty: () => dirtyEl.classList.remove('hidden'),
@@ -1158,7 +1164,9 @@ function docTitle(text) { return firstHeading(text) || 'Untitled'; }
 function refreshStatusBar() {
   statusApp.textContent = 'Loomings';
   if (currentFile) {
-    statusFile.textContent = '· ' + basename(currentFile);
+    // Safari and Firefox cannot write an opened file back in place. Say so
+    // before the writer assumes the file on disk is being kept current.
+    statusFile.textContent = '· ' + basename(currentFile) + (hasFileHandle() ? '' : ' (not saved to disk)');
     statusFile.classList.remove('hidden');
   } else if (currentDocId) {
     statusFile.textContent = '· ' + docTitle(getText()) + ' (in this browser)';
@@ -1169,26 +1177,38 @@ function refreshStatusBar() {
 }
 
 async function handleSave() {
-  if (currentFile || currentDocId) return session.saveNow();
-  // Untitled: a real file where the browser can write one, otherwise this
-  // browser's own storage (Safari, Firefox, iPad) so Save always means
-  // "kept", never "downloaded a copy and still unsaved".
-  if (hasFileSystemAccess) return handleSaveAs();
-  return saveInBrowser();
+  const action = saveAction({
+    file: currentFile,
+    docId: currentDocId,
+    writable: hasFileHandle(),
+    hasFsa: hasFileSystemAccess,
+  });
+  if (action === 'save-as') return handleSaveAs();
+  if (action === 'save-in-browser') {
+    const fromFile = currentFile;
+    return saveInBrowser({
+      title: fromFile ? displayName(fromFile) : null,
+      message: fromFile
+        ? 'Saved in this browser; the file on disk was not changed'
+        : 'Saved in this browser',
+    });
+  }
+  return session.saveNow();
 }
 
 // Save (a copy of) the buffer as a new document in this browser's storage.
-async function saveInBrowser() {
+/** @param {{title?: string|null, message?: string}} [options] */
+async function saveInBrowser({ title = null, message = 'Saved in this browser' } = {}) {
   const text = getText();
   try {
-    const doc = await putDocument({ id: null, title: docTitle(text), content: text });
+    const doc = await putDocument({ id: null, title: title || docTitle(text), content: text });
     currentFile = null;
     forgetFile();
     currentDocId = doc.id;
     setTitle(doc.title);
     session.adopt(text);
     refreshStatusBar();
-    flashStatus('Saved in this browser');
+    flashStatus(message);
   } catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
 }
 

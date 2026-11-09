@@ -32,7 +32,7 @@ unless you put it in a link.
 
 ### Keep
 - **Files** on disk in Chrome and Edge (File System Access API), with recent files remembered.
-- **Documents in this browser** everywhere else (Safari, Firefox, iPad): Save keeps the draft in IndexedDB, and the Documents menu lists, reopens and deletes them.
+- **Documents in this browser** everywhere else (Safari, Firefox, iPad): Save keeps the draft in IndexedDB, and the Documents menu lists, reopens and deletes them. A file opened from disk there is a copy: Save keeps it in this browser and leaves the original untouched.
 - **Crash recovery**: the buffer is scratched to IndexedDB as you type and offered back on the next visit.
 - **Installable**: a web manifest and service worker make it an app that works offline and, on Chromium, opens `.md` files from the OS.
 
@@ -86,6 +86,8 @@ npm run typecheck  # tsc over the source (checkJs, strictNullChecks)
 npm run build      # static site in dist/ (app at /app/, plus sw.js)
 npm run preview    # serve dist/ on http://127.0.0.1:4173/app/
 ```
+
+Node 22.12 or later is required (Vitest 5). `.nvmrc` names the supported line.
 
 ## Self-host
 
@@ -148,8 +150,9 @@ swift test --package-path macos                      # unit tests
 macos/dist/Loomings.app/Contents/MacOS/Loomings --self-test   # in-app checks
 ```
 
-The preview never loads remote images, as the web app's CSP forbids. Documents
-without a file of their own live in
+The preview loads local images and data URIs only. The web editor also allows
+HTTPS images, because lesson 3 teaches them; nothing else is fetched.
+Documents without a file of their own live in
 `~/Library/Application Support/Loomings/Shelf/`. `macos/ACCEPTANCE.md` has the
 parity checklist and the measurements.
 

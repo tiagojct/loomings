@@ -42,4 +42,24 @@ describe('share links', () => {
     expect(payloadFromUrl('https://loomings.example/app/')).toBeNull();
     expect(payloadFromUrl('https://loomings.example/app/#heading')).toBeNull();
   });
+
+  // The native app has the same ceilings (ShareLink.maximumPayloadLength and
+  // maximumDecodedLength). A link that is legal here must open there.
+  it('refuses a payload over 4,000,000 bytes before decoding it', async () => {
+    await expect(decodeDoc('z.' + 'A'.repeat(4_000_000))).rejects.toThrow(/too large/i);
+  });
+
+  it('refuses a compressed link that expands beyond 8,000,000 bytes', async () => {
+    const bomb = new Uint8Array(8_000_001);
+    const packed = new Uint8Array(await new Response(
+      new Blob([bomb]).stream().pipeThrough(new CompressionStream('deflate-raw')),
+    ).arrayBuffer());
+    const payload = 'z.' + Buffer.from(packed).toString('base64url');
+    expect(payload.length).toBeLessThan(4_000_000);
+    await expect(decodeDoc(payload)).rejects.toThrow(/too large/i);
+  });
+
+  it('refuses to encode text over 8,000,000 bytes', async () => {
+    await expect(encodeDoc('a'.repeat(8_000_001))).rejects.toThrow(/too large/i);
+  });
 });

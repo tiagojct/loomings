@@ -72,6 +72,18 @@ describe('document session', () => {
     expect(calls.written).toHaveLength(1);
   });
 
+  it('does not autosave a file whose handle cannot be written', async () => {
+    const { session, calls, setHome } = makeSession();
+
+    setHome({ file: 'notes.md', docId: null, writable: false });
+    session.markEdited();
+    await vi.advanceTimersByTimeAsync(2000);
+
+    expect(calls.written).toEqual([]);
+    expect(session.isDirty()).toBe(true);
+    expect(await session.saveNow()).toBe(false);
+  });
+
   it('reports a draft that could not be stored instead of throwing', async () => {
     const { session, calls } = makeSession({
       saveScratch: async () => { throw new Error('quota exceeded'); },

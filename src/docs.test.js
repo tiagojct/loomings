@@ -73,3 +73,10 @@ describe('landing page colour cards', () => {
     expect(labels).toHaveLength(FAMILY_ORDER.length);
   });
 });
+
+describe('landing page version', () => {
+  it('shows the version in package.json', () => {
+    const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+    expect(html).toContain(`· v${pkg.version} ·`);
+  });
+});

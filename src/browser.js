@@ -32,7 +32,9 @@ function downloadBlob(content, filename, mime) {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  URL.revokeObjectURL(url);
+  // Safari can abort a download whose blob URL is revoked in the same turn
+  // as the click. Let the download start first.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 // ==========================
@@ -167,7 +169,7 @@ export async function setTitle(title) {
 // ==========================
 
 export async function saveFile(path, content) {
-  if (!currentFileHandle) return saveFileAs(content);
+  if (!currentFileHandle) throw new Error('Loomings: no file handle for this document');
   const perm = await currentFileHandle.queryPermission({ mode: 'readwrite' });
   if (perm !== 'granted') {
     const granted = await currentFileHandle.requestPermission({ mode: 'readwrite' });
@@ -219,16 +221,28 @@ export async function openFile() {
     currentFileHandle = handle;
     return { path: file.name, content };
   }
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.md,.markdown,.mdown,.mkd,.qmd,.rmd,.txt';
+    input.style.display = 'none';
+    /** @param {{path: string, content: string}|null} payload */
+    const done = (payload) => { input.remove(); resolve(payload); };
     input.addEventListener('change', async () => {
       const file = input.files?.[0];
-      if (!file) { resolve(null); return; }
-      currentFileHandle = null;
-      resolve({ path: file.name, content: await file.text() });
+      if (!file) { done(null); return; }
+      try {
+        currentFileHandle = null;
+        done({ path: file.name, content: await file.text() });
+      } catch (err) {
+        input.remove();
+        reject(err);
+      }
     });
+    // Safari and Firefox fire cancel when the writer dismisses the picker.
+    // Without it this promise and its input would stay behind forever.
+    input.addEventListener('cancel', () => done(null));
+    document.body.appendChild(input);
     input.click();
   });
 }
@@ -246,6 +260,11 @@ export async function openHandle(handle) {
 // Detaches the buffer from any file handle — used when loading content
 // that has no file behind it (example, lesson, shared link).
 export function forgetFile() { currentFileHandle = null; }
+
+// True while the open file can be written in place. A file opened through the
+// fallback picker (Safari, Firefox) has no handle, so Save must not pretend to
+// write it to disk.
+export function hasFileHandle() { return currentFileHandle !== null; }
 
 export async function openExample() {
   currentFileHandle = null;
@@ -415,28 +434,51 @@ export async function getDocument(id) {
 }
 
 export async function putDocument({ id, title, content }) {
-  const raw = (await idbGet('documents')) || [];
-  const now = Date.now();
-  const existing = id ? raw.find((d) => d.id === id) : null;
-  const docId = existing ? existing.id : (crypto.randomUUID ? crypto.randomUUID() : String(now) + Math.random().toString(16).slice(2));
-  const docMeta = {
-    id: docId,
-    title,
-    created: existing ? existing.created : now,
-    updated: now,
-  };
-  await idbSet(DOC_CONTENT_PREFIX + docId, content);
-  const next = [
-    docMeta,
-    ...raw.filter((d) => d.id !== docId).map((d) => ({
-      id: d.id,
-      title: d.title,
-      created: d.created,
-      updated: d.updated,
-    })),
-  ];
-  await idbSet('documents', next);
-  return { ...docMeta, content };
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    // One transaction for the text and the index: a failure in either must
+    // not leave content that no document points at.
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const docsRequest = store.get('documents');
+    /** @type {any} */
+    let result = null;
+    docsRequest.onerror = () => reject(docsRequest.error);
+    docsRequest.onsuccess = () => {
+      try {
+        const raw = docsRequest.result || [];
+        const now = Date.now();
+        const existing = id ? raw.find((d) => d.id === id) : null;
+        const docId = existing ? existing.id : (crypto.randomUUID ? crypto.randomUUID() : String(now) + Math.random().toString(16).slice(2));
+        const docMeta = {
+          id: docId,
+          title,
+          created: existing ? existing.created : now,
+          updated: now,
+        };
+        store.put(content, DOC_CONTENT_PREFIX + docId);
+        const next = [
+          docMeta,
+          ...raw.filter((d) => d.id !== docId).map((d) => ({
+            id: d.id,
+            title: d.title,
+            created: d.created,
+            updated: d.updated,
+          })),
+        ];
+        store.put(next, 'documents');
+        result = { ...docMeta, content };
+      } catch (err) {
+        try { tx.abort(); } catch (_) {}
+        reject(err);
+      }
+    };
+    tx.oncomplete = () => resolve(result);
+    // `tx.error` is null for an aborted-but-clean transaction, so give the
+    // caller a real Error instead of rejecting with undefined.
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+  });
 }
 
 export async function deleteDocument(id) {

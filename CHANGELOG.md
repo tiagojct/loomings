@@ -15,6 +15,25 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   With References off, the menu and tab are gone and `[@key]` stays as typed.
   The sidebar folder is one for each window (default) or one for all windows.
 
+### Fixed (web)
+
+- A file opened on Safari or Firefox is a copy. Autosave no longer downloads
+  it, Save keeps it in this browser, and the status bar says it is not saved
+  to disk.
+- Share links use the native limits: a 4 MB payload, 8 MB decoded, and a
+  streaming guard so a compressed link cannot expand without bound.
+- Cancelling the fallback file picker resolves the open and removes the input.
+- The hashed asset location keeps the CSP, `nosniff` and `Referrer-Policy`
+  headers; nginx does not inherit them once a location sets its own header.
+- Download blob URLs are revoked after the click, not in the same turn.
+
+### Changed (web and tooling)
+
+- Node 22.12 or later, in CI, the Docker build and the package engines.
+- Projector mode no longer writes the font size or column width preferences.
+- A document's text and index entry are written in one IndexedDB transaction.
+- The landing page footer version is checked against `package.json`.
+
 ## [2.6.5] — 2026-11-06
 
 ### Added
