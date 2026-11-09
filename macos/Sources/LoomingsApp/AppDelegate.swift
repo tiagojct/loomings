@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private var shelfMenu: NSMenu?
     private var outlineMenu: NSMenu?
     private var compareMenu: NSMenu?
+    private var servicesMenu: NSMenu?
     private var referencesMenu: NSMenu?
     private var referencesMenuItem: NSMenuItem?
     private var featuresObserver: NSObjectProtocol?
@@ -103,7 +104,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
     private func buildMenu() {
         observeFeatures()
         let mainMenu = makeMainMenu()
-        NSApp.windowsMenu = mainMenu.items.last?.submenu
+        NSApp.windowsMenu = mainMenu.items.first { $0.submenu?.title == "Window" }?.submenu
+        NSApp.helpMenu = mainMenu.items.first { $0.submenu?.title == "Help" }?.submenu
+        NSApp.servicesMenu = servicesMenu
         NSApp.mainMenu = mainMenu
     }
 
@@ -148,6 +151,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         mainMenu.addItem(windowMenuItem)
         windowMenuItem.submenu = makeWindowMenu()
 
+        let helpMenuItem = NSMenuItem()
+        mainMenu.addItem(helpMenuItem)
+        helpMenuItem.submenu = makeHelpMenu()
+
         return mainMenu
     }
 
@@ -169,6 +176,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         )
         settingsItem.target = self
         menu.addItem(settingsItem)
+        menu.addItem(.separator())
+        let services = NSMenu(title: "Services")
+        servicesMenu = services
+        let servicesItem = NSMenuItem(title: "Services", action: nil, keyEquivalent: "")
+        servicesItem.submenu = services
+        menu.addItem(servicesItem)
         menu.addItem(.separator())
         menu.addItem(
             withTitle: "Hide Loomings",
@@ -235,6 +248,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         )
         importItem.target = self
         menu.addItem(importItem)
+        let shareLinkItem = NSMenuItem(
+            title: "Open Share Link\u{2026}",
+            action: #selector(openShareLink(_:)),
+            keyEquivalent: ""
+        )
+        shareLinkItem.target = self
+        menu.addItem(shareLinkItem)
         menu.addItem(.separator())
 
         menu.addItem(
@@ -274,6 +294,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         let exportItem = NSMenuItem(title: "Export", action: nil, keyEquivalent: "")
         exportItem.submenu = export
         menu.addItem(exportItem)
+
+        let share = NSMenu(title: "Share")
+        share.addItem(withTitle: "Copy Share Link", action: #selector(EditorWindowController.copyShareLink(_:)), keyEquivalent: "")
+        share.addItem(withTitle: "Show QR Code\u{2026}", action: #selector(EditorWindowController.showQRCode(_:)), keyEquivalent: "")
+        share.addItem(withTitle: "Send with AirDrop\u{2026}", action: #selector(EditorWindowController.sendWithAirDrop(_:)), keyEquivalent: "")
+        let shareItem = NSMenuItem(title: "Share", action: nil, keyEquivalent: "")
+        shareItem.submenu = share
+        menu.addItem(shareItem)
         menu.addItem(
             withTitle: "Print\u{2026}",
             action: #selector(EditorWindowController.printPreview(_:)),
@@ -729,11 +757,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         menu.addItem(sidebarItem)
         menu.addItem(.separator())
 
-        let outline = NSMenu(title: "Go to Heading")
+        let goToHeading = NSMenuItem(
+            title: "Go to Heading\u{2026}",
+            action: #selector(EditorWindowController.goToHeading(_:)),
+            keyEquivalent: "o"
+        )
+        goToHeading.keyEquivalentModifierMask = [.command, .shift]
+        menu.addItem(goToHeading)
+
+        // A menu item with a submenu never runs a key equivalent, so the
+        // list of headings has none.
+        let outline = NSMenu(title: "Headings")
         outline.delegate = self
         outlineMenu = outline
-        let outlineItem = NSMenuItem(title: "Go to Heading", action: nil, keyEquivalent: "o")
-        outlineItem.keyEquivalentModifierMask = [.command, .shift]
+        let outlineItem = NSMenuItem(title: "Headings", action: nil, keyEquivalent: "")
         outlineItem.submenu = outline
         menu.addItem(outlineItem)
         menu.addItem(.separator())
@@ -753,6 +790,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         )
         smaller.target = self
         menu.addItem(smaller)
+
+        let actualSize = NSMenuItem(
+            title: "Actual Size",
+            action: #selector(resetFontSize(_:)),
+            keyEquivalent: "0"
+        )
+        actualSize.target = self
+        menu.addItem(actualSize)
 
         let width = NSMenu(title: "Column Width")
         for candidate in ColumnWidth.allCases {
@@ -878,6 +923,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             keyEquivalent: ""
         )
         return menu
+    }
+
+    /// The system adds its search field to the menu that `NSApp.helpMenu` names.
+    private func makeHelpMenu() -> NSMenu {
+        let menu = NSMenu(title: "Help")
+        let cheatsheet = NSMenuItem(
+            title: "Markdown Cheatsheet",
+            action: #selector(openCheatsheet(_:)),
+            keyEquivalent: ""
+        )
+        cheatsheet.target = self
+        menu.addItem(cheatsheet)
+        let website = NSMenuItem(
+            title: "Loomings on the Web",
+            action: #selector(openWebsite(_:)),
+            keyEquivalent: ""
+        )
+        website.target = self
+        menu.addItem(website)
+        return menu
+    }
+
+    @objc private func openCheatsheet(_ sender: Any?) {
+        guard let item = learnItems.first(where: { $0.file == nil && $0.title == "Markdown cheatsheet" }) else { return }
+        openLearnContent(item)
+    }
+
+    @objc private func openWebsite(_ sender: Any?) {
+        if let url = URL(string: "https://loomings.tiagojacinto.eu") { NSWorkspace.shared.open(url) }
     }
 
     // MARK: - Dynamic menus
@@ -1049,6 +1123,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
             after: EditorPreferences.fontSize,
             delta: 1
         )
+        refreshAllWindows()
+    }
+
+    @objc private func resetFontSize(_ sender: Any?) {
+        EditorPreferences.fontSize = EditorPreferences.defaultFontSize
         refreshAllWindows()
     }
 

@@ -24,6 +24,7 @@ enum ColumnWidth: String, CaseIterable {
 enum EditorPreferences {
     private static let defaults = UserDefaults.standard
 
+    static let defaultFontSize: CGFloat = 15
     static let minimumFontSize: CGFloat = 11
     static let maximumFontSize: CGFloat = 24
     static let wordGoals = [0, 250, 500, 750, 1000, 2000, 5000]
@@ -35,7 +36,7 @@ enum EditorPreferences {
     static var fontSize: CGFloat {
         get {
             let stored = defaults.double(forKey: key("fontSize"))
-            return stored == 0 ? 15 : min(maximumFontSize, max(minimumFontSize, stored))
+            return stored == 0 ? defaultFontSize : min(maximumFontSize, max(minimumFontSize, stored))
         }
         set {
             defaults.set(

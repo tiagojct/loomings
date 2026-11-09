@@ -19,6 +19,18 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   link is built for the page, so the print does not wait for one. Show QR
   Code in the Share menu is not affected.
 
+### Changed (native macOS app, menus)
+
+- File > Open Share Link… (there was no way to reach it) and File > Share
+  (Copy Share Link, Show QR Code, Send with AirDrop).
+- View > Go to Heading… (Shift-Command-O) opens the heading list. The key was
+  on a submenu item and never ran; the submenu is now called Headings.
+- View > Actual Size (Command-0). A Help menu (Markdown Cheatsheet, the
+  website) with the system search field. A Services submenu.
+- Bold, Italic, Code and Link are off while the preview or another field has
+  the focus. Send with AirDrop is off when AirDrop is not available.
+- Settings: Escape closes it, and it opens where it was left.
+
 ### Changed (native macOS app, speed)
 
 - A window that becomes key lists its sidebar folders again only if one of

@@ -539,6 +539,16 @@ enum SelfTest {
         } else {
             check(false, "could not create the feature window")
         }
+        // Bold, Italic, Code and Link edit the editor, so they are off when
+        // the preview has the focus.
+        controller.setViewMode(.split)
+        let bold = NSMenuItem(title: "Bold", action: #selector(EditorWindowController.toggleBold(_:)), keyEquivalent: "")
+        check(window.makeFirstResponder(controller.previewTextViewForTesting), "the preview takes the focus")
+        check(!controller.validateMenuItem(bold), "Bold is off while the preview has the focus")
+        check(window.makeFirstResponder(editor.textView), "the editor takes the focus")
+        check(controller.validateMenuItem(bold), "Bold is on while the editor has the focus")
+        controller.setViewMode(.write)
+
         // A render that waited behind a newer one never starts.
         controller.setViewMode(.preview)
         _ = pump(timeout: 2) { false }
@@ -572,6 +582,34 @@ enum SelfTest {
             let handled = unassigned.map { mainMenu.performKeyEquivalent(with: $0) } ?? true
             check(!handled, "the test key is not a menu command")
             check(delegate.dynamicMenuRebuilds == before, "a key equivalent rebuilds no dynamic menu: \(delegate.dynamicMenuRebuilds - before) rebuilt")
+            // The menu bar: Open Share Link and Share are in File, Go to Heading
+            // has its key, a menu with a submenu has none, and Help is last.
+            func submenu(_ title: String, in menu: NSMenu) -> NSMenu? {
+                menu.items.first(where: { $0.submenu?.title == title })?.submenu
+            }
+            let fileMenu = submenu("File", in: mainMenu)
+            check(fileMenu?.item(withTitle: "Open Share Link\u{2026}")?.action != nil, "File has Open Share Link")
+            check(
+                submenu("Share", in: fileMenu ?? NSMenu())?.items.map(\.title) == ["Copy Share Link", "Show QR Code\u{2026}", "Send with AirDrop\u{2026}"],
+                "File has the Share items"
+            )
+            let viewMenu = submenu("View", in: mainMenu)
+            let heading = viewMenu?.item(withTitle: "Go to Heading\u{2026}")
+            check(
+                heading?.keyEquivalent == "o" && heading?.keyEquivalentModifierMask == [.command, .shift] && heading?.hasSubmenu == false,
+                "Go to Heading is a command with its key"
+            )
+            func submenuKeys(_ menu: NSMenu) -> [String] {
+                menu.items.flatMap { item -> [String] in
+                    var found = item.hasSubmenu && !item.keyEquivalent.isEmpty ? [item.title] : []
+                    if let sub = item.submenu { found += submenuKeys(sub) }
+                    return found
+                }
+            }
+            check(submenuKeys(mainMenu).isEmpty, "no menu with a submenu has a key equivalent: \(submenuKeys(mainMenu))")
+            check(mainMenu.items.last?.submenu?.title == "Help", "Help is the last menu")
+            check(viewMenu?.item(withTitle: "Actual Size")?.keyEquivalent == "0", "View has Actual Size")
+
             // The delegate still fills a menu when AppKit asks for it to open.
             if let recent = mainMenu.items.first(where: { $0.submenu?.title == "File" })?.submenu?.item(withTitle: "Open Recent")?.submenu {
                 delegate.menuNeedsUpdate(recent)
@@ -581,6 +619,10 @@ enum SelfTest {
             }
         }
         let settings = SettingsWindowController.shared
+        settings.show()
+        check(settings.window?.isVisible == true, "Settings opens")
+        settings.cancelOperation(nil)
+        check(pump(timeout: 2) { settings.window?.isVisible == false }, "Escape closes Settings")
         settings.sync()
         check(settings.window?.title == "Settings", "the Settings window exists")
         EditorPreferences.printQRCode = true

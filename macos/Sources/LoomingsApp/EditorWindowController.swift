@@ -1944,7 +1944,12 @@ final class EditorWindowController: NSWindowController,
              #selector(toggleItalic(_:)),
              #selector(toggleInlineCode(_:)),
              #selector(insertLink(_:)):
-            return window?.firstResponder is NSTextView
+            // Not the preview, the References filter or a sheet's field: the
+            // command edits the editor's text.
+            return window?.firstResponder === editor.textView
+        case #selector(sendWithAirDrop(_:)):
+            menuItem.toolTip = airDropAvailable ? nil : "AirDrop is not available on this Mac right now."
+            return airDropAvailable
         case #selector(setWriteMode(_:)):
             menuItem.state = viewMode == .write ? .on : .off
         case #selector(setSplitMode(_:)):
@@ -2011,6 +2016,7 @@ final class EditorWindowController: NSWindowController,
     private var modeSwitch: ModeSwitch?
     private var toolButtons: [ToolbarIconButton] = []
     private var shareButton: ToolbarIconButton?
+    private var outlineButton: ToolbarIconButton?
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
         toolbarDefaultItemIdentifiers(toolbar)
@@ -2053,7 +2059,9 @@ final class EditorWindowController: NSWindowController,
 
         case ToolbarItem.outline:
             item.label = "Outline"
-            item.view = makeTool(symbol: "list.bullet.indent", label: "Go to Heading", action: #selector(showOutlineMenu(_:)))
+            let button = makeTool(symbol: "list.bullet.indent", label: "Go to Heading", action: #selector(showOutlineMenu(_:)))
+            outlineButton = button
+            item.view = button
 
         case ToolbarItem.theme:
             item.label = "Theme"
@@ -2101,6 +2109,15 @@ final class EditorWindowController: NSWindowController,
     }
 
     @objc private func showOutlineMenu(_ sender: NSButton) {
+        popUpOutline(from: sender)
+    }
+
+    /// View > Go to Heading: the same list as the toolbar tool.
+    @objc func goToHeading(_ sender: Any?) {
+        popUpOutline(from: outlineButton ?? statusBar)
+    }
+
+    private func popUpOutline(from anchor: NSView) {
         let menu = NSMenu(title: "Go to Heading")
         let entries = outlineEntries()
         if entries.isEmpty {
@@ -2120,7 +2137,7 @@ final class EditorWindowController: NSWindowController,
             item.indentationLevel = min(4, max(0, heading.level - 1))
             menu.addItem(item)
         }
-        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: sender.bounds.height + 4), in: sender)
+        menu.popUp(positioning: nil, at: NSPoint(x: 0, y: anchor.bounds.height + 4), in: anchor)
     }
 
     /// The item's tag is its heading's source location.
@@ -2214,7 +2231,7 @@ final class EditorWindowController: NSWindowController,
         return (NSImage(cgImage: code, size: NSSize(width: 240, height: 240)), "Scan to open this document in Loomings.")
     }
 
-    @objc private func showQRCode(_ sender: Any?) {
+    @objc func showQRCode(_ sender: Any?) {
         withShareText { shared in
             if let failure = shared.failure { self.markupOverlay.show(failure) }
             self.showQRCode(for: shared.source)

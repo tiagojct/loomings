@@ -110,9 +110,16 @@ final class SettingsWindowController: NSWindowController {
     var printQRCodeIsOnForTesting: Bool { printQR.state == .on }
     func clickPrintQRCodeForTesting() { printQR.performClick(nil) }
 
+    /// Escape closes the window, as in other Settings windows.
+    override func cancelOperation(_ sender: Any?) {
+        window?.performClose(sender)
+    }
+
     func show() {
         sync()
-        window?.center()
+        // The window comes back where the writer left it.
+        if window?.setFrameUsingName("LoomingsSettings") != true { window?.center() }
+        window?.setFrameAutosaveName("LoomingsSettings")
         showWindow(nil)
         window?.makeKeyAndOrderFront(nil)
     }
