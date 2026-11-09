@@ -1696,13 +1696,16 @@ final class EditorWindowController: NSWindowController,
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("loomings-handout-\(UUID().uuidString).pdf")
         defer { try? FileManager.default.removeItem(at: url) }
-        Handout.writePDF(makeHandout(currentPage), to: url)
+        Handout.writePDF(makeHandout(currentPage, includeQR: EditorPreferences.printQRCode), to: url)
         return (try? Data(contentsOf: url)) ?? Data()
     }
 
-    private func makeHandout(_ page: ExportPage) -> HandoutTextView {
+    /// - Parameter includeQR: the page ends with the share link as a QR code.
+    ///   The caller reads the setting once, so the page and the share link
+    ///   built for it agree even if the setting changes during the wait.
+    private func makeHandout(_ page: ExportPage, includeQR: Bool) -> HandoutTextView {
         Handout.view(
-            source: page.shareSource,
+            source: includeQR ? page.shareSource : nil,
             markdown: page.markdown,
             documentURL: page.documentURL,
             title: page.title
@@ -1827,9 +1830,10 @@ final class EditorWindowController: NSWindowController,
         guard let url = saveURL(name: exportTitle, fileExtension: "pdf") else {
             return
         }
-        withExportPage(sharing: true) { page in
+        let includeQR = EditorPreferences.printQRCode
+        withExportPage(sharing: includeQR) { page in
             // No panel, so this run is not modal.
-            if Handout.writePDF(self.makeHandout(page), to: url) { return }
+            if Handout.writePDF(self.makeHandout(page, includeQR: includeQR), to: url) { return }
             let alert = NSAlert()
             alert.messageText = "The PDF could not be written."
             alert.informativeText = "Check that the folder can be written to, then try again."
@@ -1838,13 +1842,14 @@ final class EditorWindowController: NSWindowController,
     }
 
     @objc func printPreview(_ sender: Any?) {
-        withExportPage(statusFirst: true, sharing: true) { page in
-            self.print(page)
+        let includeQR = EditorPreferences.printQRCode
+        withExportPage(statusFirst: true, sharing: includeQR) { page in
+            self.print(page, includeQR: includeQR)
         }
     }
 
-    private func print(_ page: ExportPage) {
-        let view = makeHandout(page)
+    private func print(_ page: ExportPage, includeQR: Bool) {
+        let view = makeHandout(page, includeQR: includeQR)
         if let printHookForTesting {
             printHookForTesting(view)
             return

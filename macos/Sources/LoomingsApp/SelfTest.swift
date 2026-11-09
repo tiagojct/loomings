@@ -26,6 +26,11 @@ enum SelfTest {
         }
 
         print("Loomings native self-test")
+        // The handout checks below expect the QR code. The writer's setting is
+        // put back at the end.
+        let savedPrintQRCode = EditorPreferences.printQRCode
+        EditorPreferences.printQRCode = true
+        defer { EditorPreferences.printQRCode = savedPrintQRCode }
         check(ThemeManager.shared.library != nil, "the ten palettes load from the bundle")
         check(NSFont(name: "JetBrainsMono-Regular", size: 15) != nil, "JetBrains Mono is bundled")
         check(NSFont(name: "SourceSerif4-Regular", size: 15) != nil, "Source Serif 4 is bundled")
@@ -526,6 +531,21 @@ enum SelfTest {
         let settings = SettingsWindowController.shared
         settings.sync()
         check(settings.window?.title == "Settings", "the Settings window exists")
+        EditorPreferences.printQRCode = true
+        settings.sync()
+        check(settings.printQRCodeIsOnForTesting, "Settings shows the QR code on printed pages as on")
+        settings.clickPrintQRCodeForTesting()
+        check(!EditorPreferences.printQRCode && !settings.printQRCodeIsOnForTesting, "turning the QR code setting off is stored")
+        settings.clickPrintQRCodeForTesting()
+        check(EditorPreferences.printQRCode && settings.printQRCodeIsOnForTesting, "turning the QR code setting on is stored")
+        if let content = settings.window?.contentView,
+           let stack = content.subviews.compactMap({ $0 as? NSStackView }).first {
+            content.layoutSubtreeIfNeeded()
+            let needed = stack.fittingSize.height + 40
+            check(needed <= content.bounds.height, "the Settings window holds all its controls: needs \(needed) of \(content.bounds.height)")
+        } else {
+            check(false, "the Settings window has its controls")
+        }
         featureDocument.updateChangeCount(.changeCleared)
         featureDocument.close()
         try? FileManager.default.removeItem(at: folderRoot)
@@ -682,6 +702,34 @@ enum SelfTest {
                 let letter = abs(size.width - 612) < 1 && abs(size.height - 792) < 1
                 check(a4 || letter, "the handout is A4 or Letter")
             }
+
+            // With the setting off the handout ends with the document: every
+            // page is numbered, the last page has text and no page is blank.
+            EditorPreferences.printQRCode = false
+            let plain = PDFDocument(data: controller.renderedPDFForTesting())
+            let plainPages = (0..<(plain?.pageCount ?? 0)).map { plain?.page(at: $0)?.string ?? "" }
+            check(plainPages.count > 1, "the handout without a QR code runs over several pages")
+            check(
+                !plainPages.contains { $0.contains("Scan to open this document in Loomings") || $0.contains("too long for a QR code") },
+                "the handout has no QR code or caption when the setting is off"
+            )
+            check(
+                plainPages.last?.contains("page \(plainPages.count) of \(plainPages.count)") == true,
+                "the last page of a handout without a QR code is numbered"
+            )
+            check(
+                plainPages.allSatisfy { $0.contains("of \(plainPages.count)") },
+                "no page of a handout without a QR code is blank"
+            )
+            if let document = plain, let page = document.page(at: document.pageCount - 1) {
+                let bounds = page.bounds(for: .mediaBox)
+                let image = page.thumbnail(of: NSSize(width: bounds.width * 2, height: bounds.height * 2), for: .mediaBox)
+                let detector = CIDetector(ofType: CIDetectorTypeQRCode, context: nil, options: [CIDetectorAccuracy: CIDetectorAccuracyHigh])
+                let found = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                    .flatMap { detector?.features(in: CIImage(cgImage: $0)) } ?? []
+                check(found.isEmpty, "the last page without a QR code holds no QR code")
+            }
+            EditorPreferences.printQRCode = true
         }
 
         // 13a-7. The share tool offers its actions as a menu.
@@ -1101,6 +1149,7 @@ enum SelfTest {
             try checkShareLinks(check, folder: root.appendingPathComponent("share"))
             try checkShareStyle(check, folder: root.appendingPathComponent("share-style"))
             try checkShareOnPaper(check, folder: root.appendingPathComponent("share-paper"))
+            try checkPrintWithoutQRCode(check, folder: root.appendingPathComponent("print-plain"))
             try checkShareFallback(check, folder: root.appendingPathComponent("share-fallback"))
             try checkSharedPaths(check, folder: root.appendingPathComponent("share-paths"))
         } catch {
@@ -1190,6 +1239,36 @@ enum SelfTest {
         check(printed?.sharedSource.contains("references: [{") == true, "the handout's QR code has the cited entries")
         check(printed?.string.contains("(Silva 2020)") == true, "the handout has the formatted citation")
         check(controller.editor.source == citationText, "the print does not change the document")
+    }
+
+    /// The setting off: the page has the citations and no QR code, and no
+    /// share link is built, so a slow link cannot hold the print.
+    private static func checkPrintWithoutQRCode(_ check: (Bool, String) -> Void, folder: URL) throws {
+        let (document, controller) = try citationDocument(text: citationText, folder: folder)
+        defer { closeCitationDocument(document) }
+        let saved = EditorPreferences.printQRCode
+        defer { EditorPreferences.printQRCode = saved }
+        EditorPreferences.printQRCode = false
+
+        var printed: HandoutTextView?
+        controller.printHookForTesting = { printed = $0 }
+        controller.printPreview(nil)
+        check(pump(timeout: 15) { printed != nil }, "the handout prints with the QR code off")
+        check(printed?.sharedSource == "", "a handout with the QR code off has no share link")
+        check(printed?.string.contains("(Silva 2020)") == true, "a handout with the QR code off has the formatted citation")
+        check(printed?.string.contains("Scan to open") == false, "a handout with the QR code off has no caption")
+        check(printed?.string.contains("too long") == false, "a handout with the QR code off has no too-long note")
+        check(controller.editor.source == citationText, "the print does not change the document")
+
+        // A link that takes 5 s is not waited for.
+        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0, shareDelay: 5))
+        controller.citations.exportLimit = 10
+        printed = nil
+        let started = Date()
+        controller.printPreview(nil)
+        check(pump(timeout: 3) { printed != nil }, "no share link is built when the QR code is off")
+        check(Date().timeIntervalSince(started) < 3, "a slow share link does not hold a print with no QR code")
+        check(printed?.sharedSource == "", "the late engine gives a page with no share link")
     }
 
     private static func checkShareFallback(_ check: (Bool, String) -> Void, folder: URL) throws {

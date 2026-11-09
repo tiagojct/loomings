@@ -11,9 +11,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A floating file sidebar: the Markdown and text files of a folder, on a card
   over the editor's left edge. A Files button in the title bar, View > Show
   Sidebar (Control-Command-S) and Escape show and hide it. Off by default.
-- Settings (Command-comma) with two switches: References and the file sidebar.
+- Settings (Command-comma) with the switches References and the file sidebar.
   With References off, the menu and tab are gone and `[@key]` stays as typed.
   The sidebar folder is one for each window (default) or one for all windows.
+- A setting for the QR code on printed pages (Settings > Printing). On by
+  default. Off: Print and Export > PDF end with the document, and no share
+  link is built for the page, so the print does not wait for one. Show QR
+  Code in the Share menu is not affected.
 
 ### Fixed (web)
 

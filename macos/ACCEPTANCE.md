@@ -184,7 +184,7 @@ section limits grows with the number of limited sections. Measured with
 | Exercises that check themselves | Yes | 17 shared cases in `check-cases.json`; every lesson fails untouched and passes with an answer |
 | Section word limits | Yes | Section tests; status bar and outline in self-test |
 | Projector mode | Yes | Self-test: sizes, hidden chrome, caption, preview size, no preference written |
-| Handout PDF and QR code | Yes | Self-test: pages, numbering, A4/Letter, the printed code decodes to the share link |
+| Handout PDF and QR code | Yes | Self-test: pages, numbering, A4/Letter, the printed code decodes to the share link; with Settings > Printing off, no code or caption, every page numbered, and no share link built |
 | Writing history and replay | Yes | Delta round trip with emoji; survives rename and save; throttle and flush in self-test |
 | Compare With | Yes | Diff tests incl. 20,000 lines; aligned rows in self-test |
 | Send with AirDrop | Partial | File contents and availability in self-test; a real AirDrop transfer was not automated |

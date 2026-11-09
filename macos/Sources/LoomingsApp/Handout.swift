@@ -5,8 +5,8 @@ import LoomingsTheme
 
 /// The printed and PDF form of a document: paginated on A4 or Letter, in the
 /// light colours of the current family on white paper, every page numbered,
-/// and the share link as a QR code at the end so the sheet leads back to an
-/// editable document.
+/// and, unless the writer turned it off, the share link as a QR code at the
+/// end so the sheet leads back to an editable document.
 @MainActor
 enum Handout {
     static var paperSize: NSSize {
@@ -34,21 +34,24 @@ enum Handout {
     }
 
     /// - Parameters:
-    ///   - source: the text of the share link.
+    ///   - source: the text of the share link, or nil for a page with no QR
+    ///     code: it then ends with the document.
     ///   - markdown: the text to print, with its citations formatted.
-    static func view(source: String, markdown: String, documentURL: URL?, title: String) -> HandoutTextView {
+    static func view(source: String?, markdown: String, documentURL: URL?, title: String) -> HandoutTextView {
         let manager = ThemeManager.shared
         let light = manager.library?.resolve(family: manager.family, mode: .light, systemIsDark: false)
         let theme = light.map { PreviewTheme.themed($0) } ?? .standard
         let rendered = PreviewRenderer(theme: theme, producesHTML: false).render(source: markdown, documentURL: documentURL)
 
         let content = NSMutableAttributedString(attributedString: rendered.attributed)
-        content.append(qrBlock(source: source, theme: theme))
+        if let source {
+            content.append(qrBlock(source: source, theme: theme))
+        }
 
         let width = paperSize.width - sideMargin * 2
         let view = HandoutTextView(frame: NSRect(x: 0, y: 0, width: width, height: 200))
         view.title = title
-        view.sharedSource = source
+        view.sharedSource = source ?? ""
         view.footerColor = theme.secondaryTextColor
         view.footerFont = NSFont(name: "SourceSerif4-Regular", size: 9) ?? .systemFont(ofSize: 9)
         view.isEditable = false
@@ -118,7 +121,7 @@ enum Handout {
 /// A text view that prints "title · page n of N" at the foot of every page.
 final class HandoutTextView: NSTextView {
     var title = ""
-    /// The text in the share link.
+    /// The text in the share link. Empty when the page has no QR code.
     var sharedSource = ""
     var footerColor: NSColor = .secondaryLabelColor
     var footerFont: NSFont = .systemFont(ofSize: 9)

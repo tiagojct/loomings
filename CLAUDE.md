@@ -272,7 +272,11 @@ Stage 2 decisions worth preserving:
 - Share links with citations: `CitationController.shareText` runs
   `CitationEngine.shareSource` on the citation queue, with `exportLimit`, and
   gives the plain text and a failure after the limit. Copy Share Link, Show QR
-  Code and the Handout QR code use it. `LoomingsDocument.cameFromShareLink`
+  Code and the Handout QR code use it. The Handout QR code follows
+  `EditorPreferences.printQRCode` (Settings > Printing, on by default): the
+  caller reads it once and passes it to `makeHandout(_:includeQR:)` and to
+  `withExportPage(sharing:)`, so an off setting builds no share text.
+  `LoomingsDocument.cameFromShareLink`
   (Open Share Link, cleared on a save, kept by a copy and by restoration)
   sets `allowPaths: false` in `planNativeSources`: an absolute or parent path
   in `bibliography:` or `csl:` stays unread, with a note, until the save.

@@ -131,6 +131,17 @@ enum EditorPreferences {
         set { defaults.set(newValue, forKey: key("referencesEnabled")) }
     }
 
+    /// The share link as a QR code at the end of a printed page or a PDF. On
+    /// by default. Off: the page ends with the document, and no share link is
+    /// built for it. The Share tool's Show QR Code does not follow this.
+    static var printQRCode: Bool {
+        get {
+            if defaults.object(forKey: key("printQRCode")) == nil { return true }
+            return defaults.bool(forKey: key("printQRCode"))
+        }
+        set { defaults.set(newValue, forKey: key("printQRCode")) }
+    }
+
     /// The file sidebar. Off by default.
     static var sidebarEnabled: Bool {
         get { defaults.bool(forKey: key("sidebarEnabled")) }
