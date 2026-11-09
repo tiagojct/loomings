@@ -222,6 +222,14 @@ node macos/scripts/render-web-fixtures.mjs     # preview HTML fixtures
 node macos/scripts/render-share-fixtures.mjs   # cross-language share fixtures
 ```
 
+- The self-test reads the stored theme and mode. Run it with no theme
+  arguments. `-Loomings.Native.themeFamily` and `-themeMode` override the
+  setters, so "theme switching applies to the editor" fails under them.
+- To build the unmodified HEAD for a baseline, use `git worktree add`, copy
+  `macos/.build/{checkouts,repositories,workspace-state.json}` into the
+  worktree, then run `build-app.sh`. Without the copy the build fails offline
+  with "swift-cmark ... already exists".
+
 Stage 2 decisions worth preserving:
 
 - Saves are forced onto the main thread (`canAsynchronouslyWrite` is false)
