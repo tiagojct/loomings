@@ -510,6 +510,17 @@ enum SelfTest {
             feature.setSidebarFolder(folderRoot)
             check(feature.sidebarFolderForTesting?.lastPathComponent == folderRoot.lastPathComponent, "the sidebar can go back up to a parent folder")
 
+            // A window that becomes key lists a folder again only if it changed.
+            let listings = feature.sidebarListingsForTesting
+            feature.refreshSidebar()
+            check(feature.sidebarListingsForTesting == listings, "an unchanged folder is not listed again when the window becomes key")
+            try? "x".write(to: folderRoot.appendingPathComponent("d.md"), atomically: true, encoding: .utf8)
+            feature.refreshSidebar()
+            check(
+                feature.sidebarListingsForTesting > listings && feature.sidebarRowsForTesting.contains("d.md"),
+                "a new file shows when the window becomes key: \(feature.sidebarRowsForTesting)"
+            )
+
             // References off: citations stay as typed, and nothing runs.
             EditorPreferences.referencesEnabled = true
             feature.editor.setText("---\nreferences: []\n---\n\nSee [@a].\n")
@@ -527,6 +538,47 @@ enum SelfTest {
             )), "Show References is disabled when the feature is off")
         } else {
             check(false, "could not create the feature window")
+        }
+        // A render that waited behind a newer one never starts.
+        controller.setViewMode(.preview)
+        _ = pump(timeout: 2) { false }
+        let startedBefore = controller.previewRendersStartedForTesting
+        controller.blockPreviewQueueForTesting(0.5)
+        for n in 1...5 {
+            editor.setText("Draft \(n)\n")
+            controller.refreshPreviewForTesting()
+        }
+        check(pump(timeout: 5) { controller.previewText.contains("Draft 5") }, "the last of five quick edits is in the preview")
+        _ = pump(timeout: 1) { false }
+        let started = controller.previewRendersStartedForTesting - startedBefore
+        check(started >= 1 && started <= 2, "five renders behind a busy queue start at most two: \(started)")
+        controller.setViewMode(.write)
+
+        // A key equivalent does not rebuild the dynamic menus (Recent, Shelf,
+        // Go to Heading, Compare With): that read the shelf on each key.
+        do {
+            let delegate = AppDelegate()
+            let mainMenu = delegate.makeMainMenu()
+            let savedMenu = NSApp.mainMenu
+            NSApp.mainMenu = mainMenu
+            defer { NSApp.mainMenu = savedMenu }
+            let before = delegate.dynamicMenuRebuilds
+            let unassigned = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: [.command, .option, .control], timestamp: 0,
+                windowNumber: 0, context: nil, characters: "j", charactersIgnoringModifiers: "j",
+                isARepeat: false, keyCode: 38
+            )
+            if let unassigned { NSApp.sendEvent(unassigned) }
+            let handled = unassigned.map { mainMenu.performKeyEquivalent(with: $0) } ?? true
+            check(!handled, "the test key is not a menu command")
+            check(delegate.dynamicMenuRebuilds == before, "a key equivalent rebuilds no dynamic menu: \(delegate.dynamicMenuRebuilds - before) rebuilt")
+            // The delegate still fills a menu when AppKit asks for it to open.
+            if let recent = mainMenu.items.first(where: { $0.submenu?.title == "File" })?.submenu?.item(withTitle: "Open Recent")?.submenu {
+                delegate.menuNeedsUpdate(recent)
+                check(delegate.dynamicMenuRebuilds == before + 1 && !recent.items.isEmpty, "the delegate fills Open Recent when asked")
+            } else {
+                check(false, "the File menu has Open Recent")
+            }
         }
         let settings = SettingsWindowController.shared
         settings.sync()

@@ -290,6 +290,16 @@ Stage 2 decisions worth preserving:
   in `bibliography:` or `csl:` stays unread, with a note, until the save.
   `citation-fixtures.json` has the `shares` cases; the Swift tests also send a
   native link through the web code in Node.
+- Sidebar: `reloadIfChanged` (window activation) lists again only if the date
+  of a listed folder changed; `reload` always lists. Read the date with
+  `FileManager.attributesOfItem`, not `URL.resourceValues`: a URL keeps the
+  values it read and answers with the old date.
+- Dynamic menus (Open Recent, Shelf, Go to Heading, Compare With) are filled in
+  `menuNeedsUpdate`. `menuHasKeyEquivalent` returns false so AppKit does not
+  call it for each key press; a delegated menu with its own key equivalent
+  would need a different answer there.
+- The preview render has a ticket (`PreviewTicket`) like the parse: a render
+  that waited behind a newer one never starts.
 - Share fixtures are generated with `node macos/scripts/render-share-fixtures.mjs`;
   the Swift tests decode those and also run the web decoder through Node, so
   both directions are exercised. No custom URL scheme or universal link is

@@ -28,10 +28,28 @@ final class HistoryRecorder {
 
     var isRecording: Bool { recordingID != nil }
 
+    /// The last answer of `hasHistory`. A menu asks on every validation, and
+    /// the answer costs a read of the path table and of the whole history.
+    private var historyAnswer: (file: URL, has: Bool)?
+
     /// Whether this file has a history to replay or delete.
     func hasHistory(fileURL: URL?) -> Bool {
-        guard let fileURL, let id = store.existingIdentifier(for: fileURL) else { return false }
-        return !((try? store.entries(for: id)) ?? []).isEmpty
+        guard let fileURL else { return false }
+        if let historyAnswer, historyAnswer.file == fileURL { return historyAnswer.has }
+        let has: Bool
+        if let id = store.existingIdentifier(for: fileURL) {
+            has = !((try? store.entries(for: id)) ?? []).isEmpty
+        } else {
+            has = false
+        }
+        historyAnswer = (fileURL, has)
+        return has
+    }
+
+    /// Forget the last answer of `hasHistory`: another window, or another
+    /// process, can record or delete the history of the same file.
+    func forgetHistoryAnswer() {
+        historyAnswer = nil
     }
 
     /// Picks up a recording switched on in an earlier session.
@@ -44,6 +62,7 @@ final class HistoryRecorder {
     }
 
     func setRecording(_ on: Bool, fileURL: URL, text: String) {
+        historyAnswer = nil
         if on {
             guard let id = try? store.identifier(for: fileURL) else { return }
             store.setRecording(id, true)
@@ -75,6 +94,7 @@ final class HistoryRecorder {
     }
 
     func deleteHistory() {
+        historyAnswer = nil
         let id = recordingID
         pending = nil
         recordingID = nil
@@ -83,6 +103,7 @@ final class HistoryRecorder {
 
     /// Deletes the history of a file that is not being recorded now.
     func deleteHistory(fileURL: URL?) {
+        historyAnswer = nil
         if recordingID != nil { deleteHistory(); return }
         guard let fileURL, let id = store.existingIdentifier(for: fileURL) else { return }
         try? store.delete(id)
@@ -94,6 +115,7 @@ final class HistoryRecorder {
         lastRecorded = clock()
         do {
             try store.record(text: text, at: Date().timeIntervalSince1970, for: id)
+            historyAnswer = nil
         } catch {
             guard !reportedError else { return }
             reportedError = true

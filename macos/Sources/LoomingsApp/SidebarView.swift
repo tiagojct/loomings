@@ -193,10 +193,39 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
         reload()
     }
 
+    /// The modification date of each folder the tree has listed, taken just
+    /// before that listing. A folder's date changes when a file is added,
+    /// removed or renamed in it, which are the only changes a listing shows.
+    private var listed: [URL: Date] = [:]
+
+    /// Not `URL.resourceValues`: a URL keeps the values it read and would
+    /// answer with the old date.
+    private func modified(_ url: URL) -> Date {
+        (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date ?? .distantPast
+    }
+
+    /// How many folders were listed. The self-test reads it.
+    private(set) var listingsForTesting = 0
+
+    private func list(_ url: URL) -> [Node] {
+        listingsForTesting += 1
+        listed[url] = modified(url)
+        return FolderListing.entries(in: url).map(Node.init)
+    }
+
+    /// Lists the folders again only if one of them changed since it was
+    /// listed. A window that becomes key asks this on every activation, so a
+    /// large folder is not read again when nothing happened to it.
+    func reloadIfChanged() {
+        guard folder != nil else { return }
+        if listed.contains(where: { modified($0.key) != $0.value }) { reload() }
+    }
+
     /// Lists the folder again, and keeps the folders that were open.
     func reload() {
         let open = openFolders()
-        roots = folder.map { FolderListing.entries(in: $0).map(Node.init) } ?? []
+        listed = [:]
+        roots = folder.map(list) ?? []
         outline.reloadData()
         restore(open, in: roots)
         let empty = folder == nil || roots.isEmpty
@@ -227,7 +256,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
 
     private func children(of node: Node) -> [Node] {
         if let children = node.children { return children }
-        let loaded = FolderListing.entries(in: node.entry.url).map(Node.init)
+        let loaded = list(node.entry.url)
         node.children = loaded
         return loaded
     }

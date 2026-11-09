@@ -893,7 +893,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         }
     }
 
+    /// None of the menus with this delegate has a key equivalent of its own.
+    /// Answering this keeps AppKit from calling `menuNeedsUpdate` on each of
+    /// them for every key press, which rebuilt the Recent, Shelf, Go to Heading
+    /// and Compare With menus (the shelf one reads every shelf entry).
+    func menuHasKeyEquivalent(
+        _ menu: NSMenu,
+        for event: NSEvent,
+        target: AutoreleasingUnsafeMutablePointer<AnyObject?>?,
+        action: UnsafeMutablePointer<Selector?>?
+    ) -> Bool {
+        false
+    }
+
+    /// How many times a dynamic menu was rebuilt. The self-test reads it.
+    private(set) var dynamicMenuRebuilds = 0
+
     func menuNeedsUpdate(_ menu: NSMenu) {
+        if menu === recentMenu || menu === shelfMenu || menu === outlineMenu || menu === compareMenu {
+            dynamicMenuRebuilds += 1
+        }
         if menu === recentMenu {
             rebuildRecentMenu(menu)
         } else if menu === shelfMenu {

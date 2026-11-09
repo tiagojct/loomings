@@ -19,6 +19,17 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   link is built for the page, so the print does not wait for one. Show QR
   Code in the Share menu is not affected.
 
+### Changed (native macOS app, speed)
+
+- A window that becomes key lists its sidebar folders again only if one of
+  them changed (its modification date), not on every activation.
+- A key press no longer rebuilds the Open Recent, Shelf, Go to Heading and
+  Compare With menus; they are filled when they open.
+- A preview render that waited behind a newer edit never starts.
+- The writing-history copy of the text is made only for a recording document,
+  and the "has a history" answer is kept until the history or the window
+  changes.
+
 ### Fixed (web)
 
 - A file opened on Safari or Firefox is a copy. Autosave no longer downloads

@@ -57,6 +57,9 @@ final class EditorWindowController: NSWindowController,
     private var syncSource: String?
     private var syncUntil = Date.distantPast
     private var previewGeneration = 0
+    /// The newest generation, readable from the preview queue: a render that
+    /// waited behind a newer one never starts.
+    private let previewTicket = PreviewTicket()
     private let previewPipeline = PreviewPipeline()
     /// Links the text in the preview to the editor's text, when they differ.
     private var citationLines: CitationLineMap?
@@ -316,7 +319,8 @@ final class EditorWindowController: NSWindowController,
             guard let self else { return }
             self.applyTeachingReport()
             if self.editor.lastAppliedRevision == self.editor.revision, self.editor.revision > 0 {
-                self.history.textChanged(self.editor.source)
+                // The text is copied only for a document that records.
+                if self.history.isRecording { self.history.textChanged(self.editor.source) }
                 // The parse is done, so this is never on the edit path.
                 self.updateCitations()
             }
@@ -869,6 +873,14 @@ final class EditorWindowController: NSWindowController,
     /// The text of the last render that reached the preview pipeline.
     private(set) var previewInputForTesting: String?
     private(set) var previewRendersForTesting = 0
+    /// The renders that began on the preview queue; a stale one never does.
+    var previewRendersStartedForTesting: Int { previewTicket.started }
+    var sidebarListingsForTesting: Int { sidebar.listingsForTesting }
+    func refreshPreviewForTesting() { refreshPreview() }
+    /// Keeps the preview queue busy, so later renders wait behind it.
+    func blockPreviewQueueForTesting(_ seconds: TimeInterval) {
+        previewQueue.async { Thread.sleep(forTimeInterval: seconds) }
+    }
 
     // MARK: - View modes and preview
 
@@ -1095,6 +1107,7 @@ final class EditorWindowController: NSWindowController,
     private var replayController: ReplayWindowController?
 
     func windowDidBecomeKey(_ notification: Notification) {
+        history.forgetHistoryAnswer()
         refreshSidebar()
     }
 
@@ -1298,7 +1311,7 @@ final class EditorWindowController: NSWindowController,
     /// The window's own list, listed again: files come and go outside the app.
     func refreshSidebar() {
         guard sidebarOn else { return }
-        sidebar.reload()
+        sidebar.reloadIfChanged()
         sidebar.select(url: loomingsDocument?.fileURL)
     }
 
@@ -1486,12 +1499,15 @@ final class EditorWindowController: NSWindowController,
         previewRendersForTesting += 1
         previewGeneration += 1
         let generation = previewGeneration
+        previewTicket.set(generation)
+        let ticket = previewTicket
         let documentURL = loomingsDocument?.linkBaseURL
         let resolved = ThemeManager.shared.resolved()
         let theme = previewTheme(resolved)
 
         let pipeline = previewPipeline
         previewQueue.async { [weak self] in
+            guard ticket.start(generation) else { return }
             let rendered = pipeline.render(
                 source: markdown,
                 documentURL: documentURL,
@@ -2276,5 +2292,32 @@ final class ThemedSplitView: NSSplitView {
     /// With one pane hidden there is nothing to divide; no line at the edge.
     override var dividerThickness: CGFloat {
         arrangedSubviews.contains(where: \.isHidden) ? 0 : super.dividerThickness
+    }
+}
+
+/// The newest preview generation, readable from the preview queue.
+private final class PreviewTicket: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latest = 0
+
+    func set(_ generation: Int) {
+        lock.lock(); latest = generation; lock.unlock()
+    }
+
+    private var begun = 0
+
+    /// Whether `generation` is the newest. A render that is will run, and is
+    /// counted.
+    func start(_ generation: Int) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        guard latest == generation else { return false }
+        begun += 1
+        return true
+    }
+
+    /// How many renders have started.
+    var started: Int {
+        lock.lock(); defer { lock.unlock() }
+        return begun
     }
 }
