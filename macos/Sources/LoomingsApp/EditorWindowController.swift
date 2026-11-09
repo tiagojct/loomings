@@ -79,8 +79,11 @@ final class EditorWindowController: NSWindowController,
         )
         // The title, the centred mode switch and three tools fit from 640 pt.
         window.minSize = NSSize(width: 640, height: 360)
-        window.tabbingMode = .preferred
-        window.isRestorable = false
+        // The tab setting of System Settings decides; the tab bar's + asks the
+        // app for a new window (`newWindowForTab`).
+        window.tabbingMode = .automatic
+        // An unsaved document and the window's place come back after a restart.
+        window.isRestorable = true
         window.center()
 
         super.init(window: window)

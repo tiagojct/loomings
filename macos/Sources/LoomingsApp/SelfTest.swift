@@ -539,6 +539,9 @@ enum SelfTest {
         } else {
             check(false, "could not create the feature window")
         }
+        check(window.tabbingMode == .automatic, "the tab setting of the system decides")
+        check(window.isRestorable, "the window is restored after a restart")
+
         // Bold, Italic, Code and Link edit the editor, so they are off when
         // the preview has the focus.
         controller.setViewMode(.split)

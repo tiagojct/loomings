@@ -84,6 +84,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate, NSMenu
         document.showWindows()
     }
 
+    /// The + in the tab bar: a new document, in a tab of the window it came from.
+    @objc func newWindowForTab(_ sender: Any?) {
+        let current = NSApp.keyWindow
+        newDocument(sender)
+        if let current, let created = NSApp.keyWindow, created !== current {
+            current.addTabbedWindow(created, ordered: .above)
+            created.makeKeyAndOrderFront(nil)
+        }
+    }
+
     // MARK: - Menu
 
     @objc private func showSettings(_ sender: Any?) {

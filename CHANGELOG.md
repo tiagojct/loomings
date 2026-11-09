@@ -30,6 +30,9 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Bold, Italic, Code and Link are off while the preview or another field has
   the focus. Send with AirDrop is off when AirDrop is not available.
 - Settings: Escape closes it, and it opens where it was left.
+- Windows follow the tab setting of System Settings (they all opened as tabs
+  before), the tab bar's + makes a new document, and a window with an unsaved
+  document comes back after a restart.
 
 ### Changed (native macOS app, speed)
 
