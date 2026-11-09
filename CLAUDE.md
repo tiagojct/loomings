@@ -290,6 +290,10 @@ Stage 2 decisions worth preserving:
   in `bibliography:` or `csl:` stays unread, with a note, until the save.
   `citation-fixtures.json` has the `shares` cases; the Swift tests also send a
   native link through the web code in Node.
+- `EditorPreferences.sidebarVisible` is never stored: it is a value in memory
+  or the argument `-Loomings.Native.sidebarVisible YES`, for tests and
+  snapshots. A new window starts with the sidebar closed. The Files button
+  sits just before Outline, with the other tools.
 - Sidebar: `reloadIfChanged` (window activation) lists again only if the date
   of a listed folder changed; `reload` always lists. Read the date with
   `FileManager.attributesOfItem`, not `URL.resourceValues`: a URL keeps the

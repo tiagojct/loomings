@@ -455,6 +455,11 @@ enum SelfTest {
             EditorPreferences.sidebarEnabled = true
             NotificationCenter.default.post(name: .loomingsFeaturesChanged, object: nil)
             check(feature.isSidebarVisibleForTesting, "the sidebar shows when the feature turns on")
+            let tools = feature.toolbarIdentifiersForTesting
+            check(
+                tools.firstIndex(of: "files").map { tools.indices.contains($0 + 1) && tools[$0 + 1] == "outline" } == true,
+                "the Files button sits just before Outline, with the other tools: \(tools)"
+            )
             feature.setSidebarFolder(folderRoot)
             check(
                 feature.sidebarRowsForTesting == ["sub", "a.md", "b.txt"],
@@ -667,6 +672,13 @@ enum SelfTest {
         (EditorPreferences.sidebarEnabled, EditorPreferences.sidebarVisible,
          EditorPreferences.sidebarSharedFolder, EditorPreferences.sidebarFolder,
          EditorPreferences.referencesEnabled) = savedFeatures
+
+        // A stored sidebarVisible (an old test run left one) does not open the
+        // sidebar in a new window.
+        UserDefaults.standard.set(true, forKey: "Loomings.Native.sidebarVisible")
+        EditorPreferences.resetSidebarVisibleForTesting()
+        check(!EditorPreferences.sidebarVisible, "a stored sidebarVisible does not open the sidebar")
+        UserDefaults.standard.removeObject(forKey: "Loomings.Native.sidebarVisible")
 
         // 13a-1. The learner's checker finds a mistake, fixes it, and undo
         // brings the mistake back.

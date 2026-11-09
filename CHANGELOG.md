@@ -19,6 +19,13 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   link is built for the page, so the print does not wait for one. Show QR
   Code in the Share menu is not affected.
 
+### Changed (native macOS app, sidebar)
+
+- A new window always starts with the sidebar closed. A stored
+  `sidebarVisible` value (a test run had left one in the preferences) opened
+  it; that value is now only a command-line argument or a value in memory.
+- The Files button is with the other tools, just before Outline.
+
 ### Changed (native macOS app, title bar and keyboard)
 
 - The title-bar controls dim while the window is not the main window, as the

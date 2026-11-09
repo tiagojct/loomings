@@ -149,12 +149,22 @@ enum EditorPreferences {
         set { defaults.set(newValue, forKey: key("sidebarEnabled")) }
     }
 
-    /// The sidebar is a quick switcher: new windows start with it hidden. This
-    /// key is for tests and snapshots; the window toggle does not write it.
+    /// The sidebar is a quick switcher: new windows start with it hidden. For
+    /// tests and snapshots only, and never stored: a value in memory, or the
+    /// command-line argument `-Loomings.Native.sidebarVisible YES`. A stored
+    /// value (an old test run left one) is ignored.
+    private static var sidebarVisibleOverride: Bool?
+
     static var sidebarVisible: Bool {
-        get { defaults.bool(forKey: key("sidebarVisible")) }
-        set { defaults.set(newValue, forKey: key("sidebarVisible")) }
+        get {
+            if let sidebarVisibleOverride { return sidebarVisibleOverride }
+            let argument = UserDefaults.standard.volatileDomain(forName: UserDefaults.argumentDomain)[key("sidebarVisible")]
+            return (argument as? String).map { NSString(string: $0).boolValue } ?? (argument as? Bool) ?? false
+        }
+        set { sidebarVisibleOverride = newValue }
     }
+
+    static func resetSidebarVisibleForTesting() { sidebarVisibleOverride = nil }
 
     /// One folder for every window (true), or one for each window (false).
     static var sidebarSharedFolder: Bool {

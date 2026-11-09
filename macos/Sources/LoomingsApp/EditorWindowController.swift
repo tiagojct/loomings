@@ -1119,6 +1119,10 @@ final class EditorWindowController: NSWindowController,
         for button in toolButtons { button.isWindowActive = active }
     }
 
+    var toolbarIdentifiersForTesting: [String] {
+        window?.toolbar?.items.map { $0.itemIdentifier.rawValue.replacingOccurrences(of: "eu.tiagojacinto.loomings.", with: "") } ?? []
+    }
+
     var chromeIsDimmedForTesting: Bool {
         modeSwitch?.isWindowActive == false || columnTabs.isWindowActive == false
             || toolButtons.contains { !$0.isWindowActive }
@@ -2104,7 +2108,9 @@ final class EditorWindowController: NSWindowController,
         guard let toolbar = window?.toolbar else { return }
         let index = toolbar.items.firstIndex { $0.itemIdentifier == ToolbarItem.files }
         if EditorPreferences.sidebarEnabled, index == nil {
-            toolbar.insertItem(withItemIdentifier: ToolbarItem.files, at: 0)
+            // With the other tools: just before Outline.
+            let outline = toolbar.items.firstIndex { $0.itemIdentifier == ToolbarItem.outline }
+            toolbar.insertItem(withItemIdentifier: ToolbarItem.files, at: outline ?? toolbar.items.count)
         } else if !EditorPreferences.sidebarEnabled, let index {
             toolbar.removeItem(at: index)
         }
