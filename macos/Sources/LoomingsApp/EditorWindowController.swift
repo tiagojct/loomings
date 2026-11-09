@@ -1109,6 +1109,22 @@ final class EditorWindowController: NSWindowController,
     let history = HistoryRecorder()
     private var replayController: ReplayWindowController?
 
+    func windowDidBecomeMain(_ notification: Notification) { setChromeActive(true) }
+    func windowDidResignMain(_ notification: Notification) { setChromeActive(false) }
+
+    /// The title-bar controls dim while the window is not the main window.
+    private func setChromeActive(_ active: Bool) {
+        modeSwitch?.isWindowActive = active
+        columnTabs.isWindowActive = active
+        for button in toolButtons { button.isWindowActive = active }
+    }
+
+    var chromeIsDimmedForTesting: Bool {
+        modeSwitch?.isWindowActive == false || columnTabs.isWindowActive == false
+            || toolButtons.contains { !$0.isWindowActive }
+    }
+    func stepModeSwitchForTesting(_ delta: Int) { modeSwitch?.stepForTesting(delta) }
+
     func windowDidBecomeKey(_ notification: Notification) {
         history.forgetHistoryAnswer()
         refreshSidebar()

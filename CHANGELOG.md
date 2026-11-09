@@ -19,6 +19,14 @@ follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   link is built for the page, so the print does not wait for one. Show QR
   Code in the Share menu is not affected.
 
+### Changed (native macOS app, title bar and keyboard)
+
+- The title-bar controls dim while the window is not the main window, as the
+  system's own title bar does.
+- With Full Keyboard Access the Write/Split/Preview switch is one Tab stop
+  and the left and right arrows move its selection (it had three stops).
+- The sidebar fades in and out only if Reduce Motion is off.
+
 ### Changed (native macOS app, menus)
 
 - File > Open Share Link… (there was no way to reach it) and File > Share

@@ -43,6 +43,16 @@ final class ModeSwitch: NSView {
         }
     }
 
+    /// False while the window is not the main window: the colours dim, as
+    /// the system's own title bar does.
+    var isWindowActive = true {
+        didSet {
+            guard isWindowActive != oldValue else { return }
+            for segment in segments { segment.isWindowActive = isWindowActive }
+            needsDisplay = true
+        }
+    }
+
     private var segments: [ModeSegment] = []
     private var colors = ChromeColors(nil)
     /// Not `frame.size`: a hidden column gives this view no width, and the
@@ -69,6 +79,8 @@ final class ModeSwitch: NSView {
             segment.target = self
             segment.action = #selector(pick(_:))
             segment.tag = index
+            // The switch is one stop of the key loop; the arrows move inside it.
+            segment.refusesFirstResponder = true
             addSubview(segment)
             segments.append(segment)
         }
@@ -93,14 +105,42 @@ final class ModeSwitch: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let track = NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7)
-        colors.track.withAlphaComponent(0.55).setFill()
+        colors.track.withAlphaComponent(isWindowActive ? 0.55 : 0.3).setFill()
         track.fill()
     }
 
     @objc private func pick(_ sender: ModeSegment) {
-        selectedIndex = sender.tag
-        onSelect?(sender.tag)
+        select(sender.tag)
     }
+
+    private func select(_ index: Int) {
+        guard segments.indices.contains(index) else { return }
+        selectedIndex = index
+        onSelect?(index)
+    }
+
+    // MARK: Keyboard
+
+    /// With Full Keyboard Access the switch takes the Tab key; a click on its
+    /// track does not move the focus from the text.
+    override var acceptsFirstResponder: Bool { NSApp.isFullKeyboardAccessEnabled }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 123: select(selectedIndex - 1)  // left arrow
+        case 124: select(selectedIndex + 1)  // right arrow
+        default: super.keyDown(with: event)
+        }
+    }
+
+    override func drawFocusRingMask() {
+        NSBezierPath(roundedRect: bounds, xRadius: 7, yRadius: 7).fill()
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    /// Moves the selection as the arrow keys do. The self-test calls it.
+    func stepForTesting(_ delta: Int) { select(selectedIndex + delta) }
 }
 
 @MainActor
@@ -108,6 +148,7 @@ private final class ModeSegment: NSButton {
     let label: String
     let labelFont: NSFont
     var colors = ChromeColors(nil) { didSet { needsDisplay = true } }
+    var isWindowActive = true { didSet { needsDisplay = true } }
     var isActive = false {
         didSet {
             needsDisplay = true
@@ -142,7 +183,7 @@ private final class ModeSegment: NSButton {
         }
         let attributes: [NSAttributedString.Key: Any] = [
             .font: labelFont,
-            .foregroundColor: isActive ? colors.ink : colors.dimInk,
+            .foregroundColor: (isActive ? colors.ink : colors.dimInk).withAlphaComponent(isWindowActive ? 1 : 0.5),
         ]
         let size = (label as NSString).size(withAttributes: attributes)
         (label as NSString).draw(
@@ -173,6 +214,14 @@ final class ToolbarIconButton: NSButton {
     private var tracking: NSTrackingArea?
     private var restoreWork: DispatchWorkItem?
 
+    /// False while the window is not the main window: the symbol dims.
+    var isWindowActive = true {
+        didSet {
+            guard isWindowActive != oldValue else { return }
+            contentTintColor = colors.dimInk.withAlphaComponent(isWindowActive ? 1 : 0.5)
+        }
+    }
+
     init(symbol: String, label: String) {
         symbolName = symbol
         super.init(frame: NSRect(x: 0, y: 0, width: Self.side, height: Self.side))
@@ -194,7 +243,7 @@ final class ToolbarIconButton: NSButton {
 
     func applyPalette(_ palette: ResolvedPalette?) {
         colors = ChromeColors(palette)
-        contentTintColor = colors.dimInk
+        contentTintColor = colors.dimInk.withAlphaComponent(isWindowActive ? 1 : 0.5)
         needsDisplay = true
     }
 

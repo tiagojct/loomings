@@ -539,6 +539,24 @@ enum SelfTest {
         } else {
             check(false, "could not create the feature window")
         }
+        // The title-bar controls dim while the window is not the main window.
+        controller.windowDidResignMain(Notification(name: NSWindow.didResignMainNotification))
+        check(controller.chromeIsDimmedForTesting, "the title-bar controls dim in an inactive window")
+        controller.windowDidBecomeMain(Notification(name: NSWindow.didBecomeMainNotification))
+        check(!controller.chromeIsDimmedForTesting, "the title-bar controls are full strength in the main window")
+
+        // The arrow keys move the mode switch.
+        controller.setViewMode(.write)
+        controller.stepModeSwitchForTesting(1)
+        check(controller.viewMode == .split, "the right arrow moves the mode switch to Split")
+        controller.stepModeSwitchForTesting(1)
+        controller.stepModeSwitchForTesting(1)
+        check(controller.viewMode == .preview, "the right arrow stops at Preview")
+        controller.stepModeSwitchForTesting(-2)
+        check(controller.viewMode == .write, "the left arrow goes back to Write")
+        controller.stepModeSwitchForTesting(-1)
+        check(controller.viewMode == .write, "the left arrow stops at Write")
+
         check(window.tabbingMode == .automatic, "the tab setting of the system decides")
         check(window.isRestorable, "the window is restored after a restart")
 

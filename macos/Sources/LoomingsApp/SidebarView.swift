@@ -167,7 +167,7 @@ final class SidebarView: NSView, NSOutlineViewDataSource, NSOutlineViewDelegate 
     /// Fades the card in or out. The editor does not move.
     func setShown(_ show: Bool, animated: Bool) {
         if show { isHidden = false }
-        guard animated else {
+        guard animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
             alphaValue = show ? 1 : 0
             isHidden = !show
             return
