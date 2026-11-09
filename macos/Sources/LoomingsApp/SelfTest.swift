@@ -1242,7 +1242,7 @@ enum SelfTest {
     }
 
     /// The setting off: the page has the citations and no QR code, and no
-    /// share link is built, so a slow link cannot hold the print.
+    /// share link is built.
     private static func checkPrintWithoutQRCode(_ check: (Bool, String) -> Void, folder: URL) throws {
         let (document, controller) = try citationDocument(text: citationText, folder: folder)
         defer { closeCitationDocument(document) }
@@ -1260,15 +1260,22 @@ enum SelfTest {
         check(printed?.string.contains("too long") == false, "a handout with the QR code off has no too-long note")
         check(controller.editor.source == citationText, "the print does not change the document")
 
-        // A link that takes 5 s is not waited for.
-        controller.citations.useEngineForTesting(try SlowCitationEngine(delay: 0, shareDelay: 5))
-        controller.citations.exportLimit = 10
+        // No share link is asked for. The count is the proof: a time limit
+        // would depend on how fast the engine starts.
+        let counting = try SlowCitationEngine(delay: 0)
+        controller.citations.useEngineForTesting(counting)
         printed = nil
-        let started = Date()
         controller.printPreview(nil)
-        check(pump(timeout: 3) { printed != nil }, "no share link is built when the QR code is off")
-        check(Date().timeIntervalSince(started) < 3, "a slow share link does not hold a print with no QR code")
-        check(printed?.sharedSource == "", "the late engine gives a page with no share link")
+        check(pump(timeout: 15) { printed != nil }, "the handout prints with the QR code off and a new engine")
+        check(counting.shares == 0, "no share link is built when the QR code is off: \(counting.shares)")
+        check(printed?.sharedSource == "", "the page has no share link")
+
+        // The same engine with the setting on is asked for one.
+        EditorPreferences.printQRCode = true
+        printed = nil
+        controller.printPreview(nil)
+        check(pump(timeout: 15) { printed != nil }, "the handout prints with the QR code on and a counting engine")
+        check(counting.shares == 1, "one share link is built when the QR code is on: \(counting.shares)")
     }
 
     private static func checkShareFallback(_ check: (Bool, String) -> Void, folder: URL) throws {
@@ -2038,19 +2045,27 @@ enum SelfTest {
         (controller.columnTabsForTesting?.subviews[index] as? NSButton)?.performClick(nil)
     }
 
-    /// The selected part of the control has the raised ground, and the window
-    /// shows it: a sibling that paints over the control fails this.
+    /// The control differs from the ground of the window, and the window shows
+    /// it: a sibling that paints over the control fails this. The selected
+    /// part has the raised ground and the rest has the track. A family may
+    /// give the raised ground the colour of the page (Delight in light mode),
+    /// so the control shows if either part differs.
     private static func controlIsPainted(_ controller: EditorWindowController) -> Bool {
         guard let tabs = controller.columnTabsForTesting,
               let frame = controller.window?.contentView?.superview else { return false }
         controller.layoutNowForTesting()
-        let inner = tabs.convert(NSPoint(x: tabs.bounds.width * (tabs.selectedIndex == 0 ? 0.08 : 0.92), y: tabs.bounds.midY), to: frame)
         let outer = tabs.convert(NSPoint(x: -20, y: tabs.bounds.midY), to: frame)
-        guard let lit = pixel(frame, at: inner), let ground = pixel(frame, at: outer) else { return false }
-        let difference = abs(lit.redComponent - ground.redComponent)
-            + abs(lit.greenComponent - ground.greenComponent)
-            + abs(lit.blueComponent - ground.blueComponent)
-        return difference > 0.01
+        guard let ground = pixel(frame, at: outer) else { return false }
+        func differs(atFraction fraction: CGFloat) -> Bool {
+            let point = tabs.convert(NSPoint(x: tabs.bounds.width * fraction, y: tabs.bounds.midY), to: frame)
+            guard let color = pixel(frame, at: point) else { return false }
+            let difference = abs(color.redComponent - ground.redComponent)
+                + abs(color.greenComponent - ground.greenComponent)
+                + abs(color.blueComponent - ground.blueComponent)
+            return difference > 0.01
+        }
+        let selected: CGFloat = tabs.selectedIndex == 0 ? 0.08 : 0.92
+        return differs(atFraction: selected) || differs(atFraction: 1 - selected)
     }
 
     private static func checkReferencesColumn(_ check: (Bool, String) -> Void, folder: URL) throws {
@@ -2567,6 +2582,7 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
     private let shareDelay: TimeInterval
     private let lock = NSLock()
     private var count = 0
+    private var shareCount = 0
 
     init(delay: TimeInterval, shareDelay: TimeInterval = 0) throws {
         guard let root = Bundle.main.resourceURL else { throw CocoaError(.fileNoSuchFile) }
@@ -2576,6 +2592,8 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
     }
 
     var analyses: Int { lock.withLock { count } }
+    /// The calls to `shareSource`.
+    var shares: Int { lock.withLock { shareCount } }
 
     func analyse(_ source: String) -> CitationReport {
         lock.withLock { count += 1 }
@@ -2585,6 +2603,7 @@ private final class SlowCitationEngine: CitationEngineProtocol, @unchecked Senda
 
     func setSources(_ sources: CitationSources) { engine.setSources(sources) }
     func shareSource(_ source: String) throws -> String {
+        lock.withLock { shareCount += 1 }
         Thread.sleep(forTimeInterval: shareDelay)
         return try engine.shareSource(source)
     }
