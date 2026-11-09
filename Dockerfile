@@ -1,4 +1,4 @@
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -18,6 +18,8 @@ FROM nginx:alpine
 COPY docs /usr/share/nginx/html
 COPY vendor /usr/share/nginx/html/vendor
 COPY --from=build /src/dist /usr/share/nginx/html/app
+RUN mkdir -p /etc/nginx/snippets
+COPY nginx-security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
