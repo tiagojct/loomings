@@ -5,7 +5,7 @@ import {
   idbSet, idbGet, idbDelete, _resetDbForTesting,
   putDocument, getDocument, listDocuments, deleteDocument,
   saveScratch, readScratch, clearScratch,
-  openHandle, openFile, saveFile, forgetFile, hasFileHandle, downloadMarkdown,
+  openHandle, openFile, openRecent, saveFile, forgetFile, adoptFileHandle, hasFileHandle, downloadMarkdown,
   initDragDrop, listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
 } from './browser.js';
 
@@ -107,7 +107,42 @@ describe('browser storage adapter (IndexedDB)', () => {
     expect(await readScratch()).toBeNull();
   });
 
-  it('does not adopt a handle whose file could not be read', async () => {
+  it('returns a handle from openHandle without adopting it', async () => {
+    const previous = {
+      kind: 'file',
+      name: 'previous.md',
+      getFile: async () => ({ name: 'previous.md', text: async () => '# previous' }),
+      queryPermission: async () => 'granted',
+      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+    };
+    const next = {
+      kind: 'file',
+      name: 'next.md',
+      getFile: async () => ({ name: 'next.md', text: async () => '# next' }),
+    };
+
+    adoptFileHandle(previous);
+    const payload = await openHandle(next);
+
+    expect(payload).toEqual({ path: 'next.md', content: '# next', handle: next });
+    expect(hasFileHandle()).toBe(true);
+    await expect(saveFile('previous.md', 'text')).resolves.toBe('previous.md');
+    forgetFile();
+  });
+
+  it('adopts a handle only when explicitly requested', async () => {
+    const handle = {
+      kind: 'file',
+      name: 'notes.md',
+      getFile: async () => ({ name: 'notes.md', text: async () => '# notes' }),
+    };
+
+    forgetFile();
+    adoptFileHandle(handle);
+    expect(hasFileHandle()).toBe(true);
+  });
+
+  it('does not change the active handle when a file could not be read', async () => {
     // A file can vanish between the picker and the read. If the handle is
     // adopted first, the next Save writes the previous document's text into
     // whatever file the handle now points at.
@@ -120,13 +155,42 @@ describe('browser storage adapter (IndexedDB)', () => {
       createWritable: async () => { writes++; return { write() {}, close() {} }; },
     };
 
-    forgetFile();
+    const previous = {
+      kind: 'file',
+      name: 'previous.md',
+      getFile: async () => ({ name: 'previous.md', text: async () => '# previous' }),
+      queryPermission: async () => 'granted',
+      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+    };
+    adoptFileHandle(previous);
     await expect(openHandle(halfOpen)).rejects.toThrow('unreadable');
 
-    // No handle adopted, so there is nothing to write in place: saveFile must
-    // say so rather than starting a download the writer did not ask for.
-    await expect(saveFile('notes.md', 'text')).rejects.toThrow(/no file handle/i);
+    await expect(saveFile('previous.md', 'text')).resolves.toBe('previous.md');
     expect(writes).toBe(0);
+    forgetFile();
+  });
+
+  it('returns a recent file handle without adopting it', async () => {
+    const previous = {
+      kind: 'file',
+      name: 'previous.md',
+      getFile: async () => ({ name: 'previous.md', text: async () => '' }),
+      queryPermission: async () => 'granted',
+      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
+    };
+    const recent = {
+      kind: 'file',
+      name: 'recent.md',
+      requestPermission: async () => 'granted',
+      getFile: async () => ({ name: 'recent.md', text: async () => '# recent' }),
+    };
+
+    adoptFileHandle(previous);
+    const payload = await openRecent({ name: 'recent.md', handle: recent });
+
+    expect(payload).toEqual({ path: 'recent.md', content: '# recent', handle: recent });
+    await expect(saveFile('previous.md', 'text')).resolves.toBe('previous.md');
+    forgetFile();
   });
 
   it('does not leave content behind when the document index cannot be written', async () => {
@@ -149,15 +213,18 @@ describe('browser storage adapter (IndexedDB)', () => {
     expect(await idbGet(keys[0])).toBeNull();
   });
 
-  it('reports whether the open file has a writable handle', async () => {
+  it('reports whether a handle has been adopted', async () => {
     forgetFile();
     expect(hasFileHandle()).toBe(false);
 
-    await openHandle({
+    const handle = {
       kind: 'file',
       name: 'notes.md',
       getFile: async () => ({ name: 'notes.md', text: async () => '# notes' }),
-    });
+    };
+    await openHandle(handle);
+    expect(hasFileHandle()).toBe(false);
+    adoptFileHandle(handle);
     expect(hasFileHandle()).toBe(true);
 
     forgetFile();
@@ -320,7 +387,7 @@ describe('citation files', () => {
     await drop(mkFile('drop.bib', '@a{}'));
     await drop(mkFile('note.md', '# hi'));
     expect(cites).toEqual([{ name: 'drop.bib', kind: 'bib', text: '@a{}', encodingNote: false, stored: true }]);
-    expect(docs).toEqual([{ path: 'note.md', content: '# hi' }]);
+    expect(docs).toEqual([{ path: 'note.md', content: '# hi', handle: null }]);
     expect((await listCitationFiles()).map((f) => f.name)).toContain('drop.bib');
   });
 });

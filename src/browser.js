@@ -216,24 +216,20 @@ export async function openFile() {
     }
     const file = await handle.getFile();
     const content = await file.text();
-    // Adopt only after a successful read: a handle whose file vanished between
-    // picking and reading must not become the target of the next Save.
-    currentFileHandle = handle;
-    return { path: file.name, content };
+    return { path: file.name, content, handle };
   }
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.md,.markdown,.mdown,.mkd,.qmd,.rmd,.txt';
     input.style.display = 'none';
-    /** @param {{path: string, content: string}|null} payload */
+    /** @param {{path: string, content: string, handle: null}|null} payload */
     const done = (payload) => { input.remove(); resolve(payload); };
     input.addEventListener('change', async () => {
       const file = input.files?.[0];
       if (!file) { done(null); return; }
       try {
-        currentFileHandle = null;
-        done({ path: file.name, content: await file.text() });
+        done({ path: file.name, content: await file.text(), handle: null });
       } catch (err) {
         input.remove();
         reject(err);
@@ -247,15 +243,17 @@ export async function openFile() {
   });
 }
 
-// Adopts a handle that arrived from outside the pickers (PWA file_handlers
-// launch queue, drag-and-drop) so later Save writes back to it.
+// Reads a handle that arrived from outside the picker without changing the
+// active save target. The editor adopts it after confirming the load.
 export async function openHandle(handle) {
   if (!handle || handle.kind !== 'file' || !OPENABLE.test(handle.name)) return null;
   const file = await handle.getFile();
   const content = await file.text();
-  currentFileHandle = handle;
-  return { path: file.name, content };
+  return { path: file.name, content, handle };
 }
+
+// Makes a confirmed file load the target of later in-place saves.
+export function adoptFileHandle(handle) { currentFileHandle = handle; }
 
 // Detaches the buffer from any file handle — used when loading content
 // that has no file behind it (example, lesson, shared link).
@@ -267,7 +265,6 @@ export function forgetFile() { currentFileHandle = null; }
 export function hasFileHandle() { return currentFileHandle !== null; }
 
 export async function openExample() {
-  currentFileHandle = null;
   return { path: '', content: exampleContent };
 }
 
@@ -379,10 +376,7 @@ export async function openRecent(entry) {
     }
     const file = await entry.handle.getFile();
     const content = await file.text();
-    // Only now is this handle the file the buffer belongs to; assigning it
-    // before the read could aim the next Save at a file it never opened.
-    currentFileHandle = entry.handle;
-    return { path: file.name, content };
+    return { path: file.name, content, handle: entry.handle };
   } catch (_) {
     // Revoked permission, a moved file, or a handle the browser no longer
     // accepts — all of them mean this row is finished.
@@ -737,8 +731,7 @@ export function initDragDrop(onFile, onFail, onCitationFile) {
       }
       const file = first;
       if (!file || !OPENABLE.test(file.name)) return;
-      currentFileHandle = null;
-      onFile({ path: file.name, content: await file.text() });
+      onFile({ path: file.name, content: await file.text(), handle: null });
     } catch (err) { if (onFail) onFail(err); }
   });
 }

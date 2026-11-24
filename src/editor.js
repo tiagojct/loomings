@@ -29,7 +29,7 @@ import { nextFontSize, nextWidth } from './preferences.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
   saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml, downloadMarkdown, downloadDocx, loadImageForDocx,
-  addRecent, getRecents, openRecent, hasFileHandle,
+  addRecent, getRecents, openRecent, adoptFileHandle, hasFileHandle,
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
@@ -2324,6 +2324,7 @@ async function loadFile(payload) {
     setTitle(payload.title || null);
   } else {
     currentFile = payload.path;
+    adoptFileHandle(payload.handle ?? null);
     setTitle(displayName(payload.path));
     addRecent(payload.path);
   }
