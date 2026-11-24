@@ -29,7 +29,7 @@ import { nextFontSize, nextWidth } from './preferences.js';
 import {
   hasFileSystemAccess, getVersion, openUrl, ask, setTitle,
   saveFile, saveFileAs, openFile as pickFile, openExample, downloadHtml, downloadMarkdown, downloadDocx, loadImageForDocx,
-  addRecent, getRecents, openRecent, hasFileHandle,
+  addRecent, getRecents, openRecent, hasFileHandle, adoptFileHandle,
   listDocuments, getDocument, putDocument, deleteDocument,
   saveScratch, readScratch, clearScratch,
   initDragDrop, forgetFile, initLaunchQueue, registerServiceWorker,
@@ -1216,8 +1216,10 @@ async function saveInBrowser({ title = null, message = 'Saved in this browser' }
 async function handleSaveAs() {
   try {
     const text = getText();
-    const path = await saveFileAs(text, suggestedFilename());
-    if (path) {
+    const result = await saveFileAs(text, suggestedFilename());
+    if (result) {
+      const { path, handle } = result;
+      adoptFileHandle(handle);
       currentFile = path;
       currentDocId = null;
       await addRecent(path);

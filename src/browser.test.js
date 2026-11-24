@@ -5,7 +5,7 @@ import {
   idbSet, idbGet, idbDelete, _resetDbForTesting,
   putDocument, getDocument, listDocuments, deleteDocument,
   saveScratch, readScratch, clearScratch,
-  openHandle, openFile, openRecent, saveFile, forgetFile, adoptFileHandle, hasFileHandle, downloadMarkdown,
+  openHandle, openFile, openRecent, saveFile, saveFileAs, forgetFile, adoptFileHandle, hasFileHandle, downloadMarkdown,
   initDragDrop, listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
 } from './browser.js';
 
@@ -149,6 +149,97 @@ describe('browser storage adapter (IndexedDB)', () => {
     forgetFile();
     adoptFileHandle(handle);
     expect(hasFileHandle()).toBe(true);
+  });
+
+  it('keeps the save target when the active handle changes during permission lookup', async () => {
+    let releasePermission;
+    const permissionPending = new Promise((resolve) => { releasePermission = resolve; });
+    const target = writableHandle('target.md', '# target');
+    target.handle.queryPermission = vi.fn(() => permissionPending);
+    const replacement = writableHandle('replacement.md', '# replacement');
+
+    adoptFileHandle(target.handle);
+    const saving = saveFile('target.md', 'saved text');
+    adoptFileHandle(replacement.handle);
+    releasePermission('granted');
+    await saving;
+
+    expect(target.createWritable).toHaveBeenCalledOnce();
+    expect(target.write).toHaveBeenCalledWith('saved text');
+    expect(replacement.createWritable).not.toHaveBeenCalled();
+    forgetFile();
+  });
+
+  it('writes Save As to the picked handle and returns it without adopting it', async () => {
+    const picked = writableHandle('picked.md', '');
+    const previousWindow = globalThis.window;
+    globalThis.window = {
+      showOpenFilePicker: vi.fn(),
+      showSaveFilePicker: vi.fn(async () => picked.handle),
+    };
+    vi.resetModules();
+    try {
+      const browser = await import('./browser.js');
+      const result = await browser.saveFileAs('saved text', 'suggested.md');
+
+      expect(picked.createWritable).toHaveBeenCalledOnce();
+      expect(picked.write).toHaveBeenCalledWith('saved text');
+      expect(picked.close).toHaveBeenCalledOnce();
+      expect(browser.hasFileHandle()).toBe(false);
+      expect(result).toEqual({ path: 'picked.md', handle: picked.handle });
+    } finally {
+      globalThis.window = previousWindow;
+      vi.resetModules();
+    }
+  });
+
+  it('aborts a writable stream when writing fails', async () => {
+    const abort = vi.fn();
+    const write = vi.fn(async () => { throw new Error('write failed'); });
+    const close = vi.fn();
+    const handle = {
+      kind: 'file',
+      name: 'notes.md',
+      queryPermission: async () => 'granted',
+      createWritable: async () => ({ write, close, abort }),
+    };
+
+    adoptFileHandle(handle);
+    await expect(saveFile('notes.md', 'text')).rejects.toThrow('write failed');
+
+    expect(abort).toHaveBeenCalledOnce();
+    expect(close).not.toHaveBeenCalled();
+    forgetFile();
+  });
+
+  it('aborts a writable stream when closing fails', async () => {
+    const abort = vi.fn();
+    const write = vi.fn();
+    const close = vi.fn(async () => { throw new Error('close failed'); });
+    const handle = {
+      kind: 'file',
+      name: 'notes.md',
+      queryPermission: async () => 'granted',
+      createWritable: async () => ({ write, close, abort }),
+    };
+
+    adoptFileHandle(handle);
+    await expect(saveFile('notes.md', 'text')).rejects.toThrow('close failed');
+
+    expect(write).toHaveBeenCalledWith('text');
+    expect(abort).toHaveBeenCalledOnce();
+    forgetFile();
+  });
+
+  it('closes the writable stream after a successful save', async () => {
+    const target = writableHandle('notes.md', '');
+    adoptFileHandle(target.handle);
+
+    await saveFile('notes.md', 'text');
+
+    expect(target.write).toHaveBeenCalledWith('text');
+    expect(target.close).toHaveBeenCalledOnce();
+    forgetFile();
   });
 
   it('does not change the active handle when a file could not be read', async () => {

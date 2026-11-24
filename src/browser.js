@@ -168,16 +168,25 @@ export async function setTitle(title) {
 //  File I/O
 // ==========================
 
-export async function saveFile(path, content) {
-  if (!currentFileHandle) throw new Error('Loomings: no file handle for this document');
-  const perm = await currentFileHandle.queryPermission({ mode: 'readwrite' });
+export async function saveFile(path, content, handle = currentFileHandle) {
+  if (!handle) throw new Error('Loomings: no file handle for this document');
+  const perm = await handle.queryPermission({ mode: 'readwrite' });
   if (perm !== 'granted') {
-    const granted = await currentFileHandle.requestPermission({ mode: 'readwrite' });
+    const granted = await handle.requestPermission({ mode: 'readwrite' });
     if (granted !== 'granted') throw new Error('Permission to write this file was not granted');
   }
-  const writable = await currentFileHandle.createWritable();
-  await writable.write(content);
-  await writable.close();
+  const writable = await handle.createWritable();
+  try {
+    await writable.write(content);
+    await writable.close();
+  } catch (err) {
+    try {
+      await writable.abort();
+    } catch (_) {
+      // Preserve the write or close error if aborting also fails.
+    }
+    throw err;
+  }
   return path;
 }
 
@@ -193,15 +202,22 @@ export async function saveFileAs(content, suggestedName = 'untitled.md') {
       throw err;
     }
     const writable = await handle.createWritable();
-    await writable.write(content);
-    await writable.close();
-    currentFileHandle = handle;
-    return handle.name;
+    try {
+      await writable.write(content);
+      await writable.close();
+    } catch (err) {
+      try {
+        await writable.abort();
+      } catch (_) {
+        // Preserve the write or close error if aborting also fails.
+      }
+      throw err;
+    }
+    return { path: handle.name, handle };
   }
   // No File System Access API (Firefox/Safari): a plain download, not an
   // in-place save. The caller surfaces this distinction to the user.
   downloadBlob(content, suggestedName, 'text/markdown');
-  currentFileHandle = null;
   return null;
 }
 
