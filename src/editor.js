@@ -38,6 +38,7 @@ import {
 import { shareUrl, payloadFromUrl, decodeDoc } from './share.js';
 import { createSession } from './session.js';
 import { saveAction } from './save-route.js';
+import { loadFileAfterConfirmation } from './load-file.js';
 import { openModal } from './modal.js';
 import { hasDiagrams, renderDiagrams, renderDiagramsInHtml } from './mermaid.js';
 import { makeHighlight, makeTheme } from './cm-theme.js';
@@ -2304,32 +2305,30 @@ window.addEventListener('resize', () => closeExplanation(false), { passive: true
 // ==========================
 
 async function loadFile(payload) {
-  if (session.isDirty()) {
-    const proceed = await confirmDiscard('Open new file?');
-    if (!proceed) return;
-  }
-  await session.discardScratch(); // the buffer we're replacing is no longer relevant to recover
-  // Checks come only with a bundled lesson; any other document drops them.
-  attachedChecks = payload.attached || null;
-  citations.reset();
-  referencesView.newDocument();
-  setText(payload.content);
-  currentDocId = payload.docId || null;
-  if (!payload.path) {
-    // Untitled buffer with content (example, lesson, share link) — no
-    // autosave target, no recents, and no file handle left behind that a
-    // later Save could overwrite. Saving goes through Save As.
-    currentFile = null;
-    forgetFile();
-    setTitle(payload.title || null);
-  } else {
-    currentFile = payload.path;
-    adoptFileHandle(payload.handle ?? null);
-    setTitle(displayName(payload.path));
-    addRecent(payload.path);
-  }
-  markClean(); updateStats(); updatePreview(); refreshStatusBar();
-  view.focus();
+  await loadFileAfterConfirmation(session.isDirty(), confirmDiscard, async () => {
+    await session.discardScratch(); // the buffer we're replacing is no longer relevant to recover
+    // Checks come only with a bundled lesson; any other document drops them.
+    attachedChecks = payload.attached || null;
+    citations.reset();
+    referencesView.newDocument();
+    setText(payload.content);
+    currentDocId = payload.docId || null;
+    if (!payload.path) {
+      // Untitled buffer with content (example, lesson, share link) — no
+      // autosave target, no recents, and no file handle left behind that a
+      // later Save could overwrite. Saving goes through Save As.
+      currentFile = null;
+      forgetFile();
+      setTitle(payload.title || null);
+    } else {
+      currentFile = payload.path;
+      adoptFileHandle(payload.handle ?? null);
+      setTitle(displayName(payload.path));
+      addRecent(payload.path);
+    }
+    markClean(); updateStats(); updatePreview(); refreshStatusBar();
+    view.focus();
+  });
 }
 
 // ==========================

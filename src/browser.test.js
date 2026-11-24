@@ -9,6 +9,21 @@ import {
   initDragDrop, listCitationFiles, saveCitationFile, deleteCitationFile, decodeCitationBytes, refreshCitationFiles,
 } from './browser.js';
 
+function writableHandle(name, content) {
+  const write = vi.fn();
+  const close = vi.fn();
+  const writable = { write, close };
+  const createWritable = vi.fn(async () => writable);
+  const handle = {
+    kind: 'file',
+    name,
+    getFile: async () => ({ name, text: async () => content }),
+    queryPermission: async () => 'granted',
+    createWritable,
+  };
+  return { handle, createWritable, write, close };
+}
+
 describe('browser storage adapter (IndexedDB)', () => {
   beforeEach(async () => {
     _resetDbForTesting();
@@ -108,25 +123,19 @@ describe('browser storage adapter (IndexedDB)', () => {
   });
 
   it('returns a handle from openHandle without adopting it', async () => {
-    const previous = {
-      kind: 'file',
-      name: 'previous.md',
-      getFile: async () => ({ name: 'previous.md', text: async () => '# previous' }),
-      queryPermission: async () => 'granted',
-      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
-    };
-    const next = {
-      kind: 'file',
-      name: 'next.md',
-      getFile: async () => ({ name: 'next.md', text: async () => '# next' }),
-    };
+    const previous = writableHandle('previous.md', '# previous');
+    const next = writableHandle('next.md', '# next');
 
-    adoptFileHandle(previous);
-    const payload = await openHandle(next);
+    adoptFileHandle(previous.handle);
+    const payload = await openHandle(next.handle);
 
-    expect(payload).toEqual({ path: 'next.md', content: '# next', handle: next });
+    expect(payload).toEqual({ path: 'next.md', content: '# next', handle: next.handle });
     expect(hasFileHandle()).toBe(true);
-    await expect(saveFile('previous.md', 'text')).resolves.toBe('previous.md');
+    await saveFile('previous.md', 'text');
+    expect(previous.createWritable).toHaveBeenCalledOnce();
+    expect(previous.write).toHaveBeenCalledWith('text');
+    expect(next.createWritable).not.toHaveBeenCalled();
+    expect(next.write).not.toHaveBeenCalled();
     forgetFile();
   });
 
@@ -146,50 +155,45 @@ describe('browser storage adapter (IndexedDB)', () => {
     // A file can vanish between the picker and the read. If the handle is
     // adopted first, the next Save writes the previous document's text into
     // whatever file the handle now points at.
-    let writes = 0;
+    const failedWrite = vi.fn();
+    const failedCreateWritable = vi.fn(async () => ({ write: failedWrite, close: vi.fn() }));
     const halfOpen = {
       kind: 'file',
       name: 'notes.md',
       getFile: async () => ({ name: 'notes.md', text: async () => { throw new Error('unreadable'); } }),
       queryPermission: async () => 'granted',
-      createWritable: async () => { writes++; return { write() {}, close() {} }; },
+      createWritable: failedCreateWritable,
     };
 
-    const previous = {
-      kind: 'file',
-      name: 'previous.md',
-      getFile: async () => ({ name: 'previous.md', text: async () => '# previous' }),
-      queryPermission: async () => 'granted',
-      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
-    };
-    adoptFileHandle(previous);
+    const previous = writableHandle('previous.md', '# previous');
+    adoptFileHandle(previous.handle);
     await expect(openHandle(halfOpen)).rejects.toThrow('unreadable');
 
-    await expect(saveFile('previous.md', 'text')).resolves.toBe('previous.md');
-    expect(writes).toBe(0);
+    await saveFile('previous.md', 'text');
+    expect(previous.createWritable).toHaveBeenCalledOnce();
+    expect(previous.write).toHaveBeenCalledWith('text');
+    expect(failedCreateWritable).not.toHaveBeenCalled();
+    expect(failedWrite).not.toHaveBeenCalled();
     forgetFile();
   });
 
   it('returns a recent file handle without adopting it', async () => {
-    const previous = {
-      kind: 'file',
-      name: 'previous.md',
-      getFile: async () => ({ name: 'previous.md', text: async () => '' }),
-      queryPermission: async () => 'granted',
-      createWritable: async () => ({ write: async () => {}, close: async () => {} }),
-    };
+    const previous = writableHandle('previous.md', '# previous');
+    const recentFile = writableHandle('recent.md', '# recent');
     const recent = {
-      kind: 'file',
-      name: 'recent.md',
+      ...recentFile.handle,
       requestPermission: async () => 'granted',
-      getFile: async () => ({ name: 'recent.md', text: async () => '# recent' }),
     };
 
-    adoptFileHandle(previous);
+    adoptFileHandle(previous.handle);
     const payload = await openRecent({ name: 'recent.md', handle: recent });
 
     expect(payload).toEqual({ path: 'recent.md', content: '# recent', handle: recent });
-    await expect(saveFile('previous.md', 'text')).resolves.toBe('previous.md');
+    await saveFile('previous.md', 'text');
+    expect(previous.createWritable).toHaveBeenCalledOnce();
+    expect(previous.write).toHaveBeenCalledWith('text');
+    expect(recentFile.createWritable).not.toHaveBeenCalled();
+    expect(recentFile.write).not.toHaveBeenCalled();
     forgetFile();
   });
 
