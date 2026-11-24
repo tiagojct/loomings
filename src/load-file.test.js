@@ -25,12 +25,25 @@ describe('load file confirmation lifecycle', () => {
     const previous = writableHandle('previous.md');
     const incoming = writableHandle('incoming.md');
     const confirmDiscard = vi.fn(async () => false);
-    const load = vi.fn(async () => adoptFileHandle(incoming.handle));
+    const discardScratch = vi.fn(async () => {});
+    const applyContent = vi.fn(async () => {});
+    const finishLoad = vi.fn(async () => {});
 
     adoptFileHandle(previous.handle);
-    await expect(loadFileAfterConfirmation(true, confirmDiscard, load)).resolves.toBe(false);
+    await expect(loadFileAfterConfirmation({
+      path: 'incoming.md',
+      handle: incoming.handle,
+    }, {
+      dirty: true,
+      confirmDiscard,
+      discardScratch,
+      applyContent,
+      finishLoad,
+    })).resolves.toBe(false);
     expect(confirmDiscard).toHaveBeenCalledWith('Open new file?');
-    expect(load).not.toHaveBeenCalled();
+    expect(discardScratch).not.toHaveBeenCalled();
+    expect(applyContent).not.toHaveBeenCalled();
+    expect(finishLoad).not.toHaveBeenCalled();
 
     await saveFile('previous.md', 'still previous');
     expect(previous.createWritable).toHaveBeenCalledOnce();
@@ -41,16 +54,33 @@ describe('load file confirmation lifecycle', () => {
   it('adopts the incoming save target after load confirmation succeeds', async () => {
     const previous = writableHandle('previous.md');
     const incoming = writableHandle('incoming.md');
-    const confirmDiscard = vi.fn(async () => true);
-    const load = vi.fn(async () => adoptFileHandle(incoming.handle));
+    const confirmDiscard = vi.fn(async () => {
+      await saveFile('previous.md', 'during confirmation');
+      return true;
+    });
+    const discardScratch = vi.fn(async () => {});
+    const applyContent = vi.fn(async () => {});
+    const finishLoad = vi.fn(async () => {});
 
     adoptFileHandle(previous.handle);
-    await expect(loadFileAfterConfirmation(true, confirmDiscard, load)).resolves.toBe(true);
-    expect(load).toHaveBeenCalledOnce();
+    await expect(loadFileAfterConfirmation({
+      path: 'incoming.md',
+      handle: incoming.handle,
+    }, {
+      dirty: true,
+      confirmDiscard,
+      discardScratch,
+      applyContent,
+      finishLoad,
+    })).resolves.toBe(true);
+    expect(discardScratch).toHaveBeenCalledOnce();
+    expect(applyContent).toHaveBeenCalledOnce();
+    expect(finishLoad).toHaveBeenCalledOnce();
+    expect(previous.createWritable).toHaveBeenCalledOnce();
+    expect(previous.write).toHaveBeenCalledWith('during confirmation');
 
     await saveFile('incoming.md', 'incoming text');
     expect(incoming.createWritable).toHaveBeenCalledOnce();
     expect(incoming.write).toHaveBeenCalledWith('incoming text');
-    expect(previous.createWritable).not.toHaveBeenCalled();
   });
 });
