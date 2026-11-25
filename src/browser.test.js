@@ -282,6 +282,56 @@ describe('browser storage adapter (IndexedDB)', () => {
     }
   });
 
+  it('keeps scratch identity across opener tabs, later navigations, and reloads', async () => {
+    const previousWindow = globalThis.window;
+    const storageKey = 'loomings_scratch_client';
+    const clientToken = '00000000-0000-4000-8000-000000000001';
+    const sharedToken = '00000000-0000-4000-8000-000000000010';
+    const tokens = [clientToken, '00000000-0000-4000-8000-000000000002'];
+    const makeWindow = (values, name, opener = null, navigationType = 'navigate') => ({
+      sessionStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+      },
+      crypto: { randomUUID: () => tokens.shift() },
+      performance: { getEntriesByType: () => [{ type: navigationType }] },
+      name,
+      opener,
+    });
+    const openerValues = new Map([[storageKey, sharedToken]]);
+    const openedValues = new Map(openerValues);
+    const openerWindow = makeWindow(openerValues, 'opener-window-name');
+    const openedWindow = makeWindow(openedValues, 'opened-window-name', {});
+    try {
+      globalThis.window = openerWindow;
+      await saveScratch('Opener draft', null);
+      expect(openerWindow.name).toBe('opener-window-name|loomings-scratch-tab-v1=' + sharedToken);
+
+      globalThis.window = openedWindow;
+      await saveScratch('Opened tab draft', null);
+      const openedName = 'opened-window-name|loomings-scratch-tab-v1=' + clientToken;
+      expect(openedWindow.name).toBe(openedName);
+      expect(openedWindow.name).not.toContain('Opened tab draft');
+
+      const laterNavigation = makeWindow(new Map(openedValues), openedName, {}, 'navigate');
+      globalThis.window = laterNavigation;
+      expect(await readScratch()).toEqual({ content: 'Opened tab draft', current_file: null });
+      expect(laterNavigation.name).toBe(openedName);
+
+      globalThis.window = makeWindow(new Map(openedValues), openedName, {}, 'reload');
+      expect(await readScratch()).toEqual({ content: 'Opened tab draft', current_file: null });
+      await clearScratch();
+
+      globalThis.window = openerWindow;
+      expect(await readScratch()).toEqual({ content: 'Opener draft', current_file: null });
+    } finally {
+      await idbDelete('scratch:00000000-0000-4000-8000-000000000010');
+      await idbDelete('scratch:00000000-0000-4000-8000-000000000001');
+      await idbDelete('scratch:00000000-0000-4000-8000-000000000002');
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('returns a handle from openHandle without adopting it', async () => {
     const previous = writableHandle('previous.md', '# previous');
     const next = writableHandle('next.md', '# next');

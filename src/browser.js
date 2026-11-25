@@ -46,6 +46,7 @@ const STORE = 'kv';
 const DOC_CONTENT_PREFIX = 'doc_content:';
 const LEGACY_SCRATCH_KEY = 'scratch';
 const SCRATCH_CLIENT_STORAGE_KEY = 'loomings_scratch_client';
+const SCRATCH_WINDOW_NAME_MARKER = '|loomings-scratch-tab-v1=';
 /** @type {WeakMap<Window, string>} */
 const scratchClientIds = new WeakMap();
 
@@ -681,36 +682,58 @@ function createScratchClientId() {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
+function scratchClientIdFromWindowName(name) {
+  const markerAt = name.lastIndexOf(SCRATCH_WINDOW_NAME_MARKER);
+  if (markerAt === -1) return null;
+  const clientId = name.slice(markerAt + SCRATCH_WINDOW_NAME_MARKER.length);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientId)
+    ? clientId
+    : null;
+}
+
+function storeScratchClientIdInWindowName(page, clientId) {
+  const name = typeof page.name === 'string' ? page.name : '';
+  const markerAt = name.lastIndexOf(SCRATCH_WINDOW_NAME_MARKER);
+  const existingClientId = scratchClientIdFromWindowName(name);
+  const unrelatedName = existingClientId ? name.slice(0, markerAt) : name;
+  page.name = unrelatedName + SCRATCH_WINDOW_NAME_MARKER + clientId;
+}
+
 function scratchClientId() {
   const page = window;
   const activeClientId = scratchClientIds.get(page);
   if (activeClientId) return activeClientId;
 
-  const navigation = /** @type {PerformanceNavigationTiming|undefined} */ (
-    page.performance?.getEntriesByType?.('navigation')[0]
-  );
-  const copiedFromOpener = Boolean(page.opener && navigation?.type === 'navigate');
-
   let storage;
   try {
     storage = page.sessionStorage;
     const storedClientId = storage.getItem(SCRATCH_CLIENT_STORAGE_KEY);
-    if (storedClientId && !copiedFromOpener) {
-      scratchClientIds.set(page, storedClientId);
-      return storedClientId;
+    const namedClientId = scratchClientIdFromWindowName(page.name || '');
+    if (namedClientId) {
+      if (storedClientId !== namedClientId) {
+        try {
+          storage.setItem(SCRATCH_CLIENT_STORAGE_KEY, namedClientId);
+        } catch (_) {
+          const clientId = createScratchClientId();
+          scratchClientIds.set(page, clientId);
+          return clientId;
+        }
+      }
+      scratchClientIds.set(page, namedClientId);
+      return namedClientId;
     }
+
+    const copiedFromOpener = Boolean(page.opener && storedClientId);
+    const clientId = storedClientId && !copiedFromOpener ? storedClientId : createScratchClientId();
+    if (clientId !== storedClientId) storage.setItem(SCRATCH_CLIENT_STORAGE_KEY, clientId);
+    storeScratchClientIdInWindowName(page, clientId);
+    scratchClientIds.set(page, clientId);
+    return clientId;
   } catch (_) {
     const clientId = createScratchClientId();
     scratchClientIds.set(page, clientId);
     return clientId;
   }
-
-  const clientId = createScratchClientId();
-  try {
-    storage.setItem(SCRATCH_CLIENT_STORAGE_KEY, clientId);
-  } catch (_) {}
-  scratchClientIds.set(page, clientId);
-  return clientId;
 }
 
 async function moveLegacyScratch(key) {
