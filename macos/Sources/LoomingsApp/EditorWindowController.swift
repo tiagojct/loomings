@@ -395,8 +395,12 @@ final class EditorWindowController: NSWindowController,
         }
         // Undo can bring back the text of the last report. No new report
         // comes for that text, so the dropped marks come from the last one.
-        if let report = citations.latestResult?.report, editor.citationRanges.count != report.citations.count {
-            applyMarks(of: report, keys: editor.citationKeys)
+        if let latest = citations.latestResult, editor.citationRanges.count != latest.report.citations.count {
+            _ = editor.restoreCitationsIfSourceMatches(
+                citationMarks(of: latest.report),
+                keys: editor.citationKeys,
+                reportedSource: latest.source
+            )
             updateNoteCount()
         }
     }
@@ -413,12 +417,19 @@ final class EditorWindowController: NSWindowController,
     private func applyMarks(of report: CitationReport, keys: [CitationCompletion]) {
         guard let source = citations.latestResult?.source else { return }
         editor.setCitations(
-            report.citations.map {
-                CitationMark(range: NSRange(location: $0.from, length: $0.to - $0.from), isUnknown: !$0.missing.isEmpty)
-            },
+            citationMarks(of: report),
             keys: keys,
             reportedSource: source
         )
+    }
+
+    private func citationMarks(of report: CitationReport) -> [CitationMark] {
+        report.citations.map {
+            CitationMark(
+                range: NSRange(location: $0.from, length: $0.to - $0.from),
+                isUnknown: !$0.missing.isEmpty
+            )
+        }
     }
 
     /// The notes of the newest report, in the current text. A note goes when

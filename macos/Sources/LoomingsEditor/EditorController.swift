@@ -221,6 +221,17 @@ public final class EditorController: NSObject, NSTextViewDelegate, NSTextStorage
         updateCitationSquiggles()
     }
 
+    /// Restores dropped marks only when the editor still has the report's source.
+    package func restoreCitationsIfSourceMatches(
+        _ marks: [CitationMark],
+        keys: [CitationCompletion],
+        reportedSource: String
+    ) -> Bool {
+        guard source == reportedSource else { return false }
+        setCitations(marks, keys: keys, reportedSource: reportedSource)
+        return true
+    }
+
     public func clearCitations() {
         citationKeys = []
         isCompletionArmed = false

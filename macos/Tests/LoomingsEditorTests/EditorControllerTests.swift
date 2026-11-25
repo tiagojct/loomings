@@ -828,6 +828,67 @@ struct CitationMarkTests {
         #expect(squiggles(editor) == [Self.gone])
     }
 
+    @Test("An old report does not reapply marks after two edits")
+    func staleReportAfterTwoEdits() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 22, length: 1), with: "x")
+        editor.replace(range: NSRange(location: 0, length: 0), with: "New. ")
+
+        let restored = editor.restoreCitationsIfSourceMatches(
+            marks,
+            keys: [],
+            reportedSource: Self.text
+        )
+
+        #expect(!restored)
+        #expect(editor.citationRanges == [NSRange(location: Self.known.location + 5, length: Self.known.length)])
+    }
+
+    @Test("The untouched mark moves with the second edit")
+    func untouchedMarkMovesTwice() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 22, length: 1), with: "x")
+        editor.replace(range: NSRange(location: 0, length: 0), with: "New. ")
+
+        #expect(editor.citationRanges == [NSRange(location: Self.known.location + 5, length: Self.known.length)])
+    }
+
+    @Test("Returning to the reported source restores the dropped mark")
+    func restoreAtExactSource() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 22, length: 1), with: "x")
+        editor.setText(Self.text)
+        #expect(editor.source == Self.text)
+
+        let restored = editor.restoreCitationsIfSourceMatches(
+            marks,
+            keys: [],
+            reportedSource: Self.text
+        )
+
+        #expect(restored)
+        #expect(editor.citationRanges == [Self.known, Self.gone])
+    }
+
+    @Test("A changed source cannot restore marks from an older report")
+    func changedSourceRejectsReport() {
+        let editor = editor()
+        editor.setCitations(marks, keys: [], reportedSource: Self.text)
+        editor.replace(range: NSRange(location: 22, length: 1), with: "x")
+
+        let restored = editor.restoreCitationsIfSourceMatches(
+            marks,
+            keys: [],
+            reportedSource: Self.text
+        )
+
+        #expect(!restored)
+        #expect(editor.citationRanges == [Self.known])
+    }
+
     @Test("Attribute changes do not move the marks")
     func attributes() throws {
         let editor = editor()

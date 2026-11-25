@@ -2022,6 +2022,29 @@ enum SelfTest {
             "the next report brings the mark back"
         )
 
+        // A stale report cannot erase a surviving mark after separate edits.
+        let insertion = text.range(of: "A claim").location
+        textView.insertText("x", replacementRange: NSRange(location: unknown.location + 3, length: 0))
+        textView.insertText("New. ", replacementRange: NSRange(location: insertion, length: 0))
+        editor.reparseSynchronously()
+        let movedKnown = NSRange(location: known.location + 5, length: known.length)
+        check(
+            editor.citationRanges == [movedKnown],
+            "a stale report does not erase the untouched mark after two edits"
+        )
+
+        // Undo first returns to the edited citation, then to the report source.
+        textView.undoManager?.undo()
+        editor.reparseSynchronously()
+        check(editor.citationRanges == [known], "the untouched mark moves back with Undo")
+        textView.undoManager?.undo()
+        editor.reparseSynchronously()
+        check(editor.source == markText, "Undo returns to the exact reported source")
+        check(
+            editor.citationRanges == [known, unknown],
+            "the exact report source restores the dropped mark immediately"
+        )
+
         // No citation keys: no marks and no list.
         editor.replace(range: text.range(of: "bibliography: refs.bib"), with: "title: x")
         check(pump(timeout: 5) { editor.citationRanges.isEmpty && editor.citationKeys.isEmpty }, "a document with no bibliography has no marks")
