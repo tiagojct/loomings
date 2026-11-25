@@ -117,8 +117,11 @@ public enum TextFileCodec {
 
         // No byte-order mark: only valid UTF-8 is accepted. Falling back to a
         // single-byte encoding would let the app save over text it could not
-        // faithfully read. A C0 control byte other than tab, LF or CR marks
-        // BOMless UTF-16 (NUL for ASCII, 0x01 for U+0141 and similar). BOMless
+        // faithfully read. Any C0 control byte other than tab, LF or CR is
+        // refused, on purpose: it marks BOMless UTF-16 (NUL for ASCII, 0x01 for
+        // U+0141 and similar), and Markdown does not need other C0 controls
+        // such as ESC or form feed. This is a deliberate compatibility boundary:
+        // a BOMless UTF-8 file that contains those bytes does not open. BOMless
         // UTF-16 that forms only printable UTF-8 stays ambiguous and is read as
         // UTF-8; a BOM is the only reliable signal for it.
         if data.contains(where: { $0 < 0x20 && $0 != 0x09 && $0 != 0x0A && $0 != 0x0D }) {

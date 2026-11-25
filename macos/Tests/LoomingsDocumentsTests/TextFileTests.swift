@@ -126,6 +126,22 @@ struct TextFileTests {
         #expect(file.text == "café\n")
     }
 
+    @Test("BOMless UTF-8 with an ESC byte is refused by design")
+    func bomlessUTF8WithESCIsRefused() {
+        let data = Data("a\u{1B}b\n".utf8)
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("BOMless UTF-8 with a form feed is refused by design")
+    func bomlessUTF8WithFormFeedIsRefused() {
+        let data = Data("a\u{0C}b\n".utf8)
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
     @Test("BOMless UTF-8 with tab, LF and CR still opens")
     func bomlessUTF8WithAllowedControlBytesOpens() throws {
         let file = try TextFileCodec.decode(Data("a\tb\r\nc\n".utf8))
