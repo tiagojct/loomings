@@ -158,7 +158,11 @@ parity checklist and the measurements.
 
 ## License
 
-MIT for the code, see [LICENSE](LICENSE). Chapter 1 of *Moby-Dick* is public
-domain. The colour tokens in `src/palettes.js` and the landing page come from
+MIT for the code, see [LICENSE](LICENSE). Bundled third-party library and font
+notices are generated into `THIRD-PARTY-NOTICES.txt` during web and native
+builds; `citeproc-js` is distributed under [CPAL-1.0](public/licenses/CPAL-1.0.txt),
+and CSL styles and locales under [CC BY-SA 3.0](public/licenses/CSL-LICENSE.txt).
+Chapter 1 of *Moby-Dick* is public domain. The colour tokens in
+`src/palettes.js` and the landing page come from
 [Ensigns](https://ensigns.tiagojacinto.eu) by Tiago Jacinto, whose tokens and
 documentation are licensed CC BY 4.0.

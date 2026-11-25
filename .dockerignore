@@ -7,8 +7,8 @@ src-tauri
 icons
 social
 scripts/*
+!scripts/build-notices.mjs
 !scripts/citeproc-notice.js
 *.md
-LICENSE
 .DS_Store
 docs/superpowers

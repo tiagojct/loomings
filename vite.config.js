@@ -41,7 +41,7 @@ function loomingsServiceWorker() {
         .filter((f) => f !== 'sw.js' && f !== 'index.html')
         .map((f) => BASE + f),
       ...(publicDir ? listPublicFiles(publicDir)
-        .filter((f) => /\.(woff2|png|svg|webmanifest|ico)$/.test(f))
+        .filter((f) => /\.(woff2|png|svg|webmanifest|ico|txt)$/.test(f))
         .map((f) => BASE + f) : [])];
       const template = readFileSync(new URL('./src/sw-template.js', import.meta.url), 'utf8');
       this.emitFile({
@@ -66,7 +66,7 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         banner: (chunk) => (chunk.moduleIds.some((id) => /[\\/]node_modules[\\/]citeproc[\\/]/.test(id))
-          ? `${citeprocNotice('/app/licenses/citeproc-LICENSE.txt')}\n` : ''),
+          ? `${citeprocNotice('/app/licenses/CPAL-1.0.txt')}\n` : ''),
       },
     },
   },

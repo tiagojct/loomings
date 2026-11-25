@@ -31,6 +31,6 @@ export default defineConfig({
       fileName: () => 'citations.js',
     },
     // The minifier rewrites the banner. A notice must stay as it is, so it goes after that step.
-    rolldownOptions: { output: { banner, postBanner: citeprocNotice('LICENSE-citeproc') } },
+    rolldownOptions: { output: { banner, postBanner: citeprocNotice('CPAL-1.0.txt') } },
   },
 });

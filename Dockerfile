@@ -2,7 +2,8 @@ FROM node:22-alpine AS build
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
-COPY vite.config.js ./
+COPY vite.config.js LICENSE ./
+COPY scripts/build-notices.mjs ./scripts/build-notices.mjs
 COPY scripts/citeproc-notice.js ./scripts/citeproc-notice.js
 COPY vendor ./vendor
 COPY src ./src

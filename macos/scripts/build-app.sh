@@ -30,6 +30,9 @@ sed \
 
 # Shared native resources: palettes, teaching material, font files and the
 # citation bundle with its styles and locales.
+node "$REPO/scripts/build-notices.mjs" native
+cp "$MACOS/Resources/THIRD-PARTY-NOTICES.txt" "$MACOS/Resources/Citations/THIRD-PARTY-NOTICES.txt"
+cp "$MACOS/Resources/THIRD-PARTY-NOTICES.txt" "$APP/Contents/Resources/"
 cp "$MACOS/Resources/palettes.json" "$APP/Contents/Resources/"
 cp "$MACOS/Resources/cheatsheet.md" "$APP/Contents/Resources/"
 cp "$MACOS/Resources/example.md" "$APP/Contents/Resources/"

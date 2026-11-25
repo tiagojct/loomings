@@ -4,13 +4,15 @@
   "description": "A minimalist Markdown editor for the browser. Write, share with students, teach Markdown side by side.",
   "type": "module",
   "scripts": {
+    "predev": "node scripts/build-notices.mjs web",
     "dev": "vite",
-    "build": "vite build",
+    "prepreview": "node scripts/build-notices.mjs web",
     "preview": "vite preview",
+    "build": "node scripts/build-notices.mjs web && vite build",
     "test": "vitest run",
     "typecheck": "tsc -p jsconfig.json",
     "site": "npm run build && node scripts/serve-site.mjs",
-    "export:native": "vite build --config vite.citations.config.js && node scripts/export-native-resources.mjs"
+    "export:native": "vite build --config vite.citations.config.js && node scripts/export-native-resources.mjs && node scripts/build-notices.mjs native"
   },
   "author": "Tiago Jacinto",
   "license": "MIT",

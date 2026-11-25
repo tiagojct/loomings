@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PALETTES, FAMILY_ORDER, DEFAULT_FAMILY, roles } from '../src/palettes.js';
 import { BUNDLED_LOCALES, BUNDLED_STYLES, LOCALE_LABELS } from '../src/citations/style.js';
+import { writeNotices } from './build-notices.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const resources = join(root, 'macos', 'Resources');
@@ -36,11 +37,14 @@ console.log('exported palettes.json, lessons/ and example.md');
 const citations = join(resources, 'Citations');
 const bundle = join(root, 'node_modules', '.cache', 'loomings-citations', 'citations.js');
 mkdirSync(citations, { recursive: true });
+writeNotices('native', root);
 cpSync(join(root, 'src', 'citations', 'styles'), join(citations, 'styles'), { recursive: true });
 cpSync(join(root, 'src', 'citations', 'locales'), join(citations, 'locales'), { recursive: true });
 cpSync(join(root, 'src', 'citations', 'LICENSE-CSL.md'), join(citations, 'LICENSE-CSL.md'));
 cpSync(join(root, 'node_modules', 'citeproc', 'LICENSE'), join(citations, 'LICENSE-citeproc'));
+cpSync(join(root, 'public', 'licenses', 'CPAL-1.0.txt'), join(citations, 'CPAL-1.0.txt'));
 cpSync(join(root, 'public', 'licenses', 'citation-js-LICENSE.txt'), join(citations, 'LICENSE-citation-js'));
+cpSync(join(resources, 'THIRD-PARTY-NOTICES.txt'), join(citations, 'THIRD-PARTY-NOTICES.txt'));
 // The titles for the native menu. The menu needs them before JavaScript runs.
 writeFileSync(
   join(citations, 'styles.json'),
