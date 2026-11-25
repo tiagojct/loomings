@@ -32,6 +32,10 @@ describe('browser storage adapter (IndexedDB)', () => {
       await idbDelete('test-key');
       await idbDelete('documents');
       await idbDelete('scratch');
+      await idbDelete('scratch:tab-a');
+      await idbDelete('scratch:tab-b');
+      await idbDelete('scratch:legacy-tab');
+      await idbDelete('scratch:00000000-0000-4000-8000-000000000000');
     } catch (_) {}
   });
 
@@ -110,16 +114,103 @@ describe('browser storage adapter (IndexedDB)', () => {
     expect(list.find((d) => d.id === doc.id)).toBeUndefined();
   });
 
-  it('handles scratch buffer operations cleanly', async () => {
-    await clearScratch();
-    expect(await readScratch()).toBeNull();
+  it('stores independent scratch drafts for separate tabs', async () => {
+    await saveScratch('Draft A', 'a.md', 'tab-a');
+    await saveScratch('Draft B', 'b.md', 'tab-b');
 
-    await saveScratch('Draft text', 'notes.md');
-    const scratch = await readScratch();
+    expect(await readScratch('tab-a')).toEqual({ content: 'Draft A', current_file: 'a.md' });
+    expect(await readScratch('tab-b')).toEqual({ content: 'Draft B', current_file: 'b.md' });
+  });
+
+  it('clears one tab scratch without affecting another tab', async () => {
+    await saveScratch('Draft A', 'a.md', 'tab-a');
+    await saveScratch('Draft B', 'b.md', 'tab-b');
+
+    await clearScratch('tab-a');
+
+    expect(await readScratch('tab-a')).toBeNull();
+    expect(await readScratch('tab-b')).toEqual({ content: 'Draft B', current_file: 'b.md' });
+  });
+
+  it('rejects when deleting a scratch draft fails', async () => {
+    const originalOpen = indexedDB.open;
+    indexedDB.open = () => { throw new Error('blocked'); };
+    _resetDbForTesting();
+    try {
+      await expect(clearScratch('tab-a')).rejects.toThrow('blocked');
+    } finally {
+      indexedDB.open = originalOpen;
+      _resetDbForTesting();
+    }
+  });
+
+  it('reads the legacy scratch draft when no tab draft exists', async () => {
+    await idbSet('scratch', { content: 'Legacy draft', current_file: 'legacy.md' });
+
+    expect(await readScratch('legacy-tab')).toEqual({
+      content: 'Legacy draft',
+      current_file: 'legacy.md',
+    });
+    expect(await readScratch('another-tab')).toBeNull();
+  });
+
+  it('handles scratch buffer operations cleanly', async () => {
+    await clearScratch('tab-a');
+    expect(await readScratch('tab-a')).toBeNull();
+
+    await saveScratch('Draft text', 'notes.md', 'tab-a');
+    const scratch = await readScratch('tab-a');
     expect(scratch).toEqual({ content: 'Draft text', current_file: 'notes.md' });
 
-    await clearScratch();
-    expect(await readScratch()).toBeNull();
+    await clearScratch('tab-a');
+    expect(await readScratch('tab-a')).toBeNull();
+  });
+
+  it('reuses a session-scoped scratch client ID', async () => {
+    const storageKey = 'loomings_scratch_client';
+    const previousWindow = globalThis.window;
+    const values = new Map();
+    const sessionStorage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    };
+    globalThis.window = {
+      sessionStorage,
+      crypto: { randomUUID: () => 'generated-client-id' },
+    };
+    try {
+      await saveScratch('Session draft', null);
+      const clientId = sessionStorage.getItem(storageKey);
+      expect(clientId).toBe('generated-client-id');
+      expect(await readScratch()).toEqual({ content: 'Session draft', current_file: null });
+      expect(sessionStorage.getItem(storageKey)).toBe(clientId);
+    } finally {
+      const clientId = sessionStorage.getItem(storageKey);
+      if (clientId) await clearScratch(clientId);
+      globalThis.window = previousWindow;
+    }
+  });
+
+  it('generates a UUID when randomUUID is unavailable', async () => {
+    const previousWindow = globalThis.window;
+    const values = new Map();
+    const sessionStorage = {
+      getItem: (key) => values.get(key) ?? null,
+      setItem: (key, value) => values.set(key, value),
+      removeItem: (key) => values.delete(key),
+    };
+    globalThis.window = {
+      sessionStorage,
+      crypto: { getRandomValues: (bytes) => bytes.fill(0) },
+    };
+    try {
+      await saveScratch('Fallback draft', null);
+      expect(sessionStorage.getItem('loomings_scratch_client')).toBe('00000000-0000-4000-8000-000000000000');
+    } finally {
+      await clearScratch('00000000-0000-4000-8000-000000000000');
+      globalThis.window = previousWindow;
+    }
   });
 
   it('returns a handle from openHandle without adopting it', async () => {

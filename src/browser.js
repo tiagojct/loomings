@@ -44,6 +44,8 @@ function downloadBlob(content, filename, mime) {
 const DB_NAME = 'loomings-web';
 const STORE = 'kv';
 const DOC_CONTENT_PREFIX = 'doc_content:';
+const LEGACY_SCRATCH_KEY = 'scratch';
+const SCRATCH_CLIENT_STORAGE_KEY = 'loomings_scratch_client';
 
 /** @type {Promise<IDBDatabase>|null} */
 let dbPromise = null;
@@ -667,14 +669,58 @@ export async function pickCitationFile() {
 //  Scratch (crash recovery)
 // ==========================
 
-export async function saveScratch(content, currentFile) {
-  await idbSet('scratch', { content, current_file: currentFile });
+function scratchClientId() {
+  let clientId = window.sessionStorage.getItem(SCRATCH_CLIENT_STORAGE_KEY);
+  if (!clientId) {
+    const crypto = window.crypto;
+    if (typeof crypto.randomUUID === 'function') {
+      clientId = crypto.randomUUID();
+    } else {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+      clientId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+    }
+    window.sessionStorage.setItem(SCRATCH_CLIENT_STORAGE_KEY, clientId);
+  }
+  return clientId;
 }
-export async function readScratch() {
-  try { return await idbGet('scratch'); } catch (_) { return null; }
+
+async function moveLegacyScratch(key) {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const req = store.get(LEGACY_SCRATCH_KEY);
+    let scratch = null;
+    req.onsuccess = () => {
+      scratch = req.result ?? null;
+      if (scratch !== null) {
+        store.put(scratch, key);
+        store.delete(LEGACY_SCRATCH_KEY);
+      }
+    };
+    tx.oncomplete = () => resolve(scratch);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB scratch migration failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB scratch migration aborted'));
+  });
 }
-export async function clearScratch() {
-  try { await idbDelete('scratch'); } catch (_) {}
+
+export async function saveScratch(content, currentFile, clientId = scratchClientId()) {
+  await idbSet(`scratch:${clientId}`, { content, current_file: currentFile });
+}
+export async function readScratch(clientId = scratchClientId()) {
+  try {
+    const key = `scratch:${clientId}`;
+    const scratch = await idbGet(key);
+    return scratch ?? await moveLegacyScratch(key);
+  } catch (_) {
+    return null;
+  }
+}
+export async function clearScratch(clientId = scratchClientId()) {
+  await idbDelete(`scratch:${clientId}`);
 }
 
 // ==========================

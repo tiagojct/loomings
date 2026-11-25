@@ -2608,7 +2608,11 @@ async function offerScratchRecovery() {
     if (scratch.current_file) flashStatus('Recovered draft of ' + basename(scratch.current_file));
     markDirty();
   } else {
-    await clearScratch();
+    try {
+      await clearScratch();
+    } catch (err) {
+      flashStatus('Could not clear draft; it will be offered again: ' + (err?.message || err));
+    }
   }
 }
 
