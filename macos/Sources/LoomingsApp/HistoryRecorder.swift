@@ -21,8 +21,8 @@ final class HistoryRecorder {
         self.clock = clock
     }
 
-    /// Called once when the history cannot be written (a full disk, a
-    /// folder that cannot be made), with the reason.
+    /// Reports recording and deletion failures with the reason.
+    /// Repeated recording failures are reported once; every deletion failure is reported.
     var onError: ((String) -> Void)?
     private var reportedError = false
 
@@ -102,7 +102,7 @@ final class HistoryRecorder {
             do {
                 try store.delete(id)
             } catch {
-                reportError(error)
+                reportDeletionError(error)
             }
         }
     }
@@ -115,7 +115,7 @@ final class HistoryRecorder {
         do {
             try store.delete(id)
         } catch {
-            reportError(error)
+            reportDeletionError(error)
         }
     }
 
@@ -127,13 +127,17 @@ final class HistoryRecorder {
             try store.record(text: text, at: Date().timeIntervalSince1970, for: id)
             historyAnswer = nil
         } catch {
-            reportError(error)
+            reportRecordingError(error)
         }
     }
 
-    private func reportError(_ error: Error) {
+    private func reportRecordingError(_ error: Error) {
         guard !reportedError else { return }
         reportedError = true
+        onError?(error.localizedDescription)
+    }
+
+    private func reportDeletionError(_ error: Error) {
         onError?(error.localizedDescription)
     }
 }

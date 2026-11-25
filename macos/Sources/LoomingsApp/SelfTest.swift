@@ -9,6 +9,16 @@ import LoomingsShare
 import LoomingsTeaching
 import PDFKit
 
+private final class FailingHistoryRemovalFileManager: FileManager {
+    override func removeItem(at URL: URL) throws {
+        throw NSError(
+            domain: "LoomingsSelfTest",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "simulated history deletion failure"]
+        )
+    }
+}
+
 /// Exercises the real window, text view and parse pipeline without a human
 /// at the keyboard. Run with `Loomings --self-test`; exit status 0 is proof.
 @MainActor
@@ -999,12 +1009,27 @@ enum SelfTest {
             let blocker = historyRoot.appendingPathComponent("not-a-folder")
             try "x".write(to: blocker, atomically: true, encoding: .utf8)
             var errors: [String] = []
-            let failing = HistoryRecorder(store: HistoryStore(root: blocker.appendingPathComponent("History")), clock: { now })
+            let failingStore = HistoryStore(
+                root: blocker.appendingPathComponent("History"),
+                fileManager: FailingHistoryRemovalFileManager()
+            )
+            let failing = HistoryRecorder(store: failingStore, clock: { now })
             failing.onError = { errors.append($0) }
             failing.setRecording(true, fileURL: file, text: "one")
             now = 10; failing.textChanged("one two")
             now = 20; failing.textChanged("one two three")
             check(errors.count == 1, "a history that cannot be saved is reported once, not silently dropped")
+
+            try FileManager.default.removeItem(at: blocker)
+            try FileManager.default.createDirectory(at: blocker, withIntermediateDirectories: true)
+            let failedHistoryRoot = blocker.appendingPathComponent("History")
+            try FileManager.default.createDirectory(at: failedHistoryRoot, withIntermediateDirectories: true)
+            try Data("history".utf8).write(to: failedHistoryRoot.appendingPathComponent("\(id).jsonl"))
+            failing.deleteHistory()
+            check(
+                errors.count == 2 && errors.last == "simulated history deletion failure",
+                "a deletion failure is reported after an earlier recording failure"
+            )
             historyDocument.close()
         } catch {
             check(false, "writing history: \(error.localizedDescription)")
