@@ -59,7 +59,7 @@ public enum TextFileError: LocalizedError, Equatable {
     public var errorDescription: String? {
         switch self {
         case .unsupportedEncoding:
-            return "Loomings opens UTF-8 and UTF-16 text only. This file uses another encoding; convert it to UTF-8 first."
+            return "Loomings cannot open this file. It may use an encoding other than UTF-8 or UTF-16 with a byte-order mark: convert it to UTF-8 first. It may also contain control characters other than tab, line feed and carriage return, such as ESC or form feed: remove them, then open the file again."
         case .invalidText(let encoding):
             return "The file declares \(encoding.rawValue) but contains invalid byte sequences. It was not opened, so it cannot be overwritten."
         }

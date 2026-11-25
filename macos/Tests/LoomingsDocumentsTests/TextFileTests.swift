@@ -142,6 +142,14 @@ struct TextFileTests {
         }
     }
 
+    @Test("The unsupported-encoding message names control characters too")
+    func unsupportedEncodingMessageMentionsControlCharacters() {
+        let message = TextFileError.unsupportedEncoding.errorDescription ?? ""
+        #expect(message.contains("control characters"))
+        #expect(message.contains("ESC"))
+        #expect(message.contains("form feed"))
+    }
+
     @Test("BOMless UTF-8 with tab, LF and CR still opens")
     func bomlessUTF8WithAllowedControlBytesOpens() throws {
         let file = try TextFileCodec.decode(Data("a\tb\r\nc\n".utf8))
