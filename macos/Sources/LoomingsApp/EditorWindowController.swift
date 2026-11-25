@@ -1775,7 +1775,8 @@ final class EditorWindowController: NSWindowController,
             source: includeQR ? page.shareSource : nil,
             markdown: page.markdown,
             documentURL: page.documentURL,
-            title: page.title
+            title: page.title,
+            allowImagePaths: page.allowImagePaths
         )
     }
 

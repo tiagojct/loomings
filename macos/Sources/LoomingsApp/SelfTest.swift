@@ -947,6 +947,51 @@ enum SelfTest {
                     .flatMap { detector?.features(in: CIImage(cgImage: $0)) } ?? []
                 check(found.isEmpty, "the last page without a QR code holds no QR code")
             }
+
+            let imageMarker = Data("/Subtype /Image".utf8)
+            let textOnlyURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("loomings-handout-text-\(UUID().uuidString).pdf")
+            defer { try? FileManager.default.removeItem(at: textOnlyURL) }
+            let textOnlyView = Handout.view(
+                source: nil,
+                markdown: "# Plain\n\nJust words.\n",
+                documentURL: nil,
+                title: "Plain"
+            )
+            Handout.writePDF(textOnlyView, to: textOnlyURL)
+            let textOnlyPDF = (try? Data(contentsOf: textOnlyURL)) ?? Data()
+            check(
+                textOnlyPDF.range(of: imageMarker) == nil,
+                "a text-only handout PDF without a QR code contains no image stream"
+            )
+
+            let imageDir = FileManager.default.temporaryDirectory
+                .appendingPathComponent("loomings-handout-images-\(UUID().uuidString)", isDirectory: true)
+            try? FileManager.default.createDirectory(at: imageDir, withIntermediateDirectories: true)
+            defer { try? FileManager.default.removeItem(at: imageDir) }
+            let pixelBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+            let pixelData = Data(base64Encoded: pixelBase64) ?? Data()
+            let localImageURL = imageDir.appendingPathComponent("local.png")
+            try? pixelData.write(to: localImageURL)
+            let docURL = imageDir.appendingPathComponent("doc.md")
+            let imageMarkdown = """
+            ![Local](./local.png)
+
+            ![Data](data:image/png;base64,\(pixelBase64))
+            """
+            let imagePDFURL = imageDir.appendingPathComponent("images.pdf")
+            let imageView = Handout.view(
+                source: nil,
+                markdown: imageMarkdown,
+                documentURL: docURL,
+                title: "Images"
+            )
+            Handout.writePDF(imageView, to: imagePDFURL)
+            let imagePDF = (try? Data(contentsOf: imagePDFURL)) ?? Data()
+            check(
+                imagePDF.range(of: imageMarker) != nil,
+                "a handout PDF with local and data images embeds them"
+            )
             EditorPreferences.printQRCode = true
         }
 

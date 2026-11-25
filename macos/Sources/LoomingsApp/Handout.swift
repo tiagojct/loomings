@@ -37,13 +37,24 @@ enum Handout {
     ///   - source: the text of the share link, or nil for a page with no QR
     ///     code: it then ends with the document.
     ///   - markdown: the text to print, with its citations formatted.
-    static func view(source: String?, markdown: String, documentURL: URL?, title: String) -> HandoutTextView {
+    static func view(
+        source: String?,
+        markdown: String,
+        documentURL: URL?,
+        title: String,
+        allowImagePaths: Bool = true
+    ) -> HandoutTextView {
         let manager = ThemeManager.shared
         let light = manager.library?.resolve(family: manager.family, mode: .light, systemIsDark: false)
         let theme = light.map { PreviewTheme.themed($0) } ?? .standard
         let rendered = PreviewRenderer(theme: theme, producesHTML: false).render(source: markdown, documentURL: documentURL)
+        let resolved = PreviewImageResolver.resolve(
+            rendered.attributed,
+            documentURL: documentURL,
+            allowImagePaths: allowImagePaths
+        )
 
-        let content = NSMutableAttributedString(attributedString: rendered.attributed)
+        let content = NSMutableAttributedString(attributedString: resolved)
         if let source {
             content.append(qrBlock(source: source, theme: theme))
         }
