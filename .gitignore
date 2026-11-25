@@ -18,3 +18,7 @@ macos/dist/
 
 # Vitest cache
 .vitest/
+
+# Generated license notice artifacts
+public/licenses/THIRD-PARTY-NOTICES.txt
+macos/Resources/THIRD-PARTY-NOTICES.txt
