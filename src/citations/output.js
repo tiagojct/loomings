@@ -275,17 +275,28 @@ export function withReferences(source, citations, title, bibliographyMarkdown) {
   return `${body}${gap}${title ? `## ${title}\n\n` : ''}${bibliographyMarkdown}`;
 }
 
-/** Two private-use characters that the source does not contain. */
-function markerPair(source) {
-  let code = 0xe000;
-  while (source.includes(String.fromCharCode(code)) || source.includes(String.fromCharCode(code + 1))) code += 2;
-  return [String.fromCharCode(code), String.fromCharCode(code + 1)];
+/**
+ * Two private-use characters that the source does not contain, or null when
+ * the source uses the whole private-use range.
+ *
+ * @param {string} source
+ * @returns {[string, string]|null}
+ */
+export function markerPair(source) {
+  const used = new Set();
+  for (let i = 0; i < source.length; i++) used.add(source.charCodeAt(i));
+  for (let code = 0xe000; code < 0xf8ff; code++) {
+    if (!used.has(code) && !used.has(code + 1)) return [String.fromCharCode(code), String.fromCharCode(code + 1)];
+  }
+  return null;
 }
 
 /**
  * Prepares a source for the web renderer. Each citation becomes a private-use
  * marker with the same line count. `fill` puts the citations into the
- * rendered HTML. A marker inside a tag (image alt text) gets plain text.
+ * rendered HTML. A marker inside a tag (image alt text) gets plain text. A
+ * source with no free marker pair gets each citation's Markdown and an
+ * identity `fill`.
  *
  * @param {string} source
  * @param {{citations: CitationOutput[]}} report
@@ -293,7 +304,11 @@ function markerPair(source) {
  */
 export function applyCitations(source, report) {
   const { citations } = report;
-  const [open, close] = markerPair(source);
+  const pair = markerPair(source);
+  if (!pair) {
+    return { text: replaceRanges(source, citations, (i) => citations[i].markdown), fill: (html) => html };
+  }
+  const [open, close] = pair;
   const text = replaceRanges(source, citations, (i) => `${open}${i}${close}`);
   const marker = `${open}(\\d+)${close}`;
   const inTag = new RegExp(marker, 'g');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanCitationHtml, toMarkdown, applyCitations, withReferences } from './output.js';
+import { cleanCitationHtml, toMarkdown, applyCitations, withReferences, markerPair } from './output.js';
 import { renderMarkdown } from '../markdown.js';
 
 const lines = (s) => s.split(/\r\n|\r|\n/).length;
@@ -168,6 +168,21 @@ describe('applyCitations', () => {
     const { text, fill } = applyCitations('a\n', report([]));
     expect(text).toBe('a\n');
     expect(fill('<p>a</p>')).toBe('<p>a</p>');
+  });
+  it('gives no marker pair when the source has every private-use character', () => {
+    let all = '';
+    for (let code = 0xe000; code <= 0xf8ff; code++) all += String.fromCharCode(code);
+    expect(markerPair(all)).toBeNull();
+    expect(markerPair('x0 [@a]')).toEqual([String.fromCharCode(0xe000), String.fromCharCode(0xe001)]);
+  });
+  it('uses citation Markdown and leaves HTML unchanged when no marker pair exists', () => {
+    let all = '';
+    for (let code = 0xe000; code <= 0xf8ff; code++) all += String.fromCharCode(code);
+    const src = `See [@a] and${all}\n`;
+    const at = src.indexOf('[@a]');
+    const { text, fill } = applyCitations(src, report([{ from: at, to: at + 4, html: 'A', markdown: '(A)', missing: [] }]));
+    expect(text).toBe(`See (A) and${all}\n`);
+    expect(fill('<p>See <i>x</i></p>')).toBe('<p>See <i>x</i></p>');
   });
 });
 
