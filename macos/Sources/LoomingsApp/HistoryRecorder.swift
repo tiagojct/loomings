@@ -98,7 +98,13 @@ final class HistoryRecorder {
         let id = recordingID
         pending = nil
         recordingID = nil
-        if let id { try? store.delete(id) }
+        if let id {
+            do {
+                try store.delete(id)
+            } catch {
+                reportError(error)
+            }
+        }
     }
 
     /// Deletes the history of a file that is not being recorded now.
@@ -106,7 +112,11 @@ final class HistoryRecorder {
         historyAnswer = nil
         if recordingID != nil { deleteHistory(); return }
         guard let fileURL, let id = store.existingIdentifier(for: fileURL) else { return }
-        try? store.delete(id)
+        do {
+            try store.delete(id)
+        } catch {
+            reportError(error)
+        }
     }
 
     private func record(_ text: String) {
@@ -117,9 +127,13 @@ final class HistoryRecorder {
             try store.record(text: text, at: Date().timeIntervalSince1970, for: id)
             historyAnswer = nil
         } catch {
-            guard !reportedError else { return }
-            reportedError = true
-            onError?(error.localizedDescription)
+            reportError(error)
         }
+    }
+
+    private func reportError(_ error: Error) {
+        guard !reportedError else { return }
+        reportedError = true
+        onError?(error.localizedDescription)
     }
 }

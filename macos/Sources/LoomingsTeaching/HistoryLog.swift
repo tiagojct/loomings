@@ -84,12 +84,14 @@ public final class HistoryStore: @unchecked Sendable {
     static let attributeName = "eu.tiagojacinto.loomings.history-id"
 
     public let root: URL
+    private let fileManager: FileManager
     private let lock = NSLock()
     private var lastText: [String: String] = [:]
     private var counts: [String: Int] = [:]
 
-    public init(root: URL = HistoryStore.defaultRoot) {
+    public init(root: URL = HistoryStore.defaultRoot, fileManager: FileManager = .default) {
         self.root = root
+        self.fileManager = fileManager
     }
 
     // MARK: Identity
@@ -251,13 +253,15 @@ public final class HistoryStore: @unchecked Sendable {
 
     public func delete(_ id: String) throws {
         lock.lock()
-        let url = fileURL(id)
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
+        do {
+            defer { lock.unlock() }
+            let url = fileURL(id)
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
+            counts[id] = nil
+            lastText[id] = nil
         }
-        counts[id] = nil
-        lastText[id] = nil
-        lock.unlock()
         setRecording(id, false)
     }
 }

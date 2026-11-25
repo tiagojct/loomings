@@ -2,6 +2,12 @@ import Foundation
 import Testing
 @testable import LoomingsTeaching
 
+private final class FailingHistoryFileManager: FileManager {
+    override func removeItem(at URL: URL) throws {
+        throw CocoaError(.fileWriteUnknown)
+    }
+}
+
 @Suite("Writing history")
 struct HistoryLogTests {
     static func temporaryRoot() throws -> URL {
@@ -106,6 +112,18 @@ struct HistoryLogTests {
         #expect(!FileManager.default.fileExists(atPath: root.appendingPathComponent("doc.jsonl").path))
         #expect(try store.entries(for: "doc").isEmpty)
         #expect(!store.isRecording("doc"))
+    }
+
+    @Test("A failed deletion releases the history lock")
+    func deleteFailureReleasesLock() throws {
+        let root = try Self.temporaryRoot()
+        let store = HistoryStore(root: root, fileManager: FailingHistoryFileManager())
+        store.setRecording("doc", true)
+        try store.record(text: "one", at: 1, for: "doc")
+
+        #expect(throws: (any Error).self) { try store.delete("doc") }
+        #expect(try store.entries(for: "doc").count == 1)
+        #expect(store.isRecording("doc"))
     }
 
     @Test("A damaged line is skipped, and recording goes on")
