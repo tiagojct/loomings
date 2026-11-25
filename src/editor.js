@@ -2519,7 +2519,12 @@ attachMenu(el('tb-docs'), el('docs-menu'), {
       const doc = await getDocument(del.dataset.delete);
       if (!doc) return;
       if (!(await ask(`Delete “${doc.title}” from this browser?`))) return;
-      await deleteDocument(doc.id);
+      try {
+        await deleteDocument(doc.id);
+      } catch (err) {
+        flashStatus('Delete failed: ' + (err?.message || err));
+        return;
+      }
       if (currentDocId === doc.id) { currentDocId = null; refreshStatusBar(); if (!session.isDirty()) markDirty(); }
       flashStatus('Deleted');
       return;

@@ -114,6 +114,48 @@ describe('browser storage adapter (IndexedDB)', () => {
     expect(list.find((d) => d.id === doc.id)).toBeUndefined();
   });
 
+  it('keeps document metadata and content when deleting its content key fails', async () => {
+    const doc = await putDocument({ id: null, title: 'Keep Me', content: 'Still here' });
+    const originalDelete = IDBObjectStore.prototype.delete;
+    vi.spyOn(IDBObjectStore.prototype, 'delete').mockImplementation(function (key) {
+      if (key === 'doc_content:' + doc.id) throw new Error('content delete failed');
+      return originalDelete.call(this, key);
+    });
+
+    try {
+      await expect(deleteDocument(doc.id)).rejects.toThrow('content delete failed');
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    expect(await getDocument(doc.id)).toEqual(expect.objectContaining({
+      id: doc.id,
+      title: 'Keep Me',
+      content: 'Still here',
+    }));
+  });
+
+  it('keeps document metadata and content when updating the index fails', async () => {
+    const doc = await putDocument({ id: null, title: 'Keep Me', content: 'Still here' });
+    const originalPut = IDBObjectStore.prototype.put;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (value, key) {
+      if (key === 'documents') throw new Error('index put failed');
+      return originalPut.call(this, value, key);
+    });
+
+    try {
+      await expect(deleteDocument(doc.id)).rejects.toThrow('index put failed');
+    } finally {
+      vi.restoreAllMocks();
+    }
+
+    expect(await getDocument(doc.id)).toEqual(expect.objectContaining({
+      id: doc.id,
+      title: 'Keep Me',
+      content: 'Still here',
+    }));
+  });
+
   it('stores independent scratch drafts for separate tabs', async () => {
     await saveScratch('Draft A', 'a.md', 'tab-a');
     await saveScratch('Draft B', 'b.md', 'tab-b');

@@ -497,11 +497,26 @@ export async function putDocument({ id, title, content }) {
 }
 
 export async function deleteDocument(id) {
-  const raw = (await idbGet('documents')) || [];
-  await Promise.allSettled([
-    idbDelete(DOC_CONTENT_PREFIX + id),
-    idbSet('documents', raw.filter((d) => d.id !== id)),
-  ]);
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE, 'readwrite');
+    const store = tx.objectStore(STORE);
+    const docsRequest = store.get('documents');
+    docsRequest.onerror = () => reject(docsRequest.error || new Error('IndexedDB read failed'));
+    docsRequest.onsuccess = () => {
+      try {
+        const raw = docsRequest.result || [];
+        store.delete(DOC_CONTENT_PREFIX + id);
+        store.put(raw.filter((d) => d.id !== id), 'documents');
+      } catch (err) {
+        try { tx.abort(); } catch (_) {}
+        reject(err);
+      }
+    };
+    tx.oncomplete = () => resolve(undefined);
+    tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+    tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
+  });
 }
 
 // ==========================
