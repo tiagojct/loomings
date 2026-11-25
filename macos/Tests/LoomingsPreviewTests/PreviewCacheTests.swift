@@ -155,6 +155,62 @@ struct PreviewCacheTests {
         #expect(!rendered.html.contains("one.example"))
     }
 
+    @Test("Swapping reference destinations updates each cached link and tooltip")
+    func swappedReferenceDestinations() {
+        let first = """
+        [a][x]
+
+        [b][y]
+
+        [x]: https://one.example "One title"
+        [y]: https://two.example "Two title"
+        """
+        let swapped = """
+        [a][x]
+
+        [b][y]
+
+        [x]: https://two.example "Two title"
+        [y]: https://one.example "One title"
+        """
+        let renderer = PreviewRenderer()
+        _ = renderer.render(source: first, documentURL: nil)
+
+        let cached = renderer.render(source: swapped, documentURL: nil)
+        let fresh = PreviewRenderer().render(source: swapped, documentURL: nil)
+
+        expectSame(cached, fresh, "swapped reference destinations")
+        #expect(cached.blocks[0].html.contains("href=\"https://two.example\""))
+        #expect(cached.blocks[0].attributed.attribute(.toolTip, at: 0, effectiveRange: nil) as? String == "Two title")
+        #expect(cached.blocks[1].html.contains("href=\"https://one.example\""))
+        #expect(cached.blocks[1].attributed.attribute(.toolTip, at: 0, effectiveRange: nil) as? String == "One title")
+    }
+
+    @Test("Editing one inline destination reuses every unchanged block")
+    func inlineDestinationEditReusesUnchangedBlocks() {
+        let first = """
+        First [link](https://one.example).
+
+        Second paragraph.
+
+        ![photo](one.png)
+
+        Last paragraph.
+        """
+        let changed = first.replacingOccurrences(of: "https://one.example", with: "https://two.example")
+        let renderer = PreviewRenderer()
+        let original = renderer.render(source: first, documentURL: nil)
+
+        let cached = renderer.render(source: changed, documentURL: nil)
+        let fresh = PreviewRenderer().render(source: changed, documentURL: nil)
+
+        expectSame(cached, fresh, "inline destination edit")
+        #expect(renderer.reusedBlockCount == original.blocks.count - 1)
+        for index in 1..<original.blocks.count {
+            #expect(cached.blocks[index].attributed === original.blocks[index].attributed)
+        }
+    }
+
     @Test("A destination on the next definition line invalidates a body link")
     func multilineReferenceDestination() {
         let first = """

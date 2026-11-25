@@ -31,8 +31,13 @@ public final class PreviewRenderer {
     /// touched from one thread at a time (the window's preview queue).
     private struct CacheKey: Hashable {
         let text: String
-        /// Resolved destinations and titles affect rendered links and images.
-        let definitions: String
+        /// Ordered resolved destinations and titles used by this block.
+        let definitions: [ResolvedLink]
+    }
+    private struct ResolvedLink: Hashable {
+        let isImage: Bool
+        let destination: String?
+        let title: String?
     }
     /// `stamp` is the render that last used the entry; older ones are swept.
     private struct CacheEntry {
@@ -63,8 +68,6 @@ public final class PreviewRenderer {
         let tree = parsed.tree
         defer { withExtendedLifetime(tree) {} }
 
-        let definitionsKey = Self.resolvedLinkKey(for: tree)
-
         renderCount += 1
         let stamp = renderCount
         var blocks: [PreviewBlock] = []
@@ -83,7 +86,7 @@ public final class PreviewRenderer {
             let key = range.map {
                 CacheKey(
                     text: String(decoding: nsSource.substring(with: $0).utf8, as: UTF8.self),
-                    definitions: definitionsKey
+                    definitions: Self.resolvedLinkKey(for: node)
                 )
             }
 
@@ -115,36 +118,24 @@ public final class PreviewRenderer {
         return PreviewDocument(blocks: blocks)
     }
 
-    private static func resolvedLinkKey(for tree: MarkdownTree) -> String {
-        var links: [(destination: String?, title: String?)] = []
+    private static func resolvedLinkKey(for block: MarkdownNode) -> [ResolvedLink] {
+        var links: [ResolvedLink] = []
 
         func visit(_ node: MarkdownNode) {
             if node.kind == .link || node.kind == .image {
-                links.append((node.destination, node.title))
+                links.append(ResolvedLink(
+                    isImage: node.kind == .image,
+                    destination: node.destination,
+                    title: node.title
+                ))
             }
             for child in node.children {
                 visit(child)
             }
         }
 
-        visit(tree.document)
-        links.sort {
-            let leftDestination = $0.destination ?? ""
-            let rightDestination = $1.destination ?? ""
-            if leftDestination != rightDestination {
-                return leftDestination < rightDestination
-            }
-            return ($0.title ?? "") < ($1.title ?? "")
-        }
-
-        func field(_ value: String?) -> String {
-            guard let value else { return "-:" }
-            return "\(value.utf8.count):\(value)"
-        }
-
-        return links.map { link in
-            "\(field(link.destination))|\(field(link.title))"
-        }.joined(separator: ";")
+        visit(block)
+        return links
     }
 
     // MARK: - Blocks
@@ -239,7 +230,7 @@ public final class PreviewRenderer {
                     node.children,
                     ordered: ordered,
                     start: start,
-                    tight: isTightList(node, map: map, source: source),
+                    tight: node.isTightList,
                     line: line,
                     map: map,
                     source: source,
@@ -1153,69 +1144,6 @@ public final class PreviewRenderer {
         }
         result += "</\(tag)>\n"
         return result
-    }
-
-    private func isTightList(_ list: MarkdownNode, map: SourceMap, source: String) -> Bool {
-        let text = source as NSString
-        var previousItemEnd: Int?
-        for item in list.children where item.kind == .item {
-            if let prev = previousItemEnd, let current = map.nsRange(for: item.range),
-               hasBlankLine(in: text, from: prev, to: current.location) {
-                return false
-            }
-            var previousChildEnd: Int?
-            for child in item.children {
-                if let prev = previousChildEnd, let current = map.nsRange(for: child.range),
-                   hasBlankLine(in: text, from: prev, to: current.location) {
-                    return false
-                }
-                if let range = map.nsRange(for: child.range) {
-                    previousChildEnd = trimmedContentEnd(of: range, in: text)
-                }
-            }
-            if let range = map.nsRange(for: item.range) {
-                previousItemEnd = trimmedContentEnd(of: range, in: text)
-            }
-        }
-        return true
-    }
-
-    private func trimmedContentEnd(of range: NSRange, in text: NSString) -> Int {
-        var end = min(NSMaxRange(range), text.length)
-        while end > range.location {
-            let ch = text.character(at: end - 1)
-            if ch == 0x0A || ch == 0x0D || ch == 0x20 || ch == 0x09 {
-                end -= 1
-            } else {
-                break
-            }
-        }
-        return end
-    }
-
-    private func hasBlankLine(in text: NSString, from start: Int, to end: Int) -> Bool {
-        let firstLine = text.lineRange(for: NSRange(location: start, length: 0))
-        var cursor = NSMaxRange(firstLine)
-        let limit = min(end, text.length)
-        while cursor < limit {
-            let line = text.lineRange(for: NSRange(location: cursor, length: 0))
-            let fullLineEnd = min(NSMaxRange(line), text.length)
-            guard fullLineEnd <= limit else { break }
-            var onlySpaces = true
-            var index = line.location
-            while index < fullLineEnd {
-                let ch = text.character(at: index)
-                if ch != 0x20 && ch != 0x09 && ch != 0x0A && ch != 0x0D {
-                    onlySpaces = false
-                    break
-                }
-                index += 1
-            }
-            if onlySpaces { return true }
-            if fullLineEnd <= cursor { break }
-            cursor = fullLineEnd
-        }
-        return false
     }
 
     private func plainText(_ nodes: MarkdownChildren) -> String {

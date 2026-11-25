@@ -6,7 +6,7 @@ import Testing
 struct PreviewHTMLTests {
     private static let fixtures = [
         "basic", "lists", "blocks", "table",
-        "typography", "frontmatter", "frontmatter-fence", "unicode", "unsafe", "hardbreaks",
+        "typography", "frontmatter", "frontmatter-fence", "quoted-loose-list", "unicode", "unsafe", "hardbreaks",
     ]
 
     @Test("Native HTML matches the web renderer", arguments: fixtures)

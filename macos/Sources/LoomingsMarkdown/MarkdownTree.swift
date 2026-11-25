@@ -251,6 +251,8 @@ public struct MarkdownNode {
 
     public var listStart: Int { Int(cmark_node_get_list_start(pointer)) }
 
+    package var isTightList: Bool { cmark_node_get_list_tight(pointer) != 0 }
+
     /// The info string of a fenced code block, or nil when it is empty.
     public var fenceInfo: String? { nonEmpty(cmark_node_get_fence_info(pointer)) }
 

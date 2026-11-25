@@ -209,6 +209,28 @@ struct PreviewAttributedTests {
             #expect(style.headIndent > style.firstLineHeadIndent)
         }
     }
+
+    @Test("Loose lists inside blockquotes preserve blank lines between blocks")
+    func quotedLooseList() throws {
+        let fixtureURL = try #require(Bundle.module.url(
+            forResource: "quoted-loose-list",
+            withExtension: "md",
+            subdirectory: "Fixtures"
+        ))
+        let expectedURL = try #require(Bundle.module.url(
+            forResource: "quoted-loose-list",
+            withExtension: "html",
+            subdirectory: "Fixtures"
+        ))
+        let source = try String(contentsOf: fixtureURL, encoding: .utf8)
+        let expectedHTML = try String(contentsOf: expectedURL, encoding: .utf8)
+        let document = PreviewRenderer().render(source: source, documentURL: nil)
+
+        #expect(document.html == expectedHTML)
+        #expect(document.html.contains("<li data-line=\"0\">\n<p data-line=\"0\">first item</p>"))
+        #expect(document.html.contains("<p data-line=\"2\">second paragraph in first item</p>"))
+        #expect(document.html.contains("<li data-line=\"4\">\n<p data-line=\"4\">second item</p>"))
+    }
 }
 
 @Suite("Preview URLs and export")
