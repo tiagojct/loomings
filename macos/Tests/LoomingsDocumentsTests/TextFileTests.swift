@@ -102,12 +102,37 @@ struct TextFileTests {
         }
     }
 
-    @Test("BOMless UTF-8 without NUL bytes still opens")
+    @Test("BOMless UTF-16LE Ł is refused, not read as UTF-8 with a control byte")
+    func bomlessUTF16LittleEndianLIsRefused() {
+        let data = Data([0x41, 0x01])
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("BOMless UTF-16BE Ł is refused, not read as UTF-8 with a control byte")
+    func bomlessUTF16BigEndianLIsRefused() {
+        let data = Data([0x01, 0x41])
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("BOMless UTF-8 without control bytes still opens")
     func bomlessUTF8StillOpens() throws {
         let file = try TextFileCodec.decode(Data("café\n".utf8))
         #expect(file.encoding == .utf8)
         #expect(!file.hasBOM)
         #expect(file.text == "café\n")
+    }
+
+    @Test("BOMless UTF-8 with tab, LF and CR still opens")
+    func bomlessUTF8WithAllowedControlBytesOpens() throws {
+        let file = try TextFileCodec.decode(Data("a\tb\r\nc\n".utf8))
+        #expect(file.encoding == .utf8)
+        #expect(!file.hasBOM)
+        #expect(file.text == "a\tb\nc\n")
+        #expect(file.lineEnding == .crlf)
     }
 
     @Test("A UTF-8 BOM with invalid bytes is refused")

@@ -115,11 +115,13 @@ public enum TextFileCodec {
             )
         }
 
-        // No byte-order mark: only valid UTF-8 without NUL bytes is accepted.
-        // BOMless UTF-16 is valid UTF-8 when it is ASCII, so a NUL byte marks it.
-        // Falling back to a single-byte encoding would let the app save over
-        // text it could not faithfully read.
-        if data.contains(0x00) {
+        // No byte-order mark: only valid UTF-8 is accepted. Falling back to a
+        // single-byte encoding would let the app save over text it could not
+        // faithfully read. A C0 control byte other than tab, LF or CR marks
+        // BOMless UTF-16 (NUL for ASCII, 0x01 for U+0141 and similar). BOMless
+        // UTF-16 that forms only printable UTF-8 stays ambiguous and is read as
+        // UTF-8; a BOM is the only reliable signal for it.
+        if data.contains(where: { $0 < 0x20 && $0 != 0x09 && $0 != 0x0A && $0 != 0x0D }) {
             throw TextFileError.unsupportedEncoding
         }
         guard let text = String(data: data, encoding: .utf8) else {
