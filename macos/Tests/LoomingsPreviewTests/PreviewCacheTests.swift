@@ -354,16 +354,43 @@ struct FastPathTests {
         #expect(matches[0].url == "https://example.com/a_(b)")
     }
 
-    @Test("Trimming 10,000 unmatched closing parentheses is linear")
-    func manyUnmatchedClosingParentheses() {
-        let input = "https://example.com/path" + String(repeating: ")", count: 10_000)
-        let start = ContinuousClock.now
+    @Test("Trimming unmatched closing parentheses scales linearly")
+    func unmatchedClosingParenthesesScaleLinearly() {
+        let warmupMatches = Linkifier.matches(in: "https://example.com/warmup)")
+        #expect(warmupMatches.count == 1)
+        #expect(warmupMatches[0].url == "https://example.com/warmup")
 
-        let matches = Linkifier.matches(in: input)
+        func bestDuration(for count: Int) -> Duration {
+            let input = "https://example.com/path" + String(repeating: ")", count: count)
+            var best: Duration?
 
-        let elapsed = start.duration(to: .now)
-        #expect(matches.count == 1)
-        #expect(matches[0].url == "https://example.com/path")
-        #expect(elapsed < .milliseconds(5))
+            for _ in 0..<3 {
+                let start = ContinuousClock.now
+                let matches = Linkifier.matches(in: input)
+                let elapsed = start.duration(to: .now)
+
+                #expect(matches.count == 1)
+                #expect(matches[0].url == "https://example.com/path")
+                if let previous = best {
+                    best = min(previous, elapsed)
+                } else {
+                    best = elapsed
+                }
+            }
+
+            return best ?? .zero
+        }
+
+        func nanoseconds(_ duration: Duration) -> Double {
+            let components = duration.components
+            return Double(components.seconds) * 1_000_000_000
+                + Double(components.attoseconds) / 1_000_000_000
+        }
+
+        let tenThousand = bestDuration(for: 10_000)
+        let twentyThousand = bestDuration(for: 20_000)
+
+        #expect(twentyThousand < .milliseconds(100))
+        #expect(nanoseconds(twentyThousand) / nanoseconds(tenThousand) < 3.0)
     }
 }
