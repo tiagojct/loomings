@@ -20,6 +20,40 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
-      - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - run: npm test
+
+  docker-smoke:
+    name: Docker smoke test
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build image
+        run: docker build --tag loomings-smoke .
+      - name: Run container
+        run: docker run --detach --name loomings-smoke --publish 127.0.0.1:8081:80 loomings-smoke
+      - name: Probe app and security headers
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8081/app/ >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              docker logs loomings-smoke
+              exit 1
+            fi
+            sleep 1
+          done
+          curl --fail --silent --show-error http://127.0.0.1:8081/ >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8081/app/ >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8081/app/sw.js >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:8081/app/manifest.webmanifest >/dev/null
+          headers=$(curl --fail --silent --show-error --head http://127.0.0.1:8081/app/)
+          printf '%s\n' "$headers" | grep --ignore-case --extended-regexp '^content-security-policy:'
+          printf '%s\n' "$headers" | grep --ignore-case --extended-regexp '^x-content-type-options:[[:space:]]*nosniff'
+          printf '%s\n' "$headers" | grep --ignore-case --extended-regexp '^referrer-policy:'
+      - name: Remove container
+        if: always()
+        run: docker rm --force loomings-smoke || true

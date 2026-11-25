@@ -9,7 +9,7 @@ services:
       # (change it if 8081 is already taken); right-hand 80 is fixed.
       - "127.0.0.1:8081:80"
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:80/app/"]
       interval: 30s
       timeout: 5s
       start_period: 5s

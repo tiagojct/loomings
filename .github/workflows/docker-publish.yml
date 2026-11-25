@@ -28,9 +28,9 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
-      - run: npm test
       - run: npm run typecheck
       - run: npm run build
+      - run: npm test
 
   publish:
     needs: build-check
