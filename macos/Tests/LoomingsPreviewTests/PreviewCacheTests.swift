@@ -155,6 +155,86 @@ struct PreviewCacheTests {
         #expect(!rendered.html.contains("one.example"))
     }
 
+    @Test("A destination on the next definition line invalidates a body link")
+    func multilineReferenceDestination() {
+        let first = """
+        [a link][ref]
+
+        [ref]:
+          https://one.example
+        """
+        let changed = first.replacingOccurrences(of: "https://one.example", with: "https://two.example")
+        let renderer = PreviewRenderer()
+        _ = renderer.render(source: first, documentURL: nil)
+
+        let rendered = renderer.render(source: changed, documentURL: nil)
+
+        #expect(rendered.html.contains("href=\"https://two.example\""))
+        #expect(!rendered.html.contains("href=\"https://one.example\""))
+    }
+
+    @Test("A title on a continuation line updates HTML and tooltip")
+    func multilineReferenceTitle() {
+        let first = """
+        [a link][ref]
+
+        [ref]: https://example.com
+          "First title"
+        """
+        let changed = first.replacingOccurrences(of: "First title", with: "Second title")
+        let renderer = PreviewRenderer()
+        _ = renderer.render(source: first, documentURL: nil)
+
+        let rendered = renderer.render(source: changed, documentURL: nil)
+        let link = rendered.blocks[0].attributed
+
+        #expect(rendered.html.contains("title=\"Second title\""))
+        #expect(!rendered.html.contains("title=\"First title\""))
+        #expect(link.attribute(.toolTip, at: 0, effectiveRange: nil) as? String == "Second title")
+    }
+
+    @Test("A blockquote reference definition invalidates a body link")
+    func blockquoteReferenceDefinition() {
+        let first = """
+        > [ref]: https://one.example
+
+        [a link][ref]
+        """
+        let changed = first.replacingOccurrences(of: "https://one.example", with: "https://two.example")
+        let renderer = PreviewRenderer()
+        _ = renderer.render(source: first, documentURL: nil)
+
+        let rendered = renderer.render(source: changed, documentURL: nil)
+
+        #expect(rendered.html.contains("href=\"https://two.example\""))
+        #expect(!rendered.html.contains("href=\"https://one.example\""))
+    }
+
+    @Test("Reference-looking code does not invalidate body blocks")
+    func codeFenceReferenceDoesNotInvalidate() {
+        let first = """
+        [ref]: https://example.com
+
+        [a link][ref]
+
+        ```
+        [fake]: https://one.example
+        ```
+
+        Unchanged paragraph.
+        """
+        let changed = first.replacingOccurrences(of: "https://one.example", with: "https://two.example")
+        let renderer = PreviewRenderer()
+        let original = renderer.render(source: first, documentURL: nil)
+
+        let rendered = renderer.render(source: changed, documentURL: nil)
+
+        #expect(rendered.blocks.count == original.blocks.count)
+        #expect(renderer.reusedBlockCount == original.blocks.count - 1)
+        #expect(rendered.blocks[0].attributed === original.blocks[0].attributed)
+        #expect(rendered.blocks[2].attributed === original.blocks[2].attributed)
+    }
+
     @Test("A new theme or document clears the cache")
     func themeAndDocumentInvalidate() throws {
         let renderer = PreviewRenderer()

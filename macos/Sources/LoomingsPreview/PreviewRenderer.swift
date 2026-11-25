@@ -31,9 +31,8 @@ public final class PreviewRenderer {
     /// touched from one thread at a time (the window's preview queue).
     private struct CacheKey: Hashable {
         let text: String
-        /// Reference definitions (`[id]: url`) elsewhere in the document
-        /// decide where `[text][id]` links point, so they are part of the key.
-        let definitions: Int
+        /// Resolved destinations and titles affect rendered links and images.
+        let definitions: String
     }
     /// `stamp` is the render that last used the entry; older ones are swept.
     private struct CacheEntry {
@@ -46,11 +45,6 @@ public final class PreviewRenderer {
 
     /// How many blocks the last `render` reused.
     public private(set) var reusedBlockCount = 0
-
-    private static let referenceDefinition = try! NSRegularExpression(
-        pattern: #"^ {0,3}\[[^\]\n]+\]:[^\n]*"#,
-        options: [.anchorsMatchLines]
-    )
 
     public func render(source: String, documentURL: URL?) -> PreviewDocument {
         render(parsed: ParsedMarkdown(source), documentURL: documentURL)
@@ -67,17 +61,9 @@ public final class PreviewRenderer {
         let nsSource = parsed.text
         let frontmatter = parsed.frontmatter
         let tree = parsed.tree
-        let parsedText = parsed.parsedText as NSString
         defer { withExtendedLifetime(tree) {} }
 
-        var definitions = Hasher()
-        Self.referenceDefinition.enumerateMatches(
-            in: parsed.parsedText,
-            range: NSRange(location: 0, length: parsedText.length)
-        ) { match, _, _ in
-            if let match { definitions.combine(parsedText.substring(with: match.range)) }
-        }
-        let definitionsKey = definitions.finalize()
+        let definitionsKey = Self.resolvedLinkKey(for: tree)
 
         renderCount += 1
         let stamp = renderCount
@@ -127,6 +113,38 @@ public final class PreviewRenderer {
         for (key, block) in fresh { cache[key] = CacheEntry(block: block, stamp: stamp) }
         reusedBlockCount = reused
         return PreviewDocument(blocks: blocks)
+    }
+
+    private static func resolvedLinkKey(for tree: MarkdownTree) -> String {
+        var links: [(destination: String?, title: String?)] = []
+
+        func visit(_ node: MarkdownNode) {
+            if node.kind == .link || node.kind == .image {
+                links.append((node.destination, node.title))
+            }
+            for child in node.children {
+                visit(child)
+            }
+        }
+
+        visit(tree.document)
+        links.sort {
+            let leftDestination = $0.destination ?? ""
+            let rightDestination = $1.destination ?? ""
+            if leftDestination != rightDestination {
+                return leftDestination < rightDestination
+            }
+            return ($0.title ?? "") < ($1.title ?? "")
+        }
+
+        func field(_ value: String?) -> String {
+            guard let value else { return "-:" }
+            return "\(value.utf8.count):\(value)"
+        }
+
+        return links.map { link in
+            "\(field(link.destination))|\(field(link.title))"
+        }.joined(separator: ";")
     }
 
     // MARK: - Blocks
