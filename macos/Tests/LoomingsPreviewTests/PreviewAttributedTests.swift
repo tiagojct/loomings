@@ -108,6 +108,91 @@ struct PreviewAttributedTests {
         #expect(text.contains("Héading 🌊"))
         #expect(document.blocks.count == 2)
     }
+
+    @Test("Nested blocks in quotes and lists render recursively and preserve styles")
+    func nestedBlocks() throws {
+        let fixtureURL = try #require(Bundle.module.url(
+            forResource: "nested-blocks",
+            withExtension: "md",
+            subdirectory: "Fixtures"
+        ))
+        let expectedURL = try #require(Bundle.module.url(
+            forResource: "nested-blocks",
+            withExtension: "html",
+            subdirectory: "Fixtures"
+        ))
+        let source = try String(contentsOf: fixtureURL, encoding: .utf8)
+        let expectedHTML = try String(contentsOf: expectedURL, encoding: .utf8)
+        let document = PreviewRenderer().render(source: source, documentURL: nil)
+        let text = document.attributed.string
+
+        // HTML parity including fenced code language inside quote and tight/loose lists
+        #expect(document.html == expectedHTML)
+        #expect(document.html.contains("<pre><code data-line=\"2\" class=\"language-swift\">let quoted = 1\n</code></pre>"))
+
+        // Headings, tables, rules, lists, and code inside quotes or list items keep their text
+        #expect(text.contains("Quoted Heading"))
+        #expect(text.contains("let quoted = 1"))
+        #expect(text.contains("quoted item a"))
+        #expect(text.contains("quoted item b"))
+        #expect(text.contains("col"))
+        #expect(text.contains("val"))
+        #expect(text.contains("const y = 2;"))
+        #expect(text.contains("Nested Heading"))
+        #expect(text.contains("nested quote"))
+        #expect(text.contains("loose first"))
+        #expect(text.contains("second paragraph"))
+        #expect(text.contains("z = 3"))
+
+        // Rules inside quote and list item produce attachment placeholders
+        var attachmentCount = 0
+        document.attributed.enumerateAttribute(
+            .attachment,
+            in: NSRange(location: 0, length: document.attributed.length)
+        ) { value, _, _ in
+            if value is NSTextAttachment { attachmentCount += 1 }
+        }
+        #expect(attachmentCount >= 2)
+
+        // Code block inside quote keeps its own NSTextBlock alongside the quote border block
+        let nsText = text as NSString
+        let codeRange = nsText.range(of: "let quoted = 1")
+        #expect(codeRange.location != NSNotFound)
+        if codeRange.location != NSNotFound {
+            let style = try #require(document.attributed.attribute(
+                .paragraphStyle,
+                at: codeRange.location,
+                effectiveRange: nil
+            ) as? NSParagraphStyle)
+            #expect(style.textBlocks.count == 2)
+            #expect(style.textBlocks.contains { $0.backgroundColor != nil })
+        }
+
+        // Table cell inside quote keeps its NSTextTableBlock
+        let cellRange = nsText.range(of: "val")
+        #expect(cellRange.location != NSNotFound)
+        if cellRange.location != NSNotFound {
+            let style = try #require(document.attributed.attribute(
+                .paragraphStyle,
+                at: cellRange.location,
+                effectiveRange: nil
+            ) as? NSParagraphStyle)
+            #expect(style.textBlocks.contains { $0 is NSTextTableBlock })
+        }
+
+        // List inside quote keeps its tab stops and indent
+        let listRange = nsText.range(of: "quoted item a")
+        #expect(listRange.location != NSNotFound)
+        if listRange.location != NSNotFound {
+            let style = try #require(document.attributed.attribute(
+                .paragraphStyle,
+                at: listRange.location,
+                effectiveRange: nil
+            ) as? NSParagraphStyle)
+            #expect(!style.tabStops.isEmpty)
+            #expect(style.headIndent > style.firstLineHeadIndent)
+        }
+    }
 }
 
 @Suite("Preview URLs and export")

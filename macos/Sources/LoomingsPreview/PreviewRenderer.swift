@@ -203,24 +203,41 @@ public final class PreviewRenderer {
         case .list:
             let ordered = node.isOrderedList
             let start = ordered ? node.listStart : 1
-            let content = renderList(node.children, ordered: ordered, start: start, depth: 0, documentURL: documentURL)
+            let content = renderList(
+                node.children,
+                ordered: ordered,
+                start: start,
+                depth: 0,
+                map: map,
+                source: source,
+                documentURL: documentURL
+            )
             return PreviewBlock(
                 kind: .list,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: html(listHTML(node.children, ordered: ordered, start: start, line: line, documentURL: documentURL))
+                html: html(listHTML(
+                    node.children,
+                    ordered: ordered,
+                    start: start,
+                    tight: isTightList(node, map: map, source: source),
+                    line: line,
+                    map: map,
+                    source: source,
+                    documentURL: documentURL
+                ))
             )
 
         case .blockQuote:
             let quote = node
-            let content = renderQuote(quote, documentURL: documentURL)
+            let content = renderQuote(quote, map: map, source: source, documentURL: documentURL)
             return PreviewBlock(
                 kind: .quote,
                 sourceRange: sourceRange,
                 sourceLine: line,
                 attributed: content,
-                html: html("<blockquote data-line=\"\(line)\">\n\(blockChildrenHTML(quote, documentURL: documentURL))</blockquote>\n")
+                html: html("<blockquote data-line=\"\(line)\">\n\(blockChildrenHTML(quote, map: map, source: source, documentURL: documentURL))</blockquote>\n")
             )
 
         case .codeBlock:
@@ -321,6 +338,8 @@ public final class PreviewRenderer {
         ordered: Bool,
         start: Int,
         depth: Int,
+        map: SourceMap,
+        source: String,
         documentURL: URL?
     ) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -360,7 +379,7 @@ public final class PreviewRenderer {
                             .foregroundColor: theme.textColor,
                         ],
                         allowLinkify: true,
-                        sourceRange: mapRange(of: paragraph),
+                        sourceRange: mapRange(of: paragraph, map: map),
                         documentURL: documentURL
                     ))
                     content.append(NSAttributedString(string: "\n"))
@@ -378,17 +397,19 @@ public final class PreviewRenderer {
                         ordered: nestedOrdered,
                         start: nestedOrdered ? child.listStart : 1,
                         depth: depth + 1,
+                        map: map,
+                        source: source,
                         documentURL: documentURL
                     ))
-                } else if child.kind == .codeBlock {
-                    result.append(renderCode(
-                        child,
-                        sourceRange: NSRange(location: 0, length: 0),
-                        map: SourceMap(""),
-                        source: ""
-                    ))
-                } else if child.kind == .blockQuote {
-                    result.append(renderQuote(child, documentURL: documentURL))
+                    first = false
+                } else if let block = renderBlock(
+                    child,
+                    map: map,
+                    source: source,
+                    documentURL: documentURL
+                ) {
+                    result.append(block.attributed)
+                    first = false
                 }
             }
             number += 1
@@ -408,62 +429,92 @@ public final class PreviewRenderer {
         return style
     }
 
-    private func renderQuote(_ quote: MarkdownNode, documentURL: URL?) -> NSAttributedString {
+    private func renderQuote(
+        _ quote: MarkdownNode,
+        map: SourceMap,
+        source: String,
+        documentURL: URL?
+    ) -> NSAttributedString {
         let content = NSMutableAttributedString()
+        let quoteParagraphStyle = NSMutableParagraphStyle()
+        quoteParagraphStyle.paragraphSpacing = 10
+        quoteParagraphStyle.lineHeightMultiple = 1.2
+
         for child in quote.children {
             if child.kind == .paragraph {
                 let paragraph = child
-                content.append(inline(
+                let part = inline(
                     paragraph.children,
                     base: [
                         .font: italicBodyFont(),
                         .foregroundColor: theme.secondaryTextColor,
                     ],
                     allowLinkify: true,
-                    sourceRange: mapRange(of: paragraph),
+                    sourceRange: mapRange(of: paragraph, map: map),
                     documentURL: documentURL
-                ))
-                content.append(NSAttributedString(string: "\n"))
+                )
+                part.append(NSAttributedString(string: "\n"))
+                part.addAttribute(
+                    .paragraphStyle,
+                    value: quoteParagraphStyle,
+                    range: NSRange(location: 0, length: part.length)
+                )
+                content.append(part)
             } else if child.kind == .heading {
                 let heading = child
-                content.append(inline(
+                let part = inline(
                     heading.children,
                     base: [
                         .font: headingFont(heading.headingLevel),
                         .foregroundColor: theme.secondaryTextColor,
                     ],
                     allowLinkify: true,
-                    sourceRange: mapRange(of: heading),
+                    sourceRange: mapRange(of: heading, map: map),
                     documentURL: documentURL
-                ))
-                content.append(NSAttributedString(string: "\n"))
-            } else if child.kind == .codeBlock {
-                content.append(renderCode(
-                    child,
-                    sourceRange: NSRange(location: 0, length: 0),
-                    map: SourceMap(""),
-                    source: ""
-                ))
+                )
+                part.append(NSAttributedString(string: "\n"))
+                part.addAttribute(
+                    .paragraphStyle,
+                    value: quoteParagraphStyle,
+                    range: NSRange(location: 0, length: part.length)
+                )
+                content.append(part)
+            } else if let block = renderBlock(
+                child,
+                map: map,
+                source: source,
+                documentURL: documentURL
+            ) {
+                content.append(block.attributed)
             }
         }
 
-        let style = NSMutableParagraphStyle()
-        style.firstLineHeadIndent = 16
-        style.headIndent = 16
-        style.paragraphSpacing = 10
-        style.lineHeightMultiple = 1.2
         let block = NSTextBlock()
         block.setContentWidth(100, type: .percentageValueType)
         block.setWidth(3, type: .absoluteValueType, for: .border, edge: .minX)
         block.setBorderColor(theme.quoteBorderColor, for: .minX)
         block.setWidth(12, type: .absoluteValueType, for: .padding, edge: .minX)
-        style.textBlocks = [block]
 
-        content.addAttribute(
+        var runs: [(NSRange, NSParagraphStyle)] = []
+        content.enumerateAttribute(
             .paragraphStyle,
-            value: style,
-            range: NSRange(location: 0, length: content.length)
-        )
+            in: NSRange(location: 0, length: content.length)
+        ) { value, range, _ in
+            let current = (value as? NSParagraphStyle) ?? quoteParagraphStyle
+            let style = (current.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+            style.firstLineHeadIndent += 16
+            style.headIndent += 16
+            if !style.tabStops.isEmpty {
+                style.tabStops = style.tabStops.map {
+                    NSTextTab(textAlignment: $0.alignment, location: $0.location + 16, options: $0.options)
+                }
+            }
+            style.textBlocks = [block] + style.textBlocks
+            runs.append((range, style))
+        }
+        for (range, style) in runs {
+            content.addAttribute(.paragraphStyle, value: style, range: range)
+        }
         return content
     }
 
@@ -1006,13 +1057,18 @@ public final class PreviewRenderer {
 
     // MARK: - HTML blocks
 
-    private func blockChildrenHTML(_ node: MarkdownNode, documentURL: URL?) -> String {
+    private func blockChildrenHTML(
+        _ node: MarkdownNode,
+        map: SourceMap,
+        source: String,
+        documentURL: URL?
+    ) -> String {
         var result = ""
         for child in node.children {
             if let block = renderBlock(
                 child,
-                map: SourceMap(""),
-                source: "",
+                map: map,
+                source: source,
                 documentURL: documentURL
             ) {
                 result += block.html
@@ -1025,7 +1081,10 @@ public final class PreviewRenderer {
         _ items: MarkdownChildren,
         ordered: Bool,
         start: Int,
+        tight: Bool,
         line: Int,
+        map: SourceMap,
+        source: String,
         documentURL: URL?
     ) -> String {
         let tag = ordered ? "ol" : "ul"
@@ -1038,35 +1097,107 @@ public final class PreviewRenderer {
             result += "<li data-line=\"\(itemLine)\">"
 
             let checkbox = checkboxPrefix(listItem)
+            let startsWithTightParagraph = tight && listItem.firstChild?.kind == .paragraph
+            if !startsWithTightParagraph && listItem.hasChildren {
+                result += "\n"
+            }
 
             var first = true
+            var afterTightParagraph = false
             for child in listItem.children {
                 if child.kind == .paragraph {
-                    if first {
-                        result += checkbox
+                    let body = (first ? checkbox : "") + inlineHTML(child.children, documentURL: documentURL)
+                    if tight {
+                        result += body
+                        afterTightParagraph = true
+                    } else {
+                        result += "<p data-line=\"\(child.startLine0)\">\(body)</p>\n"
+                        afterTightParagraph = false
                     }
-                    result += inlineHTML(child.children, documentURL: documentURL)
                     first = false
-                } else if child.kind == .list {
-                    let nestedOrdered = child.isOrderedList
-                    result += "\n" + listHTML(
-                        child.children,
-                        ordered: nestedOrdered,
-                        start: nestedOrdered ? child.listStart : 1,
-                        line: child.startLine0,
+                } else {
+                    if afterTightParagraph && child.kind != .codeBlock {
+                        result += "\n"
+                    }
+                    if let block = renderBlock(
+                        child,
+                        map: map,
+                        source: source,
                         documentURL: documentURL
-                    )
-                } else if child.kind == .blockQuote {
-                    let quote = child
-                    result += "\n<blockquote data-line=\"\(quote.startLine0)\">\n"
-                    result += blockChildrenHTML(quote, documentURL: documentURL)
-                    result += "</blockquote>\n"
+                    ) {
+                        result += block.html
+                    }
+                    afterTightParagraph = false
+                    first = false
                 }
             }
             result += "</li>\n"
         }
         result += "</\(tag)>\n"
         return result
+    }
+
+    private func isTightList(_ list: MarkdownNode, map: SourceMap, source: String) -> Bool {
+        let text = source as NSString
+        var previousItemEnd: Int?
+        for item in list.children where item.kind == .item {
+            if let prev = previousItemEnd, let current = map.nsRange(for: item.range),
+               hasBlankLine(in: text, from: prev, to: current.location) {
+                return false
+            }
+            var previousChildEnd: Int?
+            for child in item.children {
+                if let prev = previousChildEnd, let current = map.nsRange(for: child.range),
+                   hasBlankLine(in: text, from: prev, to: current.location) {
+                    return false
+                }
+                if let range = map.nsRange(for: child.range) {
+                    previousChildEnd = trimmedContentEnd(of: range, in: text)
+                }
+            }
+            if let range = map.nsRange(for: item.range) {
+                previousItemEnd = trimmedContentEnd(of: range, in: text)
+            }
+        }
+        return true
+    }
+
+    private func trimmedContentEnd(of range: NSRange, in text: NSString) -> Int {
+        var end = min(NSMaxRange(range), text.length)
+        while end > range.location {
+            let ch = text.character(at: end - 1)
+            if ch == 0x0A || ch == 0x0D || ch == 0x20 || ch == 0x09 {
+                end -= 1
+            } else {
+                break
+            }
+        }
+        return end
+    }
+
+    private func hasBlankLine(in text: NSString, from start: Int, to end: Int) -> Bool {
+        let firstLine = text.lineRange(for: NSRange(location: start, length: 0))
+        var cursor = NSMaxRange(firstLine)
+        let limit = min(end, text.length)
+        while cursor < limit {
+            let line = text.lineRange(for: NSRange(location: cursor, length: 0))
+            let fullLineEnd = min(NSMaxRange(line), text.length)
+            guard fullLineEnd <= limit else { break }
+            var onlySpaces = true
+            var index = line.location
+            while index < fullLineEnd {
+                let ch = text.character(at: index)
+                if ch != 0x20 && ch != 0x09 && ch != 0x0A && ch != 0x0D {
+                    onlySpaces = false
+                    break
+                }
+                index += 1
+            }
+            if onlySpaces { return true }
+            if fullLineEnd <= cursor { break }
+            cursor = fullLineEnd
+        }
+        return false
     }
 
     private func plainText(_ nodes: MarkdownChildren) -> String {
@@ -1110,28 +1241,15 @@ public final class PreviewRenderer {
         value.hasSuffix("\n") ? value : value + "\n"
     }
 
-    private func mapRange(of node: MarkdownNode) -> NSRange {
-        NSRange(location: 0, length: 0)
+    private func mapRange(of node: MarkdownNode, map: SourceMap) -> NSRange {
+        map.nsRange(for: node.range) ?? NSRange(location: 0, length: 0)
     }
 
     private func isFencedCode(_ code: MarkdownNode, map: SourceMap, source: String) -> Bool {
         guard let range = map.nsRange(for: code.range) else { return false }
         let text = source as NSString
         guard range.location < text.length else { return false }
-        let line = text.lineRange(for: NSRange(location: range.location, length: 0))
-        var cursor = line.location
-        var spaces = 0
-        while cursor < line.location + line.length, spaces < 4 {
-            let character = text.character(at: cursor)
-            if character == 0x20 || character == 0x09 {
-                cursor += 1
-                spaces += 1
-            } else {
-                break
-            }
-        }
-        guard cursor < line.location + line.length else { return false }
-        let character = text.character(at: cursor)
+        let character = text.character(at: range.location)
         return character == 0x60 || character == 0x7E
     }
 
