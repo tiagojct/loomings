@@ -4,9 +4,13 @@ import Foundation
 /// the editor dims. Parsing is pure: no AppKit, no text storage, no state.
 public enum MarkdownParser {
     public static func parse(_ source: String) -> MarkdownParseOutput {
-        let map = SourceMap(source)
-        let text = source as NSString
-        let tree = MarkdownTree(parsing: source)
+        parse(ParsedMarkdown(source))
+    }
+
+    public static func parse(_ parsed: ParsedMarkdown) -> MarkdownParseOutput {
+        let map = parsed.map
+        let text = parsed.text
+        let tree = parsed.tree
 
         var spans: [MarkdownSyntaxSpan] = []
         var outline: [OutlineItem] = []
@@ -40,7 +44,7 @@ public enum MarkdownParser {
             }
         }
 
-        let frontmatter = MarkdownFrontmatter.range(in: text)
+        let frontmatter = parsed.frontmatter
         var normalized = normalize(spans, limit: text.length)
         if let frontmatter {
             // cmark reads the closing --- as a setext underline.
@@ -59,7 +63,7 @@ public enum MarkdownParser {
             nodeCount: nodeCount,
             outline: outline.sorted { $0.range.location < $1.range.location },
             lineStarts: map.lineStarts,
-            wordCount: TextStatistics.countWords(source),
+            wordCount: TextStatistics.countWords(parsed.source),
             characterCount: map.characterCount,
             styleRanges: styles.sorted { $0.range.location < $1.range.location },
             codeRanges: code.sorted { $0.location < $1.location }

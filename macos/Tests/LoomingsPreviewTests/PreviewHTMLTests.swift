@@ -6,7 +6,7 @@ import Testing
 struct PreviewHTMLTests {
     private static let fixtures = [
         "basic", "lists", "blocks", "table",
-        "typography", "frontmatter", "unicode", "unsafe", "hardbreaks",
+        "typography", "frontmatter", "frontmatter-fence", "unicode", "unsafe", "hardbreaks",
     ]
 
     @Test("Native HTML matches the web renderer", arguments: fixtures)
@@ -19,6 +19,13 @@ struct PreviewHTMLTests {
             print(expected)
         }
         #expect(rendered.html == expected)
+    }
+
+    @Test("A reference definition in frontmatter does not resolve a body link")
+    func frontmatterReferenceDoesNotResolveBodyLink() {
+        let source = "---\n[secret]: https://frontmatter.example\n---\n\n[body][secret]\n"
+        let rendered = PreviewRenderer().render(source: source, documentURL: nil)
+        #expect(rendered.html == "<p data-line=\"4\">[body][secret]</p>\n")
     }
 
     private func fixture(_ name: String, extension: String) throws -> String {

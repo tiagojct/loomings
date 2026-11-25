@@ -7,6 +7,7 @@ import Foundation
 /// it. UTF-16 offsets stay those of `source`.
 public final class ParsedMarkdown {
     public let source: String
+    public let parsedText: String
     public let text: NSString
     public let map: SourceMap
     public let tree: MarkdownTree
@@ -18,9 +19,10 @@ public final class ParsedMarkdown {
         self.text = text
         let frontmatter = MarkdownFrontmatter.range(in: text)
         self.frontmatter = frontmatter
-        let parsed = frontmatter.map { Self.blanking($0, in: text) } ?? source
-        self.map = SourceMap(parsed)
-        self.tree = MarkdownTree(parsing: parsed)
+        let parsedText = frontmatter.map { Self.blanking($0, in: text) } ?? source
+        self.parsedText = parsedText
+        self.map = SourceMap(parsedText)
+        self.tree = MarkdownTree(parsing: parsedText)
     }
 
     /// `text` with every unit of `range` but line breaks turned into a space.

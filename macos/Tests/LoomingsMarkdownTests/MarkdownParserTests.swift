@@ -188,6 +188,26 @@ struct DocumentAnalysisTests {
         #expect(output.outline.map(\.title) == ["Real"])
     }
 
+    @Test("A code span in frontmatter does not hide a later heading")
+    func codeSpanInFrontmatterDoesNotHideHeading() {
+        let source = "---\ntitle: \"```\"\n---\n\n# Real\n"
+        let output = MarkdownParser.parse(source)
+        #expect(output.outline.map(\.title) == ["Real"])
+    }
+
+    @Test("Unicode frontmatter preserves later UTF-16 ranges")
+    func unicodeFrontmatterPreservesLaterUTF16Ranges() {
+        let source = "---\ntitle: \"é 🌊 🐋\"\n---\n\n# Heading\n\nA *sea*.\n"
+        let text = source as NSString
+        let output = MarkdownParser.parse(source)
+        #expect(output.spans.contains {
+            $0.kind == .headingMarker && $0.range == text.range(of: "#")
+        })
+        #expect(output.spans.contains {
+            $0.kind == .emphasisMarker && $0.range == text.range(of: "*")
+        })
+    }
+
     @Test("The heading-only outline equals the full parse's outline")
     func outlineOnlyMatchesFullParse() throws {
         let resources = URL(fileURLWithPath: #filePath)

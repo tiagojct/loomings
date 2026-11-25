@@ -53,23 +53,29 @@ public final class PreviewRenderer {
     )
 
     public func render(source: String, documentURL: URL?) -> PreviewDocument {
+        render(parsed: ParsedMarkdown(source), documentURL: documentURL)
+    }
+
+    public func render(parsed: ParsedMarkdown, documentURL: URL?) -> PreviewDocument {
         if cacheDocumentURL != documentURL {
             cache = [:]
             cacheDocumentURL = documentURL
         }
 
-        let map = SourceMap(source)
-        let nsSource = source as NSString
-        let frontmatter = MarkdownFrontmatter.range(in: source)
-        let tree = MarkdownTree(parsing: source)
+        let source = parsed.source
+        let map = parsed.map
+        let nsSource = parsed.text
+        let frontmatter = parsed.frontmatter
+        let tree = parsed.tree
+        let parsedText = parsed.parsedText as NSString
         defer { withExtendedLifetime(tree) {} }
 
         var definitions = Hasher()
         Self.referenceDefinition.enumerateMatches(
-            in: source,
-            range: NSRange(location: 0, length: nsSource.length)
+            in: parsed.parsedText,
+            range: NSRange(location: 0, length: parsedText.length)
         ) { match, _, _ in
-            if let match { definitions.combine(nsSource.substring(with: match.range)) }
+            if let match { definitions.combine(parsedText.substring(with: match.range)) }
         }
         let definitionsKey = definitions.finalize()
 
