@@ -146,6 +146,50 @@ describe('document session', () => {
     await second;
   });
 
+  it('serialises three overlapping saves', async () => {
+    const pending = [];
+    const { session, calls } = makeSession({
+      write: (value) => new Promise((resolve) => { calls.written.push(value); pending.push(resolve); }),
+    });
+
+    session.markEdited();
+    const first = session.saveNow();
+    const second = session.saveNow();
+    const third = session.saveNow();
+    expect(calls.written).toHaveLength(1);
+
+    pending.shift()();
+    await first;
+    expect(calls.written).toHaveLength(2);
+
+    pending.shift()();
+    await second;
+    expect(calls.written).toHaveLength(3);
+
+    pending.shift()();
+    await third;
+  });
+
+  it('starts the next save after a failed one', async () => {
+    let attempts = 0;
+    const { session, calls } = makeSession({
+      write: async (value) => {
+        attempts++;
+        if (attempts === 1) throw new Error('disk full');
+        calls.written.push(value);
+      },
+    });
+
+    session.markEdited();
+    const first = session.saveNow();
+    const second = session.saveNow();
+
+    expect(await first).toBe(false);
+    expect(await second).toBe(true);
+    expect(calls.written).toEqual(['first draft']);
+    expect(session.isDirty()).toBe(false);
+  });
+
   it('stays dirty when the buffer changed while the save was in flight', async () => {
     let finish;
     const { session, calls, setText } = makeSession({

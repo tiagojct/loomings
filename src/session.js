@@ -42,7 +42,7 @@ export function createSession(ports) {
 
   /** @type {string|null} */ let lastScratch = null;
   /** @type {Promise<void>|null} */ let scratchInFlight = null;
-  /** @type {Promise<boolean>|null} */ let saveInFlight = null;
+  /** @type {Promise<boolean>|null} */ let saveTail = null;
   /** @type {ReturnType<typeof setTimeout>|null} */ let scratchTimer = null;
   /** @type {ReturnType<typeof setTimeout>|null} */ let saveTimer = null;
 
@@ -138,38 +138,39 @@ export function createSession(ports) {
     return writeScratchNow();
   }
 
+  // One save, run on its turn in the queue. The buffer may have moved on while
+  // it waited, so the generation is checked first and the text is read now.
+  async function writeBuffer(gen) {
+    if (gen !== generation) return true;
+    const text = content();
+    try {
+      await write(text);
+    } catch (err) {
+      if (gen === generation) onError('Save failed: ' + messageOf(err));
+      return false;
+    }
+    if (gen !== generation) return true; // the buffer moved on; nothing to report
+    // An edit landed while the write was in flight, so what is on disk is
+    // not what is in the buffer: stay dirty and leave the timers that edit
+    // armed alone, or the newest text is neither saved nor drafted.
+    if (content() !== text) return true;
+    noteSaved(text);
+    onSaved(text);
+    return true;
+  }
+
+  // Each save starts after the one before it settles, so two writes to the
+  // same home never overlap (an explicit Cmd+S and the autosave timer can fire
+  // close together). A failed save still lets the next one run. An idle queue
+  // starts its first save at once.
   async function saveNow() {
     if (!hasHome()) return false;
-    // An explicit Cmd+S and the autosave timer can fire close enough together
-    // that two writes to the same handle would overlap; one at a time.
-    if (saveInFlight) await saveInFlight;
-
     const gen = generation;
-    const text = content();
-
-    const run = (async () => {
-      try {
-        await write(text);
-      } catch (err) {
-        if (gen === generation) onError('Save failed: ' + messageOf(err));
-        return false;
-      }
-      if (gen !== generation) return true; // the buffer moved on; nothing to report
-      // An edit landed while the write was in flight, so what is on disk is
-      // not what is in the buffer: stay dirty and leave the timers that edit
-      // armed alone, or the newest text is neither saved nor drafted.
-      if (content() !== text) return true;
-      noteSaved(text);
-      onSaved(text);
-      return true;
-    })();
-
-    saveInFlight = run;
-    try {
-      return await run;
-    } finally {
-      if (saveInFlight === run) saveInFlight = null;
-    }
+    const run = saveTail
+      ? saveTail.then(() => writeBuffer(gen), () => writeBuffer(gen))
+      : writeBuffer(gen);
+    saveTail = run;
+    return run;
   }
 
   // Clean the buffer without touching its home or its draft. Used after a
