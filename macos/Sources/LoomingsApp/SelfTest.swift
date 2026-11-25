@@ -2025,6 +2025,10 @@ enum SelfTest {
         // A stale report cannot erase a surviving mark after separate edits.
         let insertion = text.range(of: "A claim").location
         textView.insertText("x", replacementRange: NSRange(location: unknown.location + 3, length: 0))
+        let editedCitationSource = editor.source
+        // Split same-turn insertions into separate undo groups.
+        textView.undoManager?.endUndoGrouping()
+        textView.undoManager?.beginUndoGrouping()
         textView.insertText("New. ", replacementRange: NSRange(location: insertion, length: 0))
         editor.reparseSynchronously()
         let movedKnown = NSRange(location: known.location + 5, length: known.length)
@@ -2036,6 +2040,7 @@ enum SelfTest {
         // Undo first returns to the edited citation, then to the report source.
         textView.undoManager?.undo()
         editor.reparseSynchronously()
+        check(editor.source == editedCitationSource, "first Undo reverses only the later edit")
         check(editor.citationRanges == [known], "the untouched mark moves back with Undo")
         textView.undoManager?.undo()
         editor.reparseSynchronously()
