@@ -387,6 +387,9 @@ public enum Linkifier {
 
         for match in emailPattern.matches(in: text, range: full) {
             guard let range = trimmed(match.range, in: ns) else { continue }
+            guard !matches.contains(where: { NSIntersectionRange($0.range, range).length > 0 }) else {
+                continue
+            }
             let visible = ns.substring(with: range)
             matches.append(LinkMatch(range: range, url: "mailto:" + visible, text: visible))
         }
@@ -433,32 +436,40 @@ public enum Linkifier {
 
     private static func trimmed(_ range: NSRange, in text: NSString) -> NSRange? {
         var end = range.location + range.length
-        let trailing = ".,;:!?'\""
-        while end > range.location {
-            let character = text.character(at: end - 1)
-            guard let scalar = UnicodeScalar(character), trailing.contains(Character(scalar)) else {
-                break
-            }
+        while end > range.location, isTrailingPunctuation(text.character(at: end - 1)) {
             end -= 1
         }
 
-        // Drop an unmatched closing bracket; keep balanced parentheses.
-        while end > range.location {
-            let character = text.character(at: end - 1)
-            if character == 0x29 { // )
-                let value = text.substring(with: NSRange(location: range.location, length: end - range.location))
-                let opens = value.filter { $0 == "(" }.count
-                let closes = value.filter { $0 == ")" }.count
-                if closes > opens {
-                    end -= 1
-                    continue
-                }
+        var opens = 0
+        var closes = 0
+        for location in range.location..<end {
+            switch text.character(at: location) {
+            case 0x28:
+                opens += 1
+            case 0x29:
+                closes += 1
+            default:
+                break
             }
-            break
+        }
+
+        // Drop unmatched trailing closing parentheses; keep balanced parentheses.
+        while end > range.location, text.character(at: end - 1) == 0x29, closes > opens {
+            end -= 1
+            closes -= 1
         }
 
         guard end > range.location else { return nil }
         return NSRange(location: range.location, length: end - range.location)
+    }
+
+    private static func isTrailingPunctuation(_ character: unichar) -> Bool {
+        switch character {
+        case 0x2E, 0x2C, 0x3B, 0x3A, 0x21, 0x3F, 0x27, 0x22:
+            return true
+        default:
+            return false
+        }
     }
 }
 

@@ -306,4 +306,46 @@ struct FastPathTests {
         #expect(!Linkifier.mightContainLink("a: //b"))
         #expect(Linkifier.matches(in: "go to www.example.com.").first?.url == "http://www.example.com")
     }
+
+    @Test("A URL containing an email address remains one URL match")
+    func emailInsideURL() {
+        let matches = Linkifier.matches(in: "https://user@example.com/path")
+
+        #expect(matches.count == 1)
+        #expect(matches[0].url == "https://user@example.com/path")
+        #expect(matches[0].text == "https://user@example.com/path")
+    }
+
+    @Test("Email-shaped URL paths do not create overlapping matches")
+    func emailShapedURLPaths() {
+        let matches = Linkifier.matches(in: "https://one@example.com/a and https://two@example.org/b")
+
+        #expect(matches.count == 2)
+        #expect(matches.map(\.url) == [
+            "https://one@example.com/a",
+            "https://two@example.org/b",
+        ])
+        #expect(matches[0].range.location + matches[0].range.length <= matches[1].range.location)
+    }
+
+    @Test("Balanced parentheses stay in a URL")
+    func balancedParentheses() {
+        let matches = Linkifier.matches(in: "https://example.com/a_(b)")
+
+        #expect(matches.count == 1)
+        #expect(matches[0].url == "https://example.com/a_(b)")
+    }
+
+    @Test("Trimming 10,000 unmatched closing parentheses is linear")
+    func manyUnmatchedClosingParentheses() {
+        let input = "https://example.com/path" + String(repeating: ")", count: 10_000)
+        let start = ContinuousClock.now
+
+        let matches = Linkifier.matches(in: input)
+
+        let elapsed = start.duration(to: .now)
+        #expect(matches.count == 1)
+        #expect(matches[0].url == "https://example.com/path")
+        #expect(elapsed < .milliseconds(5))
+    }
 }

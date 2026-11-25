@@ -45,6 +45,22 @@ struct PreviewAttributedTests {
         #expect(bold)
     }
 
+    @Test("HTML linkification does not duplicate a URL suffix")
+    func urlWithEmailHTML() {
+        let document = PreviewRenderer().render(
+            source: "https://user@example.com/path and https://two@example.org/other\n",
+            documentURL: nil
+        )
+
+        #expect(document.html.contains(
+            "<a href=\"https://user@example.com/path\" rel=\"noopener noreferrer\">https://user@example.com/path</a>"
+        ))
+        #expect(document.html.contains(
+            "<a href=\"https://two@example.org/other\" rel=\"noopener noreferrer\">https://two@example.org/other</a>"
+        ))
+        #expect(document.html.components(separatedBy: "<a ").count - 1 == 2)
+    }
+
     @Test("Typographer substitutions match the web")
     func typographer() {
         let source = "Smart \"quotes\" and -- and --- and ... and (c) +-.\n"
