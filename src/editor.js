@@ -1207,9 +1207,9 @@ async function saveInBrowser({ title = null, message = 'Saved in this browser' }
     forgetFile();
     currentDocId = doc.id;
     setTitle(doc.title);
-    session.adopt(text);
+    const adopted = session.adopt(text);
     refreshStatusBar();
-    flashStatus(message);
+    flashStatus(adopted ? message : message + '; newer edits remain');
   } catch (err) { flashStatus('Save failed: ' + (err?.message || err)); }
 }
 
@@ -1224,8 +1224,9 @@ async function handleSaveAs() {
       currentDocId = null;
       await addRecent(path);
       setTitle(displayName(path));
-      session.adopt(text); // any save still in flight for the old target must not stomp this
+      const adopted = session.adopt(text); // any save still in flight for the old target must not stomp this
       refreshStatusBar();
+      if (!adopted) flashStatus('Saved; newer edits remain');
     } else if (!hasFileSystemAccess) {
       // Firefox/Safari: the "save" was a download, so the buffer is still
       // only in this tab — say so instead of pretending it's on disk.

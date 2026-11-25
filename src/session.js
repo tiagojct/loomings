@@ -116,9 +116,7 @@ export function createSession(ports) {
     void clearScratchQuietly();
   }
 
-  function markEdited() {
-    setDirty(true);
-
+  function armTimers() {
     saveTimer = stop(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = null;
@@ -130,6 +128,11 @@ export function createSession(ports) {
       scratchTimer = null;
       if (dirty) void writeScratchNow();
     }, SCRATCH_DELAY);
+  }
+
+  function markEdited() {
+    setDirty(true);
+    armTimers();
   }
 
   function flushScratch() {
@@ -194,9 +197,19 @@ export function createSession(ports) {
   function adopt(text) {
     generation++;
     cancelTimers();
-    lastScratch = text;
-    setDirty(false);
-    void clearScratchQuietly();
+    if (content() === text) {
+      lastScratch = text;
+      setDirty(false);
+      void clearScratchQuietly();
+      return true;
+    }
+
+    // The external write saved an earlier snapshot. Keep the current buffer
+    // dirty and retry its draft and save against the newly adopted home.
+    lastScratch = null;
+    setDirty(true);
+    armTimers();
+    return false;
   }
 
   // Drop the draft for the document we are leaving behind, so a later crash

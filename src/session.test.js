@@ -211,6 +211,57 @@ describe('document session', () => {
     expect(calls.cleared).toBe(0);
   });
 
+  it('adopts a matching buffer as clean', async () => {
+    const { session, calls, setText } = makeSession();
+
+    setText('saved');
+    session.markEdited();
+
+    expect(session.adopt('saved')).toBe(true);
+    expect(session.isDirty()).toBe(false);
+    expect(calls.cleared).toBeGreaterThan(0);
+  });
+
+  it('keeps edits made during an external save dirty', () => {
+    const { session, setText } = makeSession();
+
+    setText('saved');
+    session.markEdited();
+    setText('newer text');
+    session.markEdited();
+
+    expect(session.adopt('saved')).toBe(false);
+    expect(session.isDirty()).toBe(true);
+  });
+
+  it('writes edits made during an external save to scratch', async () => {
+    const { session, calls, setText } = makeSession();
+
+    setText('saved');
+    session.markEdited();
+    setText('newer text');
+    session.markEdited();
+    session.adopt('saved');
+
+    await vi.advanceTimersByTimeAsync(800);
+    expect(calls.scratch).toEqual(['newer text']);
+  });
+
+  it('autosaves edits made during an external save to the new home', async () => {
+    const { session, calls, setText, setHome } = makeSession();
+
+    setText('saved');
+    session.markEdited();
+    setText('newer text');
+    session.markEdited();
+    setHome({ file: null, docId: 'new-home' });
+    session.adopt('saved');
+
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(calls.written).toEqual(['newer text']);
+    expect(session.isDirty()).toBe(false);
+  });
+
   it('does not touch the new buffer when a save lands after a repoint', async () => {
     let finish;
     const { session, calls } = makeSession({
