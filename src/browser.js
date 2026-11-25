@@ -46,6 +46,8 @@ const STORE = 'kv';
 const DOC_CONTENT_PREFIX = 'doc_content:';
 const LEGACY_SCRATCH_KEY = 'scratch';
 const SCRATCH_CLIENT_STORAGE_KEY = 'loomings_scratch_client';
+/** @type {WeakMap<Window, string>} */
+const memoryScratchClientIds = new WeakMap();
 
 /** @type {Promise<IDBDatabase>|null} */
 let dbPromise = null;
@@ -669,20 +671,37 @@ export async function pickCitationFile() {
 //  Scratch (crash recovery)
 // ==========================
 
+function createScratchClientId() {
+  const crypto = window.crypto;
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function scratchClientId() {
-  let clientId = window.sessionStorage.getItem(SCRATCH_CLIENT_STORAGE_KEY);
-  if (!clientId) {
-    const crypto = window.crypto;
-    if (typeof crypto.randomUUID === 'function') {
-      clientId = crypto.randomUUID();
-    } else {
-      const bytes = crypto.getRandomValues(new Uint8Array(16));
-      bytes[6] = (bytes[6] & 0x0f) | 0x40;
-      bytes[8] = (bytes[8] & 0x3f) | 0x80;
-      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
-      clientId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-    }
-    window.sessionStorage.setItem(SCRATCH_CLIENT_STORAGE_KEY, clientId);
+  const page = window;
+  const memoryClientId = memoryScratchClientIds.get(page);
+  if (memoryClientId) return memoryClientId;
+
+  let storage;
+  try {
+    storage = page.sessionStorage;
+    const clientId = storage.getItem(SCRATCH_CLIENT_STORAGE_KEY);
+    if (clientId) return clientId;
+  } catch (_) {
+    const clientId = createScratchClientId();
+    memoryScratchClientIds.set(page, clientId);
+    return clientId;
+  }
+
+  const clientId = createScratchClientId();
+  try {
+    storage.setItem(SCRATCH_CLIENT_STORAGE_KEY, clientId);
+  } catch (_) {
+    memoryScratchClientIds.set(page, clientId);
   }
   return clientId;
 }

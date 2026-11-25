@@ -213,6 +213,38 @@ describe('browser storage adapter (IndexedDB)', () => {
     }
   });
 
+  it.each(['read', 'write'])('uses an in-memory scratch ID when sessionStorage %s throws', async (failure) => {
+    const previousWindow = globalThis.window;
+    const sessionStorage = {
+      getItem: () => {
+        if (failure === 'read') throw new Error('sessionStorage blocked');
+        return null;
+      },
+      setItem: () => {
+        if (failure === 'write') throw new Error('sessionStorage blocked');
+      },
+    };
+    globalThis.window = {
+      sessionStorage,
+      crypto: { randomUUID: () => `memory-${failure}` },
+    };
+    try {
+      await saveScratch('Memory draft', null);
+      await saveScratch('Other tab draft', null, 'other-tab');
+
+      expect(await readScratch()).toEqual({ content: 'Memory draft', current_file: null });
+      expect(await readScratch('other-tab')).toEqual({ content: 'Other tab draft', current_file: null });
+
+      await clearScratch();
+      expect(await readScratch()).toBeNull();
+      expect(await readScratch('other-tab')).toEqual({ content: 'Other tab draft', current_file: null });
+    } finally {
+      await idbDelete(`scratch:memory-${failure}`);
+      await clearScratch('other-tab');
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('returns a handle from openHandle without adopting it', async () => {
     const previous = writableHandle('previous.md', '# previous');
     const next = writableHandle('next.md', '# next');
