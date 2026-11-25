@@ -43,6 +43,27 @@ struct ImageLoaderTests {
         }
     }
 
+    @Test("Untrusted documents block local paths and allow data URIs")
+    func untrustedBlocksPaths() throws {
+        let dir = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("secret.png")
+        try pngData(width: 24, height: 12).write(to: file)
+
+        guard case .blocked = PreviewImageLoader.load(file.path, baseURL: nil, allowImagePaths: false) else {
+            Issue.record("an absolute path was not blocked when allowImagePaths is false")
+            return
+        }
+        guard case .blocked = PreviewImageLoader.load(file.absoluteString, baseURL: nil, allowImagePaths: false) else {
+            Issue.record("a file:// URL was not blocked when allowImagePaths is false")
+            return
+        }
+        let encoded = pngData(width: 6, height: 6).base64EncodedString()
+        let uri = "data:image/png;base64,\(encoded)"
+        #expect(size(of: PreviewImageLoader.load(uri, baseURL: nil, allowImagePaths: false))?.width == 6)
+        #expect(size(of: PreviewImageLoader.load("secret.png", baseURL: dir))?.width == 24)
+    }
+
     @Test("A relative path resolves against the document directory")
     func relativePath() throws {
         let dir = try makeDirectory()

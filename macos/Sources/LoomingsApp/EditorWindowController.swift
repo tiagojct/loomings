@@ -770,6 +770,7 @@ final class EditorWindowController: NSWindowController,
         /// The reference list that ends `markdown`.
         var bibliography = ""
         let documentURL: URL?
+        let allowImagePaths: Bool
         let title: String
     }
 
@@ -781,6 +782,7 @@ final class EditorWindowController: NSWindowController,
             markdown: citations.report(for: source)?.markdownSource ?? source,
             bibliography: citations.report(for: source)?.bibliographyMarkdown ?? "",
             documentURL: loomingsDocument?.linkBaseURL,
+            allowImagePaths: citationPathsAllowed,
             title: exportTitle
         )
     }
@@ -807,6 +809,7 @@ final class EditorWindowController: NSWindowController,
                 markdown: text.markdown,
                 bibliography: text.bibliography,
                 documentURL: start.documentURL,
+                allowImagePaths: start.allowImagePaths,
                 title: start.title
             )
             let status = text.status ?? shared?.failure
@@ -1545,6 +1548,7 @@ final class EditorWindowController: NSWindowController,
         previewTicket.set(generation)
         let ticket = previewTicket
         let documentURL = loomingsDocument?.linkBaseURL
+        let allowImagePaths = citationPathsAllowed
         let resolved = ThemeManager.shared.resolved()
         let theme = previewTheme(resolved)
 
@@ -1565,7 +1569,11 @@ final class EditorWindowController: NSWindowController,
                     return
                 }
                 self.citationLines = lines
-                self.previewTextView.render(rendered, documentURL: documentURL)
+                self.previewTextView.render(
+                    rendered,
+                    documentURL: documentURL,
+                    allowImagePaths: allowImagePaths
+                )
             }
         }
     }
@@ -1875,7 +1883,8 @@ final class EditorWindowController: NSWindowController,
             let data = DocxExport.data(
                 markdown: page.markdown,
                 bibliographyMarkdown: page.bibliography,
-                documentURL: page.documentURL
+                documentURL: page.documentURL,
+                allowImagePaths: page.allowImagePaths
             )
             do {
                 try data.write(to: url, options: .atomic)

@@ -27,7 +27,8 @@ public enum PreviewImageLoader {
         _ raw: String,
         baseURL: URL?,
         maximumFileBytes: Int = PreviewImageLoader.maximumFileBytes,
-        maximumDataBytes: Int = PreviewImageLoader.maximumDataBytes
+        maximumDataBytes: Int = PreviewImageLoader.maximumDataBytes,
+        allowImagePaths: Bool = true
     ) -> PreviewImageResult {
         if raw.lowercased().hasPrefix("data:image/") {
             guard let comma = raw.firstIndex(of: ",") else { return .missing }
@@ -40,7 +41,7 @@ public enum PreviewImageLoader {
             return decode(CGImageSourceCreateWithData(data as CFData, nil))
         }
 
-        if isRemote(raw) { return .blocked }
+        if !allowImagePaths || isRemote(raw) { return .blocked }
 
         guard let url = localURL(raw, baseURL: baseURL) else { return .missing }
         let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize

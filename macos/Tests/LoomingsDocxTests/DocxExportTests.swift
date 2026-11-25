@@ -146,6 +146,37 @@ private func export(_ markdown: String, bibliography: String = "") throws -> Pac
         #expect(document.contains("w:w=\"12240\""))
     }
 
+    @Test func blocksLocalImagesWhenPathsAreDisallowed() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("docx-untrusted-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="
+        let png = Data(base64Encoded: base64)!
+        let localFile = folder.appendingPathComponent("dot.png")
+        try png.write(to: localFile)
+
+        let blockedData = DocxExport.data(
+            markdown: "![dot](\(localFile.path))\n",
+            documentURL: nil,
+            paper: .a4,
+            allowImagePaths: false
+        )
+        let blockedPackage = try Package(blockedData)
+        defer { blockedPackage.remove() }
+        #expect(!blockedPackage.unzip(["-l"]).output.contains("word/media/image"))
+        #expect(blockedPackage.part("word/document.xml").contains("[image: dot]"))
+
+        let dataURIData = DocxExport.data(
+            markdown: "![inline](data:image/png;base64,\(base64))\n",
+            documentURL: nil,
+            paper: .a4,
+            allowImagePaths: false
+        )
+        let dataURIPackage = try Package(dataURIData)
+        defer { dataURIPackage.remove() }
+        #expect(dataURIPackage.unzip(["-l"]).output.contains("word/media/image1.png"))
+    }
+
     @Test func largeTextSurvivesDeflate() throws {
         let line = "Spirometry is standardised by joint guidelines. "
         let package = try export(String(repeating: line + "\n\n", count: 2000))

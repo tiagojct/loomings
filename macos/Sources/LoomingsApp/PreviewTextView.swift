@@ -8,6 +8,7 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
     private(set) var blocks: [PreviewBlock] = []
     private var blockRanges: [NSRange] = []
     private var documentURL: URL?
+    private var allowImagePaths = true
     private var imageCache: [String: NSImage] = [:]
     private var imageTasks: Set<String> = []
     private var scrollObserver: NSObjectProtocol?
@@ -163,14 +164,16 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
 
     // MARK: - Rendering
 
-    func render(source: String, documentURL: URL?) {
+    func render(source: String, documentURL: URL?, allowImagePaths: Bool = true) {
         let rendered = renderer.render(source: source, documentURL: documentURL)
-        render(rendered, documentURL: documentURL)
+        render(rendered, documentURL: documentURL, allowImagePaths: allowImagePaths)
     }
 
-    func render(_ rendered: PreviewDocument, documentURL: URL?) {
+    func render(_ rendered: PreviewDocument, documentURL: URL?, allowImagePaths: Bool = true) {
         let previousDocumentURL = self.documentURL
+        let previousAllowImagePaths = self.allowImagePaths
         self.documentURL = documentURL
+        self.allowImagePaths = allowImagePaths
 
         let topLine = topSourceLine()
         let previous = blocks
@@ -192,7 +195,7 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
         guard let storage = textStorage else { return }
         storage.beginEditing()
 
-        let documentChanged = previousDocumentURL != documentURL
+        let documentChanged = previousDocumentURL != documentURL || previousAllowImagePaths != allowImagePaths
         if previous.isEmpty || documentChanged || (prefix == 0 && suffix == 0) {
             storage.setAttributedString(rendered.attributed)
         } else {
@@ -402,21 +405,25 @@ final class PreviewTextView: NSTextView, NSTextViewDelegate {
         guard let storage = textStorage else { return }
         let full = NSRange(location: 0, length: storage.length)
         let base = documentURL?.deletingLastPathComponent()
+        let allowPaths = allowImagePaths
         storage.enumerateAttribute(.loomingsImageURL, in: full) { [weak self] value, range, _ in
             guard let self, let raw = value as? String, !raw.isEmpty else { return }
             let key = PreviewImageLoader.cacheKey(raw, baseURL: base)
-            if let image = self.imageCache[key] {
+            if allowPaths || raw.lowercased().hasPrefix("data:image/"),
+               let image = self.imageCache[key] {
                 self.applyImage(image, raw: raw)
                 return
             }
-            guard !self.imageTasks.contains(key) else { return }
-            self.imageTasks.insert(key)
+            let taskKey = "\(allowPaths)|\(key)"
+            guard !self.imageTasks.contains(taskKey) else { return }
+            self.imageTasks.insert(taskKey)
 
             DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-                let result = PreviewImageLoader.load(raw, baseURL: base)
+                let result = PreviewImageLoader.load(raw, baseURL: base, allowImagePaths: allowPaths)
                 DispatchQueue.main.async {
                     guard let self else { return }
-                    self.imageTasks.remove(key)
+                    self.imageTasks.remove(taskKey)
+                    guard self.allowImagePaths == allowPaths else { return }
                     switch result {
                     case .image(let image):
                         // Bounded: a long session of edited images must not grow forever.

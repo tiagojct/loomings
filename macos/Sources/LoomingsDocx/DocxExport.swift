@@ -30,9 +30,10 @@ public enum DocxExport {
         markdown: String,
         bibliographyMarkdown: String = "",
         documentURL: URL?,
-        paper: Paper = .current
+        paper: Paper = .current,
+        allowImagePaths: Bool = true
     ) -> Data {
-        var writer = DocxWriter(documentURL: documentURL, paper: paper)
+        var writer = DocxWriter(documentURL: documentURL, paper: paper, allowImagePaths: allowImagePaths)
         return writer.build(markdown: markdown, bibliography: bibliographyMarkdown)
     }
 
@@ -87,6 +88,7 @@ private struct Context {
 private struct DocxWriter {
     let documentURL: URL?
     let paper: DocxExport.Paper
+    let allowImagePaths: Bool
 
     private var relationships: [(id: String, type: String, target: String, external: Bool)] = []
     private var media: [(name: String, data: Data)] = []
@@ -97,9 +99,10 @@ private struct DocxWriter {
 
     private let maxImageWidth = 600.0 // pixels at 96 dpi: the text width of an A4 page with 2.5 cm margins
 
-    init(documentURL: URL?, paper: DocxExport.Paper) {
+    init(documentURL: URL?, paper: DocxExport.Paper, allowImagePaths: Bool = true) {
         self.documentURL = documentURL
         self.paper = paper
+        self.allowImagePaths = allowImagePaths
     }
 
     // MARK: Package
@@ -338,7 +341,11 @@ private struct DocxWriter {
         let alt = plainText(node)
         let fallback = run("[image\(alt.isEmpty ? "" : ": " + alt)]", { var m = Marks(); m.italic = true; return m }())
         guard let raw = node.destination,
-              case .image(let picture) = PreviewImageLoader.load(raw, baseURL: documentURL),
+              case .image(let picture) = PreviewImageLoader.load(
+                  raw,
+                  baseURL: documentURL,
+                  allowImagePaths: allowImagePaths
+              ),
               let tiff = picture.tiffRepresentation,
               let rep = NSBitmapImageRep(data: tiff),
               let png = rep.representation(using: .png, properties: [:]),

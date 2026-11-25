@@ -1536,7 +1536,11 @@ enum SelfTest {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let outside = folder.appendingPathComponent("outside.bib")
         try Data(citationBib.utf8).write(to: outside)
+        let secretPNG = folder.appendingPathComponent("secret.png")
+        let pixel = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==") ?? Data()
+        try pixel.write(to: secretPNG)
         let text = citationText.replacingOccurrences(of: "bibliography: refs.bib", with: "bibliography: \(outside.path)")
+            + "\n![secret](\(secretPNG.path))\n"
         let note = "This shared document names a file on this computer. It stays unread until you save the document."
 
         let (document, controller) = try sharedDocument(text: text)
@@ -1545,6 +1549,20 @@ enum SelfTest {
         var report = controller.citations.report(for: text)
         check(report?.notes.first?.message == note, "a shared document says that a path stays unread")
         check(report?.citations.first?.markdown != "(Silva 2020)", "a shared document does not read an absolute path")
+
+        controller.setViewMode(.split)
+        let blockedPreview = pump(timeout: 5) {
+            previewImageDescriptions(in: controller.previewTextViewForTesting).contains {
+                $0.contains("not loaded: remote images stay off")
+            }
+        }
+        check(blockedPreview, "an unsaved shared document shows a blocked placeholder for a local image")
+
+        var docxWritten = false
+        let docxURL = folder.appendingPathComponent("shared.docx")
+        controller.exportDocx(to: docxURL) { docxWritten = true }
+        check(pump(timeout: 5) { docxWritten }, "an unsaved shared document exports to Word")
+        check(!unzippedList(of: docxURL).contains("word/media/image"), "Word export of an unsaved shared document embeds no local image")
 
         let archive = NSKeyedArchiver(requiringSecureCoding: false)
         document.encodeRestorableState(with: archive)
@@ -1718,6 +1736,32 @@ enum SelfTest {
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func unzippedList(of url: URL) -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+        process.arguments = ["-l", url.path]
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = Pipe()
+        guard (try? process.run()) != nil else { return "" }
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    private static func previewImageDescriptions(in textView: NSTextView) -> [String] {
+        guard let storage = textView.textStorage else { return [] }
+        let full = NSRange(location: 0, length: storage.length)
+        var descriptions: [String] = []
+        storage.enumerateAttribute(.attachment, in: full) { value, _, _ in
+            if let attachment = value as? NSTextAttachment,
+               let description = attachment.image?.accessibilityDescription {
+                descriptions.append(description)
+            }
+        }
+        return descriptions
     }
 
     private static func checkExportLimit(_ check: (Bool, String) -> Void, folder: URL) throws {
