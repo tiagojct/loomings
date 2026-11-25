@@ -113,6 +113,17 @@ struct ShareLinkTests {
         #expect(try ShareLink.parse(url).text == "# Hi")
     }
 
+    @Test("Encoding refuses text above the decoded limit before compressing")
+    func encodeRefusesOversizedText() throws {
+        let line = "Call me Ishmael. Some years ago.\n"
+        let count = ShareLink.maximumDecodedLength / line.utf8.count + 1
+        let text = stringRepeating(line, count: count)
+        #expect(text.utf8.count > ShareLink.maximumDecodedLength)
+        #expect(throws: ShareLinkError.tooLarge) {
+            try ShareLink.encode(text)
+        }
+    }
+
     @Test("Malformed and oversized payloads fail safely")
     func malformed() throws {
         #expect(throws: ShareLinkError.self) { try ShareLink.decode("nope") }
@@ -122,8 +133,8 @@ struct ShareLinkTests {
         let oversized = "p." + String(repeating: "A", count: ShareLink.maximumPayloadLength + 1)
         #expect(throws: ShareLinkError.tooLarge) { try ShareLink.decode(oversized) }
 
-        let bomb = stringRepeating("A", count: ShareLink.maximumDecodedLength + 1)
-        let compressedBomb = try ShareLink.encode(bomb)
+        let bomb = Data(repeating: 0x41, count: ShareLink.maximumDecodedLength + 1)
+        let compressedBomb = "z." + (try RawDeflate.deflate(bomb)).base64EncodedString()
         #expect(throws: ShareLinkError.tooLarge) {
             try ShareLink.decode(compressedBomb)
         }

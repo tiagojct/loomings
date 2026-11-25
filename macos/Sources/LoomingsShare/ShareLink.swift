@@ -47,6 +47,9 @@ public enum ShareLink {
         guard let raw = text.data(using: .utf8) else {
             throw ShareLinkError.malformed
         }
+        guard raw.count <= maximumDecodedLength else {
+            throw ShareLinkError.tooLarge
+        }
 
         if let compressed = try? RawDeflate.deflate(raw) {
             let payload = "z." + base64URL(compressed)
@@ -178,7 +181,7 @@ public enum ShareLink {
     }
 }
 
-private enum RawDeflate {
+enum RawDeflate {
     static func deflate(_ data: Data) throws -> Data {
         var output: UnsafeMutablePointer<UInt8>?
         var length = 0
