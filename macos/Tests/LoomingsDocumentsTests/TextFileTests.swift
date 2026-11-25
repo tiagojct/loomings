@@ -70,6 +70,46 @@ struct TextFileTests {
         }
     }
 
+    @Test("UTF-32 little-endian BOM is refused, not read as UTF-16")
+    func utf32LittleEndianIsRefused() {
+        let data = Data([0xFF, 0xFE, 0x00, 0x00, 0x61, 0x00, 0x00, 0x00])
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("UTF-32 big-endian BOM is refused")
+    func utf32BigEndianIsRefused() {
+        let data = Data([0x00, 0x00, 0xFE, 0xFF, 0x00, 0x00, 0x00, 0x61])
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("BOMless UTF-16 little-endian text is refused, not read as UTF-8")
+    func bomlessUTF16LittleEndianIsRefused() {
+        let data = Data([0x61, 0x00, 0x62, 0x00, 0x0A, 0x00])
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("BOMless UTF-16 big-endian text is refused, not read as UTF-8")
+    func bomlessUTF16BigEndianIsRefused() {
+        let data = Data([0x00, 0x61, 0x00, 0x62, 0x00, 0x0A])
+        #expect(throws: TextFileError.unsupportedEncoding) {
+            try TextFileCodec.decode(data)
+        }
+    }
+
+    @Test("BOMless UTF-8 without NUL bytes still opens")
+    func bomlessUTF8StillOpens() throws {
+        let file = try TextFileCodec.decode(Data("café\n".utf8))
+        #expect(file.encoding == .utf8)
+        #expect(!file.hasBOM)
+        #expect(file.text == "café\n")
+    }
+
     @Test("A UTF-8 BOM with invalid bytes is refused")
     func invalidBOMBodyIsRefused() {
         let data = Data([0xEF, 0xBB, 0xBF, 0xFF, 0xFE])

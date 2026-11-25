@@ -70,8 +70,15 @@ public enum TextFileCodec {
     private static let utf8BOM: [UInt8] = [0xEF, 0xBB, 0xBF]
     private static let utf16LEBOM: [UInt8] = [0xFF, 0xFE]
     private static let utf16BEBOM: [UInt8] = [0xFE, 0xFF]
+    private static let utf32LEBOM: [UInt8] = [0xFF, 0xFE, 0x00, 0x00]
+    private static let utf32BEBOM: [UInt8] = [0x00, 0x00, 0xFE, 0xFF]
 
     public static func decode(_ data: Data) throws -> TextFile {
+        // UTF-32 starts with the UTF-16 BOM, so refuse it before the UTF-16 branches.
+        if data.starts(with: utf32LEBOM) || data.starts(with: utf32BEBOM) {
+            throw TextFileError.unsupportedEncoding
+        }
+
         if data.starts(with: utf8BOM) {
             guard let text = String(data: data.dropFirst(utf8BOM.count), encoding: .utf8) else {
                 throw TextFileError.invalidText(.utf8)
@@ -108,9 +115,13 @@ public enum TextFileCodec {
             )
         }
 
-        // No byte-order mark: only valid UTF-8 is accepted. Falling back to a
-        // single-byte encoding would let the app save over text it could not
-        // faithfully read.
+        // No byte-order mark: only valid UTF-8 without NUL bytes is accepted.
+        // BOMless UTF-16 is valid UTF-8 when it is ASCII, so a NUL byte marks it.
+        // Falling back to a single-byte encoding would let the app save over
+        // text it could not faithfully read.
+        if data.contains(0x00) {
+            throw TextFileError.unsupportedEncoding
+        }
         guard let text = String(data: data, encoding: .utf8) else {
             throw TextFileError.unsupportedEncoding
         }
