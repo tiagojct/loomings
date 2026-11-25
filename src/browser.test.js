@@ -245,6 +245,43 @@ describe('browser storage adapter (IndexedDB)', () => {
     }
   });
 
+  it('separates scratch drafts when a new tab inherits sessionStorage', async () => {
+    const previousWindow = globalThis.window;
+    const storageKey = 'loomings_scratch_client';
+    const makeWindow = (values, opener = null, navigationType = 'navigate') => ({
+      sessionStorage: {
+        getItem: (key) => values.get(key) ?? null,
+        setItem: (key, value) => values.set(key, value),
+      },
+      crypto: { randomUUID: () => 'opened-client-id' },
+      performance: { getEntriesByType: () => [{ type: navigationType }] },
+      opener,
+    });
+    const openerValues = new Map([[storageKey, 'shared-client-id']]);
+    const openedValues = new Map(openerValues);
+    const openerWindow = makeWindow(openerValues);
+    const openedWindow = makeWindow(openedValues, {});
+    try {
+      globalThis.window = openerWindow;
+      await saveScratch('Opener draft', null);
+
+      globalThis.window = openedWindow;
+      await saveScratch('Opened tab draft', null);
+      expect(openedValues.get(storageKey)).toBe('opened-client-id');
+
+      globalThis.window = makeWindow(new Map(openedValues), {}, 'reload');
+      expect(await readScratch()).toEqual({ content: 'Opened tab draft', current_file: null });
+      await clearScratch();
+
+      globalThis.window = openerWindow;
+      expect(await readScratch()).toEqual({ content: 'Opener draft', current_file: null });
+    } finally {
+      await idbDelete('scratch:shared-client-id');
+      await idbDelete('scratch:opened-client-id');
+      globalThis.window = previousWindow;
+    }
+  });
+
   it('returns a handle from openHandle without adopting it', async () => {
     const previous = writableHandle('previous.md', '# previous');
     const next = writableHandle('next.md', '# next');

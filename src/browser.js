@@ -47,7 +47,7 @@ const DOC_CONTENT_PREFIX = 'doc_content:';
 const LEGACY_SCRATCH_KEY = 'scratch';
 const SCRATCH_CLIENT_STORAGE_KEY = 'loomings_scratch_client';
 /** @type {WeakMap<Window, string>} */
-const memoryScratchClientIds = new WeakMap();
+const scratchClientIds = new WeakMap();
 
 /** @type {Promise<IDBDatabase>|null} */
 let dbPromise = null;
@@ -683,26 +683,33 @@ function createScratchClientId() {
 
 function scratchClientId() {
   const page = window;
-  const memoryClientId = memoryScratchClientIds.get(page);
-  if (memoryClientId) return memoryClientId;
+  const activeClientId = scratchClientIds.get(page);
+  if (activeClientId) return activeClientId;
+
+  const navigation = /** @type {PerformanceNavigationTiming|undefined} */ (
+    page.performance?.getEntriesByType?.('navigation')[0]
+  );
+  const copiedFromOpener = Boolean(page.opener && navigation?.type === 'navigate');
 
   let storage;
   try {
     storage = page.sessionStorage;
-    const clientId = storage.getItem(SCRATCH_CLIENT_STORAGE_KEY);
-    if (clientId) return clientId;
+    const storedClientId = storage.getItem(SCRATCH_CLIENT_STORAGE_KEY);
+    if (storedClientId && !copiedFromOpener) {
+      scratchClientIds.set(page, storedClientId);
+      return storedClientId;
+    }
   } catch (_) {
     const clientId = createScratchClientId();
-    memoryScratchClientIds.set(page, clientId);
+    scratchClientIds.set(page, clientId);
     return clientId;
   }
 
   const clientId = createScratchClientId();
   try {
     storage.setItem(SCRATCH_CLIENT_STORAGE_KEY, clientId);
-  } catch (_) {
-    memoryScratchClientIds.set(page, clientId);
-  }
+  } catch (_) {}
+  scratchClientIds.set(page, clientId);
   return clientId;
 }
 
