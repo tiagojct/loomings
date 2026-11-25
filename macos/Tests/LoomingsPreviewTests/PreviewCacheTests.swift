@@ -328,6 +328,24 @@ struct FastPathTests {
         #expect(matches[0].range.location + matches[0].range.length <= matches[1].range.location)
     }
 
+    @Test("Many URL and email candidates remain sorted and disjoint")
+    func manyURLAndEmailCandidates() {
+        let count = 1_000
+        let input = (0..<count)
+            .map { "https://user\($0)@example.com/path/\($0) mail\($0)@example.org" }
+            .joined(separator: " ")
+
+        let matches = Linkifier.matches(in: input)
+
+        #expect(matches.count == count * 2)
+        #expect(matches.filter { $0.url.hasPrefix("https://") }.count == count)
+        #expect(matches.filter { $0.url.hasPrefix("mailto:") }.count == count)
+        for index in 1..<matches.count {
+            let previousEnd = matches[index - 1].range.location + matches[index - 1].range.length
+            #expect(previousEnd <= matches[index].range.location)
+        }
+    }
+
     @Test("Balanced parentheses stay in a URL")
     func balancedParentheses() {
         let matches = Linkifier.matches(in: "https://example.com/a_(b)")

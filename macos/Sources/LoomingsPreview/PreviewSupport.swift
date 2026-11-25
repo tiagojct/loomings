@@ -376,25 +376,42 @@ public enum Linkifier {
         guard mightContainLink(text) else { return [] }
         let ns = text as NSString
         let full = NSRange(location: 0, length: ns.length)
-        var matches: [LinkMatch] = []
+        var urlMatches: [LinkMatch] = []
 
         for match in urlPattern.matches(in: text, range: full) {
             guard let range = trimmed(match.range, in: ns) else { continue }
             let visible = ns.substring(with: range)
             let url = visible.lowercased().hasPrefix("www.") ? "http://" + visible : visible
-            matches.append(LinkMatch(range: range, url: url, text: visible))
+            urlMatches.append(LinkMatch(range: range, url: url, text: visible))
         }
 
+        var matches: [LinkMatch] = []
+        var urlIndex = 0
         for match in emailPattern.matches(in: text, range: full) {
             guard let range = trimmed(match.range, in: ns) else { continue }
-            guard !matches.contains(where: { NSIntersectionRange($0.range, range).length > 0 }) else {
+
+            // Regex results are ordered. Advance past URLs that end before this email.
+            while urlIndex < urlMatches.count {
+                let urlRange = urlMatches[urlIndex].range
+                if urlRange.location + urlRange.length <= range.location {
+                    matches.append(urlMatches[urlIndex])
+                    urlIndex += 1
+                } else {
+                    break
+                }
+            }
+
+            if urlIndex < urlMatches.count,
+               NSIntersectionRange(urlMatches[urlIndex].range, range).length > 0 {
                 continue
             }
+
             let visible = ns.substring(with: range)
             matches.append(LinkMatch(range: range, url: "mailto:" + visible, text: visible))
         }
 
-        return matches.sorted { $0.range.location < $1.range.location }
+        matches.append(contentsOf: urlMatches[urlIndex...])
+        return matches
     }
 
     /// A URL match needs `://` or `www.` and an e-mail match needs `@`;
