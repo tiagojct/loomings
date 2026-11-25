@@ -1,14 +1,14 @@
 name: macOS
 
 # The native app in macos/. Separate from ci.yml: it needs a macOS runner and
-# only matters when macos/ (or the share format it must decode) changes.
+# only matters when native inputs (or the share format it must decode) change.
 on:
   push:
     branches: [main, macos]
     tags: ["v*"]
-    paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "package-lock.json", "scripts/export-native-resources.mjs", "vite.citations.config.js", ".github/workflows/macos.yml"]
+    paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "src/palettes.js", "src/teaching/**", "src/qr.js", "lessons/**", "examples/**", "public/licenses/**", "scripts/build-notices.mjs", "scripts/export-native-resources.mjs", "vendor/tryworks-design/**", "LICENSE", "package-lock.json", "vite.citations.config.js", ".github/workflows/macos.yml"]
   pull_request:
-    paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "package-lock.json", "scripts/export-native-resources.mjs", "vite.citations.config.js", ".github/workflows/macos.yml"]
+    paths: ["macos/**", "src/share.js", "src/citations/**", "src/html.js", "src/markdown.js", "src/palettes.js", "src/teaching/**", "src/qr.js", "lessons/**", "examples/**", "public/licenses/**", "scripts/build-notices.mjs", "scripts/export-native-resources.mjs", "vendor/tryworks-design/**", "LICENSE", "package-lock.json", "vite.citations.config.js", ".github/workflows/macos.yml"]
   workflow_dispatch:
 
 permissions:
@@ -30,7 +30,7 @@ jobs:
       # The bundle is committed, so a change in src/citations must also change it.
       - run: npm ci
       - run: npm run export:native
-      - run: git diff --exit-code -- macos/Resources/Citations
+      - run: git diff --exit-code -- macos/Resources
       - run: swift --version
       # Includes the Swift/Node share-link interop tests, which need node.
       - run: swift test --package-path macos
