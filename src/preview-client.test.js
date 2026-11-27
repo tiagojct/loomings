@@ -100,6 +100,40 @@ describe('preview client', () => {
     expect(fallback).toHaveBeenCalledTimes(1);
   });
 
+  it('falls back to the pending request when postMessage throws', async () => {
+    let client;
+    /** @type {Promise<string|null>|undefined} */
+    let pending;
+    const worker = {
+      onmessage: null,
+      onerror: null,
+      terminate: vi.fn(),
+      postMessage(message) {
+        pending = client.render('pending', null);
+        throw new Error('cannot clone request');
+      },
+      answer(id, data) {
+        this.onmessage?.({ data: { ...data, id } });
+      },
+    };
+    const spawn = vi.fn(() => worker);
+    const fallback = vi.fn((source) => `fallback: ${source}`);
+    client = createPreviewClient({ spawn, fallback });
+
+    const active = client.render('active', null);
+
+    expect(worker.terminate).toHaveBeenCalledTimes(1);
+    await expect(active).resolves.toBeNull();
+    await expect(pending).resolves.toBe('fallback: pending');
+    expect(fallback).toHaveBeenCalledTimes(1);
+    expect(fallback).toHaveBeenCalledWith('pending', null);
+
+    worker.answer(1, { html: 'late active result' });
+    expect(fallback).toHaveBeenCalledTimes(1);
+    await expect(client.render('later', null)).resolves.toBe('fallback: later');
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
   it('does not restart the worker after a lifecycle failure', async () => {
     const worker = fakeWorker();
     const spawn = vi.fn(() => worker);

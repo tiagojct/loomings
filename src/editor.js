@@ -11,6 +11,7 @@ import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import './search.js';
 import { renderMarkdown, renderPreview } from './markdown.js';
 import { createPreviewClient } from './preview-client.js';
+import { createPreviewLifecycle } from './preview-lifecycle.js';
 import { linkFromPaste } from './links.js';
 import { smartTypography } from './typography.js';
 import { blockForLine, previewBlocks } from './pairing.js';
@@ -1596,34 +1597,37 @@ preview.addEventListener('mouseover', (e) => {
 
 preview.addEventListener('mouseleave', () => lightSourceLines(null));
 
-let previewGeneration = 0;
-/** @type {string|null} */ let previewHtml = null;
 const previewClient = createPreviewClient();
-
-// onlyIfChanged: a citation report that gives the same HTML does not replace
-// the preview, so the diagrams are not drawn again.
-async function updatePreview({ onlyIfChanged = false } = {}) {
-  const switched = applyReferencesView();
-  if (!previewShown()) return;
-  const text = getText();
-  const report = citations.reportFor(text);
-  const generation = ++previewGeneration;
-  const html = await previewClient.render(text, report);
-  if (html === null || generation !== previewGeneration || !previewShown()) return;
-  if (onlyIfChanged && !switched && html === previewHtml) return;
-  previewHtml = html;
-  preview.innerHTML = html;
-  pairedBlockEl = null;
-  invalidatePreviewBlocks();
-  if (effectiveViewMode() === 'split') syncPreviewToEditor();
-  if (!hasDiagrams(preview)) return;
-  // Diagrams change the block heights. Skip the work if a newer render started.
-  renderDiagrams(preview).then(() => {
-    if (generation !== previewGeneration) return;
+const previewLifecycle = createPreviewLifecycle({
+  render: (text, report) => previewClient.render(text, report),
+  isShown: previewShown,
+  apply: (html) => {
+    preview.innerHTML = html;
+    pairedBlockEl = null;
+    invalidatePreviewBlocks();
+    if (effectiveViewMode() === 'split') syncPreviewToEditor();
+  },
+  hasDiagrams: () => hasDiagrams(preview),
+  renderDiagrams: () => renderDiagrams(preview),
+  afterDiagrams: () => {
     lightPreviewBlock(null);
     invalidatePreviewBlocks();
     if (effectiveViewMode() === 'split') syncPreviewToEditor();
-  }, () => {});
+  },
+});
+
+// onlyIfChanged: a citation report that gives the same HTML does not replace
+// the preview, so the diagrams are not drawn again.
+function updatePreview({ onlyIfChanged = false } = {}) {
+  return previewLifecycle.update({
+    onlyIfChanged,
+    prepare: () => {
+      const switched = applyReferencesView();
+      if (!previewShown()) return null;
+      const text = getText();
+      return { source: text, report: citations.reportFor(text), switched };
+    },
+  });
 }
 
 // ==========================
@@ -1849,39 +1853,44 @@ async function printHandout() {
     qr = `<section class="handout-qr">${svg || ''}<p>${svg ? QR_CAPTION : QR_TOO_LONG}</p></section>`;
   }
   const wasShown = previewShown();
-  // A preview update during the wait below would replace this page. Mark
-  // the page, then build it again if that happens.
-  let seen = ++previewGeneration;
+  previewLifecycle.beginPrint();
   const build = async () => {
     preview.innerHTML = citedHtml(text, report, renderPreview) + qr;
     pairedBlockEl = null;
     invalidatePreviewBlocks();
     await renderDiagrams(preview);
   };
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await build();
-    if (seen === previewGeneration) break;
-    seen = previewGeneration;
-  }
-  // Some mobile browsers never fire afterprint; a new print replaces the
-  // last one's page style rather than piling up.
-  document.getElementById('handout-page')?.remove();
-  const page = document.createElement('style');
-  page.id = 'handout-page';
-  page.textContent = handoutCss({
-    title,
-    palette: roles(themeFamily, 'light'),
-    paper: paperFor(navigator.language || 'en-GB'),
-  });
-  document.head.append(page);
-  if (!wasShown) preview.classList.remove('hidden');
+  /** @type {HTMLStyleElement|null} */
+  let page = null;
+  let cleaned = false;
   const cleanup = () => {
+    if (cleaned) return;
+    cleaned = true;
     window.removeEventListener('afterprint', cleanup);
-    page.remove();
+    page?.remove();
+    previewLifecycle.endPrint();
     if (wasShown) updatePreview(); else preview.classList.add('hidden');
   };
-  window.addEventListener('afterprint', cleanup);
-  window.print();
+  try {
+    await build();
+    // Some mobile browsers never fire afterprint; a new print replaces the
+    // last one's page style rather than piling up.
+    document.getElementById('handout-page')?.remove();
+    page = document.createElement('style');
+    page.id = 'handout-page';
+    page.textContent = handoutCss({
+      title,
+      palette: roles(themeFamily, 'light'),
+      paper: paperFor(navigator.language || 'en-GB'),
+    });
+    document.head.append(page);
+    if (!wasShown) preview.classList.remove('hidden');
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  } catch (error) {
+    cleanup();
+    throw error;
+  }
 }
 
 const printPreview = oneAtATime(printHandout);
