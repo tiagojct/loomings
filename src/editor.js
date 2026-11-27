@@ -10,6 +10,7 @@ import { syntaxHighlighting, indentOnInput, bracketMatching, syntaxTree } from '
 import { search, searchKeymap, openSearchPanel } from '@codemirror/search';
 import './search.js';
 import { renderMarkdown, renderPreview } from './markdown.js';
+import { createPreviewClient } from './preview-client.js';
 import { linkFromPaste } from './links.js';
 import { smartTypography } from './typography.js';
 import { blockForLine, previewBlocks } from './pairing.js';
@@ -1597,17 +1598,20 @@ preview.addEventListener('mouseleave', () => lightSourceLines(null));
 
 let previewGeneration = 0;
 /** @type {string|null} */ let previewHtml = null;
+const previewClient = createPreviewClient();
 
-// onlyIfChanged: a citation report that gives the same HTML starts no new
-// render, so the diagrams are not drawn again.
-function updatePreview({ onlyIfChanged = false } = {}) {
+// onlyIfChanged: a citation report that gives the same HTML does not replace
+// the preview, so the diagrams are not drawn again.
+async function updatePreview({ onlyIfChanged = false } = {}) {
   const switched = applyReferencesView();
   if (!previewShown()) return;
   const text = getText();
-  const html = citedHtml(text, citations.reportFor(text), renderPreview);
+  const report = citations.reportFor(text);
+  const generation = ++previewGeneration;
+  const html = await previewClient.render(text, report);
+  if (html === null || generation !== previewGeneration || !previewShown()) return;
   if (onlyIfChanged && !switched && html === previewHtml) return;
   previewHtml = html;
-  const generation = ++previewGeneration;
   preview.innerHTML = html;
   pairedBlockEl = null;
   invalidatePreviewBlocks();

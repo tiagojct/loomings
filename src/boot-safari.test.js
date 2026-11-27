@@ -47,6 +47,8 @@ describe('the boot chunk on the build target', () => {
     expect(modules).toContain(join(here, 'citations', 'scan.js'));
     expect(modules).toContain(join(here, 'citations', 'document.js'));
     expect(modules).toContain(join(here, 'mermaid.js'));
+    expect(modules).toContain(join(here, 'preview-client.js'));
+    expect(modules).not.toContain(join(here, 'preview-worker.js'));
     expect(modules).not.toContain(join(here, 'citations', 'worker.js'));
   });
 
